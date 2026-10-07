@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UNSA · Ciencia de la Computación</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <script src="/static/js/personas.js" defer></script>
+<script src="/static/js/session.js" defer></script></head>
+<body class="workspace">
+  <a class="skip-link" href="#main-content">Ir al contenido</a><aside class="sidebar">
+    <a class="brand" href="/" aria-label="Ciencia de la Computación UNSA, inicio"><img class="school-logo" src="/static/img/logo-escuela.png" width="1400" height="800" alt="Escuela Profesional de Ciencia de la Computación, Universidad Nacional de San Agustín de Arequipa"></a>
+    <div class="school">ESCUELA PROFESIONAL<span>Ciencia de la<br>Computación</span></div>
+    <p class="nav-label">ESPACIO DE TRABAJO</p>
+    <nav aria-label="Principal"><a class="nav-link" href="/"><span class="nav-index">01</span> Catálogo de recursos</a><a class="nav-active" href="/personas" aria-current="page"><span class="nav-index">02</span> Personas</a></nav>
+    <footer class="sidebar-footer"><span class="avatar">CC</span><div>Gestión de recursos<small>Ciencia de la Computación</small></div></footer>
+  </aside>
+  <main id="main-content">
+    <header class="topbar"><span>Comunidad académica <span class="crumb">/</span> <strong>Personas</strong></span><div class="session-controls"><span id="session-user">Sesión</span><button id="logout" class="button secondary">Cerrar sesión</button></div></header>
+    <section class="heading"><div><p class="eyebrow">NUESTRA COMUNIDAD</p><h1>Directorio de personas</h1><p>Organiza la información de quienes forman parte de la escuela.</p></div><button id="new-person" class="button primary" disabled> Registrar persona</button></section>
+    <section class="stats" aria-label="Resumen de personas">
+      <article><div><span>Estudiantes</span><strong id="students">—</strong><small>Comunidad estudiantil</small></div><span class="stat-icon"></span></article>
+      <article><div><span>Docentes</span><strong id="teachers">—</strong><small>Equipo académico</small></div><span class="stat-icon green"></span></article>
+      <article><div><span>Administrativos</span><strong id="staff">—</strong><small>Gestión de la escuela</small></div><span class="stat-icon"></span></article>
+    </section>
+    <section class="catalog"><div class="catalog-heading"><h2>Personas registradas <span id="result-count">0</span></h2><span class="catalog-caption">Estudiantes, docentes y administrativos.</span></div>
+      <div class="filters"><label class="search"><span aria-hidden="true"></span><input id="search" type="search" aria-label="Buscar personas" placeholder="Buscar por nombre, documento o código..."></label><label><span class="sr-only">Tipo de persona</span><select id="person-filter"><option value="">Todos los tipos</option><option value="ESTUDIANTE">Estudiantes</option><option value="DOCENTE">Docentes</option><option value="ADMINISTRATIVO">Administrativos</option></select></label><button id="clear" class="button subtle">Limpiar</button></div>
+      <p id="status" role="status"></p><button id="retry" class="button secondary" hidden>Reintentar conexión</button>
+      <div class="table-wrapper people-table"><table><thead><tr><th>Persona</th><th>Tipo / código</th><th>Documento</th><th>Estado</th><th>Acción</th></tr></thead><tbody id="people"></tbody></table></div>
+      <div id="empty" class="empty" hidden><span class="empty-symbol"></span><h3>No hay personas para mostrar</h3><p>Registra una persona o ajusta los filtros de búsqueda.</p></div>
+    </section><footer class="page-footer"><span>Escuela Profesional de Ciencia de la Computación</span><span>Directorio académico</span></footer>
+  </main>
+  <dialog id="person-dialog" aria-labelledby="person-title"><form id="person-form">
+    <div class="dialog-header"><div><p class="eyebrow">COMUNIDAD ACADÉMICA</p><h2 id="person-title">Registrar persona</h2></div><button type="button" class="close" data-close="person-dialog" aria-label="Cerrar">Cerrar</button></div>
+    <p class="muted">Completa sus datos. La fecha de registro se asigna automáticamente.</p>
+    <fieldset><legend>Datos personales</legend><div class="form-grid">
+      <label>Nombres *<input name="nombres" maxlength="120" required autocomplete="given-name"></label>
+      <label>Apellidos *<input name="apellidos" maxlength="120" required autocomplete="family-name"></label>
+      <label>Documento de identidad *<input name="documentoIdentidad" minlength="4" maxlength="20" required></label>
+      <label>Tipo de persona *<select name="tipo" id="person-type"><option value="ESTUDIANTE">Estudiante</option><option value="DOCENTE">Docente</option><option value="ADMINISTRATIVO">Administrativo</option></select></label>
+      <label>Correo *<input name="correo" type="email" maxlength="160" required autocomplete="email"></label>
+      <label>Teléfono<input name="telefono" type="tel" maxlength="25" autocomplete="tel"></label>
+    </div></fieldset>
+    <fieldset><legend>Datos institucionales</legend><div id="specific-fields" class="form-grid"></div></fieldset>
+    <p class="field-note">Los campos con * son obligatorios. La persona se registra activa.</p>
+    <p id="form-error" class="form-error" role="alert" hidden></p>
+    <div class="dialog-actions"><button class="button secondary" type="button" data-close="person-dialog">Cancelar</button><button id="save-person" class="button primary">Guardar persona</button></div>
+  </form></dialog>
+  <dialog id="person-detail" aria-labelledby="detail-title"><div class="dialog-header"><div><p class="eyebrow">FICHA PERSONAL</p><h2 id="detail-title"></h2></div><button class="close" data-close="person-detail" aria-label="Cerrar detalle">Cerrar</button></div><dl id="detail-fields" class="person-details"></dl></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body></html>

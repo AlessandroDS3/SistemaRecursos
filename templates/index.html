@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UNSA · Ciencia de la Computación</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <script src="/static/js/app.js" defer></script>
+<script src="/static/js/session.js" defer></script></head>
+<body class="workspace">
+  <a class="skip-link" href="#main-content">Ir al contenido</a><aside class="sidebar">
+    <a class="brand" href="/" aria-label="Ciencia de la Computación UNSA, inicio"><img class="school-logo" src="/static/img/logo-escuela.png" width="1400" height="800" alt="Escuela Profesional de Ciencia de la Computación, Universidad Nacional de San Agustín de Arequipa"></a>
+    <div class="school">ESCUELA PROFESIONAL<span>Ciencia de la<br>Computación</span></div>
+    <p class="nav-label">ESPACIO DE TRABAJO</p>
+    <nav aria-label="Principal"><a class="nav-active" href="/" aria-current="page"><span class="nav-index">01</span> Catálogo de recursos</a><a class="nav-link" href="/personas"><span class="nav-index">02</span> Personas</a></nav>
+    <footer class="sidebar-footer"><span class="avatar">CC</span><div>Gestión de recursos<small>Ciencia de la Computación</small></div></footer>
+  </aside>
+  <main id="main-content">
+    <header class="topbar"><span>Recursos materiales <span class="crumb">/</span> <strong>Catálogo</strong></span><div class="session-controls"><span id="session-user">Sesión</span><button id="logout" class="button secondary">Cerrar sesión</button></div></header>
+    <section class="heading"><div><p class="eyebrow">INVENTARIO ACADÉMICO</p><h1>Catálogo de recursos</h1><p>Encuentra el equipo adecuado para la próxima idea.</p></div><button id="new-resource" class="button primary" disabled><span></span> Registrar recurso</button></section>
+    <section class="stats" aria-label="Resumen del inventario">
+      <article><div><span>Recursos registrados</span><strong id="stat-resources">—</strong><small>Modelos en el catálogo</small></div><span class="stat-icon"></span></article>
+      <article><div><span>Bienes materiales</span><strong id="stat-total">—</strong><small>Ejemplares físicos</small></div><span class="stat-icon peach"></span></article>
+      <article><div><span>Bienes disponibles</span><strong id="stat-available">—</strong><small>Estado actual del inventario</small></div><span class="stat-icon green"></span></article>
+    </section>
+    <section class="catalog" aria-labelledby="catalog-title">
+      <div class="catalog-heading"><h2 id="catalog-title">Explora el inventario <span id="result-count">0</span></h2><span class="catalog-caption">Consulta, organiza y encuentra.</span></div>
+      <div class="filters">
+        <label class="search"><span aria-hidden="true"></span><input id="search" type="search" placeholder="Buscar nombre, marca o código..." aria-label="Buscar recursos"></label>
+        <label><span class="sr-only">Tipo de recurso</span><select id="type-filter"><option value="">Todos los tipos</option></select></label>
+        <label><span class="sr-only">Disponibilidad</span><select id="availability"><option value="">Cualquier disponibilidad</option><option value="yes">Con bienes disponibles</option><option value="no">Sin bienes disponibles</option></select></label>
+        <button class="button subtle" id="clear-filters">Limpiar</button>
+      </div>
+      <p id="status" class="status" role="status">Cargando inventario...</p>
+      <button id="retry" class="button secondary" hidden>Reintentar conexión</button>
+      <div id="cards" class="cards"></div>
+      <div id="empty" class="empty" hidden><span class="empty-symbol"></span><h3 id="empty-title">Tu inventario empieza aquí</h3><p id="empty-description">Registra un recurso y su primer ejemplar para empezar.</p></div>
+    </section>
+    <footer class="page-footer"><span>Escuela Profesional de Ciencia de la Computación</span><span>Catálogo de recursos</span></footer>
+  </main>
+
+  <dialog id="resource-dialog" aria-labelledby="form-title">
+    <form id="resource-form">
+      <div class="dialog-header"><div><p class="eyebrow">INVENTARIO</p><h2 id="form-title">Registrar recurso</h2></div><button type="button" class="close" data-close="resource-dialog" aria-label="Cerrar">Cerrar</button></div>
+      <p id="form-description" class="muted">Describe el recurso y registra su primer ejemplar físico.</p>
+      <fieldset id="resource-fields"><legend>01 · Datos del recurso</legend><div class="form-grid">
+        <label class="full">Nombre del recurso *<input name="nombre" required maxlength="120" placeholder="Ej. Laptop para laboratorio"></label>
+        <label>Tipo *<select name="tipo" required id="resource-type"></select></label>
+        <label>Categoría *<select name="idCategoriaRef" required id="resource-category"></select></label>
+        <label>Marca<input name="marca" maxlength="80" placeholder="Ej. Lenovo"></label>
+        <label>Modelo<input name="modelo" maxlength="80" placeholder="Ej. ThinkPad E14"></label>
+        <label class="full">Descripción<textarea name="descripcion" maxlength="1000" rows="2" placeholder="Características o uso académico"></textarea></label>
+      </div></fieldset>
+      <fieldset><legend id="bien-legend">02 · Primer bien material</legend><div class="form-grid">
+        <label>Código de inventario *<input name="codigoInventario" required maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9._\-]*" placeholder="Ej. CC-LAP-001"></label>
+        <label>Ubicación *<input name="ubicacion" required maxlength="120" placeholder="Ej. Laboratorio 01"></label>
+      </div><p class="field-note">La fecha actual y un número de serie aleatorio se asignan automáticamente al guardar. El nuevo bien se registra como <strong>Disponible</strong>. Los campos con * son obligatorios.</p></fieldset>
+      <p id="form-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="button secondary" data-close="resource-dialog">Cancelar</button><button id="save" class="button primary" type="submit">Guardar recurso</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="detail-dialog" class="detail-dialog" aria-labelledby="detail-title">
+    <div class="dialog-header"><div><p class="eyebrow" id="detail-type"></p><h2 id="detail-title"></h2></div><button type="button" class="close" data-close="detail-dialog" aria-label="Cerrar detalle">Cerrar</button></div>
+    <p class="muted" id="detail-meta"></p><p id="detail-description"></p>
+    <div class="detail-subheading"><h3>Bienes materiales</h3><button class="button primary" id="add-bien"> Agregar ejemplar</button></div>
+    <div class="table-wrapper"><table><thead><tr><th>Código / serie</th><th>Ubicación</th><th>Fecha de registro</th><th>Estado</th></tr></thead><tbody id="bien-rows"></tbody></table></div>
+  </dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+data/*.sqlite3
+data/*.sqlite3-*
+.venv/
+config.ini
+config.*.ini
+!config.example.ini
+
+config.ini
+.venv/
+__pycache__/
+*.pyc
+.env
+data/
