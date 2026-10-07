@@ -1,112 +1,75 @@
-# Recurso · Catálogo académico con MySQL
+# Sistema de Recursos — Ciencia de la Computación UNSA
 
-HTML, CSS, JavaScript y Python, con persistencia **MySQL**. Avance acumulado estimado: **25%**. Incluye catálogo de recursos y ejemplares, más registro, consulta, búsqueda y fichas de estudiantes, docentes y administrativos. Fechas automáticas y series aleatorias al guardar. Préstamos y los demás módulos siguen pendientes. Se añadió inicio de sesión local con cuentas en MySQL. La interfaz usa azul, verde claro y blanco y no muestra porcentajes ni avisos de entrega.
+## ¿De qué trata?
 
-## Inicio en Windows
+Este proyecto busca ayudar a la Escuela de Ciencia de la Computación de la UNSA a organizar sus recursos y gestionar sus préstamos.
 
-1. Enciende tu **MySQL Server** y comprueba que tu conexión de Workbench funciona. Workbench es el cliente; el servicio MySQL también debe estar iniciado.
-2. Abre **configurar_mysql.cmd**. La primera vez crea `.venv` e instala el conector desde `requirements.txt` (requiere Internet).
-3. Introduce host, puerto, usuario, contraseña y nombre de base. Usa los mismos datos que en Workbench. La contraseña no se muestra al escribirla. Si la base no existe, el asistente intenta crearla; el usuario necesita permisos para ello. Si existe, necesita permisos para crear tablas y leer/escribir sus datos.
-4. Crea tu cuenta ejecutando **crear_usuario.cmd** (usuario y contraseña propios).
-5. Abre **iniciar.cmd** y visita http://127.0.0.1:8000. Deja la terminal abierta.
+La idea es tener en un solo lugar los equipos, materiales y personas de la escuela. Por ahora podemos registrar recursos, revisar sus ejemplares y registrar estudiantes, docentes y administrativos.
 
-Si ya tienes `config.ini`, edítalo para cambiar los datos: el asistente no lo sobrescribe. Para usar otro puerto web: `.venv\Scripts\python.exe server.py --port 8001`.
+## ¿Qué necesitamos?
 
-`config.ini` guarda la conexión local y está excluido de Git, al igual que `.venv` y las bases SQLite antiguas. El archivo `config.example.ini` solo contiene valores de ejemplo, sin contraseña. No publiques tu archivo local de configuración.
+- Python instalado.
+- MySQL Server instalado y encendido.
+- Un navegador, como Chrome o Edge.
+- Internet para instalar las dependencias la primera vez.
 
-## Configuración manual
+Si usas MySQL Workbench, recuerda que sirve para administrar la base de datos: también necesitas que MySQL Server esté funcionando.
 
-```powershell
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe configurar_mysql.py
-.venv\Scripts\python.exe server.py
-```
+## Cómo usarlo
 
-El iniciador también detecta el Python incluido en Codex si `python` o `py` no están disponibles.
+### La primera vez
 
-## Conservar registros anteriores de SQLite
+1. Descarga el proyecto y descomprime la carpeta si viene en ZIP.
+2. Enciende MySQL Server.
+3. Abre `configurar_mysql.cmd` haciendo doble clic.
+4. Escribe los datos de tu conexión. Si MySQL está en tu computadora, normalmente el host es `127.0.0.1` y el puerto es `3306`. Usa tu usuario y contraseña de MySQL. Puedes dejar `prestamos_escuela` como nombre de la base de datos.
+5. Espera a que termine la configuración. El programa prepara las dependencias y puede crear la base si tu usuario tiene permisos.
+6. Abre `crear_usuario.cmd` y crea tu cuenta para entrar a la página. Elige una contraseña de al menos 10 caracteres.
+7. Abre `iniciar.cmd` y deja esa ventana abierta.
+8. En tu navegador entra a **http://127.0.0.1:8000** e inicia sesión con la cuenta que acabas de crear.
 
-Cierra el servidor antiguo y configura una base MySQL vacía de recursos y bienes. Después:
+La cuenta de la página es diferente del usuario y contraseña de MySQL.
 
-```powershell
-.venv\Scripts\python.exe migrar_sqlite.py data\catalogo.sqlite3
-```
+### Las siguientes veces
 
-La importación conserva IDs, categorías, códigos, fechas, series y estados. Abre SQLite en modo de solo lectura, no elimina el archivo original y confirma todos los registros en una transacción MySQL. Si ya hay recursos o bienes en el destino, se detiene para evitar duplicados. No ejecutes registros nuevos mientras importas. Si no tenías datos, no necesitas importar nada.
+Solo enciende MySQL Server, abre `iniciar.cmd` y entra a **http://127.0.0.1:8000**. No necesitas configurar todo otra vez.
 
-## Datos ficticios opcionales
+## ¿Qué puedo hacer en la página?
 
-Configura una base separada cuyo nombre termine en `_demo`:
+- **Entrar con mi cuenta:** el sistema pide iniciar sesión antes de acceder.
+- **Registrar recursos:** agregar los equipos y materiales de la escuela.
+- **Agregar ejemplares:** registrar varias unidades de un mismo recurso. Por ejemplo, un modelo de laptop puede tener tres laptops físicas.
+- **Buscar y filtrar:** encontrar recursos y consultar su disponibilidad.
+- **Ver detalles:** revisar la información y los ejemplares de cada recurso.
+- **Registrar personas:** agregar estudiantes, docentes y administrativos, buscar sus registros y consultar sus fichas.
+- **Cerrar sesión:** salir de la cuenta al terminar.
 
-```powershell
-.venv\Scripts\python.exe configurar_mysql.py --config config.demo.ini
-.venv\Scripts\python.exe demo.py --config config.demo.ini
-.venv\Scripts\python.exe server.py --config config.demo.ini --port 8001
-```
+Las fechas de registro se colocan automáticamente y los números de serie se generan al guardar. No hay que escribirlos a mano.
 
-## Arquitectura
+## Lo que ya avanzamos
 
-- `app/domain.py`: Recurso, BienMaterial y reglas de validación.
-- `app/service.py`: casos de uso de registro.
-- `app/repository.py`: RecursoMySQLRepository, consultas parametrizadas y transacciones.
-- `app/config.py`: lectura de la conexión local.
-- `sql/schema.sql`: tablas InnoDB, claves foráneas, identificadores AUTO_INCREMENT y código de inventario único.
-- `server.py`: API HTTP local y archivos estáticos.
-- `templates/`: páginas HTML (acceso, catálogo y personas).
-- `static/css/`: hojas de estilo.
-- `static/js/`: JavaScript y comunicación mediante fetch.
-- `static/img/`: imágenes y logo de la escuela.
-- `app/`: lógica Python, autenticación, configuración y persistencia.
-- `tests/`: pruebas automatizadas.
-- `docs/`: documentación.
+Empezamos con el catálogo de recursos y luego agregamos el registro de personas y el inicio de sesión. También cambiamos la base de datos a **MySQL** para guardar la información del sistema.
 
-Los archivos de inicio y utilidades Python se mantienen en la raíz junto con sus lanzadores CMD para facilitar la ejecución. El servidor publica únicamente rutas explícitas; no expone carpetas internas ni configuración.
-- `migrar_sqlite.py`: importación opcional; es el único componente que lee SQLite.
+Después mejoramos la apariencia con el logo de la escuela y los colores granate, gris y blanco. La página también se adapta a celulares.
 
-Las fechas DATE de MySQL se convierten a texto ISO para mantener compatible la API. Las nuevas series y fechas se generan en Python y no se aceptan valores manuales del navegador. Los datos históricos se conservan al importar.
+Por último, ordenamos el código: los HTML, CSS, JavaScript e imágenes están en carpetas separadas. También agregamos validaciones para detectar datos incorrectos o registros repetidos.
 
-## Pruebas
+## Lo que sigue
 
-```powershell
-.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
+El siguiente paso es agregar el registro de préstamos y devoluciones. Más adelante se podrán incluir reservas y permisos según el tipo de usuario. Estas funciones todavía no están disponibles.
 
-Sin servidor configurado se ejecutan las pruebas unitarias y se omiten explícitamente las pruebas de integración. Para ejecutar también las pruebas HTTP sobre MySQL real:
+## ¿Con qué está hecho?
 
-```powershell
-$env:MYSQL_TEST_CONFIG = (Resolve-Path config.ini).Path
-.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
+- **HTML:** organiza el contenido de las páginas.
+- **CSS:** les da colores y diseño.
+- **JavaScript:** hace funcionar los botones, formularios y búsquedas.
+- **Python:** procesa lo que hacemos en la página.
+- **MySQL:** guarda la información.
 
-El usuario de prueba necesita CREATE/DROP DATABASE. Cada caso crea y elimina únicamente una base con nombre aleatorio `test_prestamos_...`; no modifica la base indicada en config.ini. Las pruebas simuladas no sustituyen la validación contra un servidor real.
+## Si algo no abre
 
-## API
+- Si no conecta con MySQL, comprueba que el servidor esté encendido y que los datos de conexión sean correctos.
+- Si la página no carga, revisa que la ventana de `iniciar.cmd` siga abierta.
+- Si no ves un cambio de diseño, recarga con **Ctrl + F5**.
 
-| Método | Ruta | Función |
-|---|---|---|
-| GET | `/api/catalogo` | Recursos, ejemplares, categorías y enumeraciones |
-| POST | `/api/recursos` | Recurso y primer bien en una transacción |
-| POST | `/api/recursos/{id}/bienes` | Añadir ejemplar |
-
-La aplicación se ejecuta localmente en 127.0.0.1. Requiere inicio de sesión. No incorpora despliegue público.
-
-Conector y transacciones basados en la [documentación oficial de MySQL](https://dev.mysql.com/doc/connectors/en/connector-python-example-cursor-transaction.html).
-
-## Nuevo módulo de personas
-
-Accede a **Personas** en el menú. Se registran nombres, apellidos, documento, correo, teléfono opcional y datos institucionales según el tipo. Estudiantes requieren código y ciclo; docentes requieren código docente; administrativos requieren código de empleado. Los demás campos institucionales son opcionales. La persona inicia ACTIVA y su fecha de registro se asigna automáticamente en MySQL. No se crean cuentas ni contraseñas en este avance.
-
-`app/personas.py` contiene validaciones y servicio; `app/persona_repository.py` guarda Persona y su especialización en una sola transacción. El documento es único globalmente y el código es único dentro de cada tipo. Las reglas de formato propuestas no validan identidad con servicios externos.
-
-Rutas nuevas: `GET /personas`, `GET /api/personas`, `POST /api/personas`.
-
-Al iniciar, `sql/schema.sql` crea las tablas nuevas `persona`, `estudiante`, `docente` y `administrativo` si no existen, sin borrar el catálogo. No es necesario volver a importar SQLite. La cuenta MySQL necesita permiso CREATE TABLE para esta actualización.
-
-## Inicio de sesión
-
-Primero ejecuta `crear_usuario.cmd` en la carpeta del proyecto. Elige usuario y contraseña de 10 a 128 caracteres; no hay credenciales predeterminadas. Después inicia con `iniciar.cmd` y entra en la web. Las cuentas de acceso se guardan en `usuario_sistema`, separadas de las personas del directorio. Todas las cuentas tienen acceso a los dos módulos; roles y permisos diferenciados quedan pendientes.
-
-Las contraseñas se almacenan como derivaciones scrypt con salt aleatorio. La sesión usa una cookie HttpOnly y SameSite=Strict, caduca a las 8 horas y se invalida al cerrar sesión o reiniciar el servidor. El catálogo, las personas y sus API requieren autenticación. Se limitan los intentos a cinco por minuto por dirección de cliente. La sesión permanece en memoria del proceso; este servidor continúa siendo de uso local por HTTP. Publicarlo requeriría HTTPS y cookies Secure, entre otras adaptaciones.
-
-No se incluye registro público ni recuperación de contraseña. Para crear otra cuenta usa el asistente local. La fecha de creación es automática. Se retiraron emojis y pictogramas decorativos del código.
+El proyecto funciona de forma local en tu computadora. No compartas `config.ini`, porque contiene los datos de tu conexión a MySQL.
