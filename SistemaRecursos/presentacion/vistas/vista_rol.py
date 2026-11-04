@@ -1,3 +1,4 @@
+from dominio.gestion_personas_usuarios.version_edicion import version_matriz
 from flask import render_template, flash
 
 
@@ -5,7 +6,7 @@ class VistaRol:
     def mostrar_consulta(self, roles, permisos, cuentas=None, termino="", error=None):
         return render_template(
             "vista_rol.html", roles=roles, permisos=permisos,
-            cuentas=cuentas or [], termino=termino, error=error
+            cuentas=cuentas or [], termino=termino, error=error, version=version_matriz(roles, permisos)
         )
 
     def mostrar_mensaje(self, mensaje):

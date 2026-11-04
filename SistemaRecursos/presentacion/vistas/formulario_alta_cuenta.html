@@ -1,0 +1,25 @@
+<section class="panel" id="crear-cuenta">
+      <h2>Crear cuenta de acceso</h2>
+      <form method="post"
+            action="{{ url_for('personas.registrar_cuenta', dni=dni) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="campos">
+          <label>
+            Usuario
+            <input name="nombre_usuario" maxlength="50" required autocomplete="off" value="{{ request.form.get('nombre_usuario', '') }}">
+          </label>
+          <label>
+            Contraseña inicial
+            <input name="clave"
+                   type="password"
+                   minlength="12"
+                   maxlength="256"
+                   autocomplete="new-password"
+                   required>
+          </label>
+          <p class="ayuda">El rol se asigna desde Roles y permisos.</p>
+        </div>
+        <p class="ayuda">La cuenta se crea con el rol Usuario.</p>
+        <button class="boton-principal">Crear cuenta</button>
+      </form>
+    </section>

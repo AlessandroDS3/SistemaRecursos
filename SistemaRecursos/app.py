@@ -2,6 +2,7 @@ import os
 import secrets
 from datetime import timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from dominio.gestion_personas_usuarios.version_edicion import ConflictoEdicion
 from flask import Flask, render_template, session, g
 from mysql.connector import Error
 from repositorio.conexion_mysql import MySQLConnection
@@ -103,7 +104,7 @@ def create_app(config=None, repositorios=None, repositorios_recursos=None):
         validar_csrf()
         g.usuario = None
         if "id_usuario" in session:
-            g.usuario = acceso.consultar_usuario_activo(session["id_usuario"])
+            g.usuario = acceso.consultar_sesion(session["id_usuario"], session.get("token_acceso"))
             if g.usuario is None or session.get(
                 "version_credenciales"
             ) != acceso.version_credenciales(g.usuario):
@@ -152,9 +153,12 @@ def create_app(config=None, repositorios=None, repositorios_recursos=None):
     app.register_blueprint(ControladorPrestamo(servicio_prestamo, servicio_politica, servicio_sancion).blueprint)
     app.register_blueprint(ControladorPoliticaPrestamo(servicio_politica).blueprint)
 
+    @app.errorhandler(ConflictoEdicion)
+    def mostrar_conflicto(error):
+        return render_template("base.html", mensaje_error=str(error)), 409
+
     @app.errorhandler(ValueError)
     @app.errorhandler(LookupError)
-    @app.errorhandler(PermissionError)
     def mostrar_error_validacion(error):
         return render_template("base.html", mensaje_error=str(error))
 
@@ -169,11 +173,12 @@ def create_app(config=None, repositorios=None, repositorios_recursos=None):
     def mostrar_error_formulario(error):
         return render_template("base.html", mensaje_error=error.description), error.code
 
+    @app.errorhandler(PermissionError)
     @app.errorhandler(403)
     def mostrar_error_permiso(error):
         return render_template(
             "base.html", mensaje_error="Tu cuenta no tiene permiso para esta operación."
-        ), error.code
+        ), 403
 
     if app.config.get('INICIAR_PROCESADOR_VENCIMIENTOS', not app.testing):
         iniciar_procesador_vencimientos(app, servicio_sancion, servicio_reserva)

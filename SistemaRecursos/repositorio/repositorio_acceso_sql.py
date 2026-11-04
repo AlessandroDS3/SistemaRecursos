@@ -1,4 +1,7 @@
 from __future__ import annotations
+from hashlib import sha256
+from secrets import randbelow
+from dominio.gestion_personas_usuarios.nombre_rol import NombreRol
 from dominio.resultados_consulta import CuentaParaRol
 
 from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
@@ -16,7 +19,7 @@ from repositorio.repositorio_rol_sql import cargar_permisos_roles
 CONSULTA_CUENTAS = """
     SELECT u.id_usuario, u.nombre_usuario, u.contrasena_hash,
            u.ultimo_acceso, u.activo, u.estado_cuenta,
-           p.dni, p.nombres, p.apellidos, p.dni AS documento_identidad,
+           p.dni, p.nombres, p.apellidos,
            p.telefono, p.correo, p.estado,
            e.cui, e.ciclo,
            e.semestre_academico, e.estado_matricula,
@@ -50,32 +53,21 @@ class RepositorioAccesoSQL(IRepositorioAcceso):
         self.conexion = conexion or MySQLConnection()
 
     @staticmethod
-    def _construir_cuentas(cursor, filas_usuario):
-        roles_por_id = {}
-        for fila_usuario in filas_usuario:
-            id_rol = fila_usuario["id_rol"]
-            if id_rol not in roles_por_id:
-                roles_por_id[id_rol] = Rol(
-                    id_rol=id_rol, nombre=fila_usuario["nombre_rol"],
-                    descripcion=fila_usuario["descripcion_rol"], activo=fila_usuario["rol_activo"],
-                )
-        cargar_permisos_roles(cursor, roles_por_id.values())
-        cuentas = []
-        for fila_usuario in filas_usuario:
-            estado = EstadoCuenta(fila_usuario["estado_cuenta"])
-            # Los registros heredados conservan la restricción más segura.
-            if not fila_usuario["activo"] and estado == EstadoCuenta.ACTIVA:
-                estado = EstadoCuenta.INACTIVA
-            cuentas.append(UsuarioSistema(
-                id_usuario=fila_usuario["id_usuario"],
-                persona=FabricaPersona.construir(fila_usuario),
-                rol=roles_por_id[fila_usuario["id_rol"]],
-                credenciales=Credenciales(
-                    fila_usuario["nombre_usuario"], fila_usuario["contrasena_hash"],
-                ),
-                ultimo_acceso=fila_usuario["ultimo_acceso"], estado_cuenta=estado,
-            ))
-        return cuentas
+    def _construir_cuenta(cursor, fila):
+        rol = Rol(
+            id_rol=fila["id_rol"], nombre=fila["nombre_rol"],
+            descripcion=fila["descripcion_rol"], activo=fila["rol_activo"],
+        )
+        cargar_permisos_roles(cursor, [rol])
+        estado = EstadoCuenta(fila["estado_cuenta"])
+        # Los registros heredados conservan la restricción más segura.
+        if not fila["activo"] and estado == EstadoCuenta.ACTIVA:
+            estado = EstadoCuenta.INACTIVA
+        return UsuarioSistema(
+            id_usuario=fila["id_usuario"], persona=FabricaPersona.construir(fila),
+            rol=rol, credenciales=Credenciales(fila["nombre_usuario"], fila["contrasena_hash"]),
+            ultimo_acceso=fila["ultimo_acceso"], estado_cuenta=estado,
+        )
 
     def _consultar(self, campo, valor):
         columna = COLUMNAS_BUSQUEDA_CUENTA[campo]
@@ -84,7 +76,7 @@ class RepositorioAccesoSQL(IRepositorioAcceso):
             fila_usuario = cursor.fetchone()
             if fila_usuario is None:
                 return None
-            return self._construir_cuentas(cursor, [fila_usuario])[0]
+            return self._construir_cuenta(cursor, fila_usuario)
 
     def consultar_por_nombre_usuario(self, nombre_usuario) -> UsuarioSistema | None:
         return self._consultar("nombre_usuario", nombre_usuario)
@@ -94,11 +86,6 @@ class RepositorioAccesoSQL(IRepositorioAcceso):
 
     def consultar_cuenta_por_id(self, id_usuario) -> UsuarioSistema | None:
         return self._consultar("id_usuario", id_usuario)
-
-    def consultar_cuentas(self) -> list[UsuarioSistema]:
-        with self.conexion.sesion() as cursor:
-            cursor.execute(CONSULTA_CUENTAS + " ORDER BY u.nombre_usuario, u.id_usuario")
-            return self._construir_cuentas(cursor, cursor.fetchall())
 
     def consultar_resumen_cuentas(self, dnis_persona) -> dict[str, dict[str, bool]]:
         dnis_persona = tuple(sorted({validar_dni(dni) for dni in dnis_persona}))
@@ -128,6 +115,14 @@ class RepositorioAccesoSQL(IRepositorioAcceso):
             usuario.activo, usuario.estado_cuenta.value,
         )
         with self.conexion.sesion(escritura=True) as cursor:
+            cursor.execute("SELECT nombre,activo FROM rol WHERE id_rol=%s FOR UPDATE", (usuario.rol.id_rol,))
+            rol = cursor.fetchone()
+            if not rol or not rol["activo"] or rol["nombre"] != NombreRol.USUARIO:
+                raise ValueError("El rol Usuario debe estar activo para crear cuentas.")
+            cursor.execute("SELECT estado FROM persona WHERE dni=%s FOR UPDATE", (usuario.persona.dni,))
+            persona = cursor.fetchone()
+            if not persona or persona["estado"] != "ACTIVA":
+                raise ValueError("La persona debe estar activa para crear su cuenta.")
             cursor.execute(
                 "INSERT INTO usuario_sistema "
                 "(dni_persona,id_rol_ref,nombre_usuario,contrasena_hash,activo,estado_cuenta) "
@@ -219,12 +214,20 @@ class RepositorioAccesoSQL(IRepositorioAcceso):
                     break
             if cuenta_actual is None:
                 raise LookupError("No se encontró la cuenta de usuario.")
+            edita_cuenta = any(valor is not None for valor in (nombre_usuario, contrasena_hash, activar))
+            if (edita_cuenta and id_usuario_actor != id_usuario
+                    and roles[cuenta_actual["id_rol_ref"]]["nombre"] == NombreRol.ADMINISTRADOR):
+                actor = next((c for c in cuentas if c["id_usuario"] == id_usuario_actor), None)
+                if not actor or not es_administrador_activo(actor, roles):
+                    raise PermissionError("Solo un administrador puede modificar esta cuenta.")
             cuenta_nueva = self._validar_cambio_acceso(
                 cuenta_actual, cuentas, roles, id_rol, activar, id_usuario_actor,
             )
             self._persistir_cambio_acceso(
                 cursor, cuenta_nueva, nombre_usuario, id_rol, contrasena_hash, activar,
             )
+            if activar is False or contrasena_hash is not None:
+                cursor.execute("DELETE FROM sesion_acceso WHERE id_usuario=%s", (id_usuario,))
         return self.consultar_cuenta_por_id(id_usuario)
 
     def registrar_acceso(self, id_usuario) -> None:
@@ -233,6 +236,60 @@ class RepositorioAccesoSQL(IRepositorioAcceso):
                 "UPDATE usuario_sistema SET ultimo_acceso=UTC_TIMESTAMP() WHERE id_usuario=%s",
                 (id_usuario,),
             )
+
+    def abrir_sesion(self, id_usuario, token, segundos):
+        if randbelow(100) == 0:
+            with self.conexion.sesion(escritura=True) as c:
+                c.execute("DELETE FROM sesion_acceso WHERE vence <= UTC_TIMESTAMP() LIMIT 100")
+        with self.conexion.sesion(escritura=True) as c:
+            c.execute(
+                "INSERT INTO sesion_acceso (token_hash,id_usuario,vence) "
+                "VALUES (%s,%s,DATE_ADD(UTC_TIMESTAMP(), INTERVAL %s SECOND))",
+                (sha256(token.encode()).digest(), id_usuario, segundos),
+            )
+
+    def sesion_vigente(self, id_usuario, token):
+        with self.conexion.sesion() as c:
+            c.execute(
+                "SELECT 1 FROM sesion_acceso WHERE token_hash=%s AND id_usuario=%s AND vence>UTC_TIMESTAMP()",
+                (sha256(token.encode()).digest(), id_usuario),
+            )
+            return c.fetchone() is not None
+
+    def cerrar_sesion(self, token):
+        with self.conexion.sesion(escritura=True) as c:
+            c.execute("DELETE FROM sesion_acceso WHERE token_hash=%s", (sha256(token.encode()).digest(),))
+
+    def reservar_intento(self, usuario, origen):
+        # Reservar antes de verificar la clave limita también solicitudes simultáneas.
+        with self.conexion.sesion(escritura=True) as c:
+            c.execute("SELECT FLOOR(UNIX_TIMESTAMP()/600) AS ventana")
+            ventana = int(c.fetchone()["ventana"])
+            for tipo, clave, limite in (("ORIGEN", origen, 50), ("USUARIO", usuario, 8)):
+                c.execute(
+                    "INSERT INTO intento_acceso (tipo,clave,ventana,intentos) VALUES (%s,%s,%s,1) "
+                    "ON DUPLICATE KEY UPDATE intentos=IF(ventana=%s,LEAST(intentos+1,%s),1),ventana=%s",
+                    (tipo, clave, ventana, ventana, limite + 1, ventana),
+                )
+                c.execute(
+                    "SELECT intentos FROM intento_acceso WHERE tipo=%s AND clave=%s FOR UPDATE",
+                    (tipo, clave),
+                )
+                if c.fetchone()["intentos"] > limite:
+                    return None
+        if randbelow(100) == 0:
+            with self.conexion.sesion(escritura=True) as c:
+                c.execute("DELETE FROM intento_acceso WHERE ventana<%s LIMIT 100", (ventana - 1,))
+        return ventana
+
+    def descontar_intento_exitoso(self, usuario, origen, ventana):
+        with self.conexion.sesion(escritura=True) as c:
+            for tipo, clave in (("ORIGEN", origen), ("USUARIO", usuario)):
+                c.execute(
+                    "UPDATE intento_acceso SET intentos=intentos-1 "
+                    "WHERE tipo=%s AND clave=%s AND ventana=%s AND intentos>0",
+                    (tipo, clave, ventana),
+                )
 
     def consultar_cuentas_para_roles(self, termino: str, limite: int = 20) -> list[CuentaParaRol]:
         palabras = termino.strip().split()

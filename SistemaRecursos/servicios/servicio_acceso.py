@@ -5,6 +5,7 @@ from dominio.gestion_personas_usuarios.i_repositorio_persona import IRepositorio
 from dominio.gestion_personas_usuarios.i_repositorio_acceso import IRepositorioAcceso
 from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
 from hashlib import sha256
+from secrets import token_urlsafe
 from dominio.gestion_personas_usuarios.nombre_rol import NombreRol
 from servicios.validacion_identificadores import identificador
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -38,7 +39,7 @@ class ServicioAplicacionAcceso:
             raise ValueError("La contraseña debe tener entre 12 y 256 caracteres.")
         return generate_password_hash(clave, method="scrypt")
 
-    def autenticar(self, usuario, clave):
+    def autenticar(self, usuario, clave, origen="local"):
         if (
             not isinstance(usuario, str)
             or not isinstance(clave, str)
@@ -46,7 +47,11 @@ class ServicioAplicacionAcceso:
             or len(clave) > 256
         ):
             return None
-        cuenta = self.usuarios.consultar_por_nombre_usuario(usuario.strip())
+        usuario = usuario.strip()
+        ventana = self.usuarios.reservar_intento(usuario, origen)
+        if ventana is None:
+            return None
+        cuenta = self.usuarios.consultar_por_nombre_usuario(usuario)
         hash_clave = cuenta.credenciales.contrasena_hash if cuenta else self._hash_inexistente
         try:
             correcta = check_password_hash(hash_clave, clave)
@@ -54,8 +59,23 @@ class ServicioAplicacionAcceso:
             correcta = False
         if not correcta or cuenta is None or not cuenta.puede_acceder():
             return None
+        self.usuarios.descontar_intento_exitoso(usuario, origen, ventana)
         self.usuarios.registrar_acceso(cuenta.id_usuario)
         return cuenta
+
+    def abrir_sesion(self, cuenta, segundos):
+        token = token_urlsafe(32)
+        self.usuarios.abrir_sesion(cuenta.id_usuario, token, segundos)
+        return token
+
+    def consultar_sesion(self, id_usuario, token):
+        if not token or not self.usuarios.sesion_vigente(id_usuario, token):
+            return None
+        return self.consultar_usuario_activo(id_usuario)
+
+    def cerrar_sesion(self, token):
+        if token:
+            self.usuarios.cerrar_sesion(token)
 
     def consultar_usuario_activo(self, id_usuario):
         try:

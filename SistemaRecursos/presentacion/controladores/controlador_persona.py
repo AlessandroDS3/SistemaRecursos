@@ -60,7 +60,7 @@ class ControladorPersona:
             "cuenta": request.args.get("cuenta", "") if con_cuentas else "",
         }
         resultado = self.servicio.consultar_personas(
-            filtros, incluir_cuenta=con_cuentas
+            dict(filtros, pagina=request.args.get("pagina", "1")), incluir_cuenta=con_cuentas
         )
         personas = resultado["personas"]
         cuentas = {}
@@ -72,7 +72,8 @@ class ControladorPersona:
             personas,
             cuentas,
             filtros=filtros,
-            resumen=resultado["resumen"],
+            resumen=resultado["resumen"], pagina=resultado["pagina"],
+            paginas=resultado["paginas"], aviso=resultado["aviso"],
         )
 
     @requiere_permiso('PERSONAS_GESTIONAR')
@@ -131,7 +132,6 @@ class ControladorPersona:
 
     @requiere_permiso('PERSONAS_GESTIONAR')
     def desactivar_persona(self, dni):
-        persona = self.servicio.consultar_persona(dni)
         self.servicio.desactivar_persona(dni, id_usuario_actor=g.usuario.id_usuario)
         self.vista.mostrar_mensaje("Persona desactivada. Sus cuentas ya no podrán ingresar.")
         return redirigir_segun_permiso("personas.consultar_personas", "PERSONAS_CONSULTAR")
@@ -148,8 +148,9 @@ class ControladorPersona:
             mensaje = error_formulario(
                 error, "La persona ya tiene cuenta o el usuario está en uso."
             )
-            detalle_persona = self._mostrar_detalle(dni, error=mensaje)
-            return detalle_persona
+            if g.usuario.rol.tiene_permiso("PERSONAS_CONSULTAR"):
+                return self._mostrar_detalle(dni, error=mensaje), 400
+            return self.vista.mostrar_alta_cuenta(dni, error=mensaje), 400
         self.vista.mostrar_mensaje("Cuenta de acceso creada.")
         return self._ir_al_detalle(dni)
 

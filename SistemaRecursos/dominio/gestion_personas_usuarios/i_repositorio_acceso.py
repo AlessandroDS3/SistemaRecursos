@@ -11,11 +11,6 @@ class IRepositorioAcceso(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def consultar_cuentas(self) -> list[UsuarioSistema]:
-        """Lectura sin escrituras. Devuelve list[UsuarioSistema]; None indica ausencia y un listado vacío no es un error."""
-        raise NotImplementedError
-
-    @abstractmethod
     def consultar_resumen_cuentas(self, dnis_persona) -> dict[str, dict[str, bool]]:
         """Lectura sin escrituras. Devuelve dict[str, dict[str, bool]]; None indica ausencia y un listado vacío no es un error."""
         raise NotImplementedError
@@ -51,6 +46,26 @@ class IRepositorioAcceso(ABC):
     @abstractmethod
     def registrar_acceso(self, id_usuario) -> None:
         """Escritura explícita. Devuelve None y propaga errores de validación o integridad."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def abrir_sesion(self, id_usuario, token, segundos):
+        raise NotImplementedError
+
+    @abstractmethod
+    def cerrar_sesion(self, token):
+        raise NotImplementedError
+
+    @abstractmethod
+    def sesion_vigente(self, id_usuario, token):
+        raise NotImplementedError
+
+    @abstractmethod
+    def reservar_intento(self, usuario, origen):
+        raise NotImplementedError
+
+    @abstractmethod
+    def descontar_intento_exitoso(self, usuario, origen, ventana):
         raise NotImplementedError
 
     @abstractmethod

@@ -2,6 +2,7 @@ from __future__ import annotations
 from dominio.gestion_personas_usuarios.persona import Persona
 from dominio.resultados_consulta import ResultadoPersonas
 from typing import Any
+from dominio.gestion_personas_usuarios.version_edicion import version_persona, exigir_version
 from dominio.gestion_personas_usuarios.i_repositorio_persona import IRepositorioPersona
 from dominio.gestion_personas_usuarios.fabrica_persona import FabricaPersona
 from repositorio.conexion_mysql import MySQLConnection
@@ -143,14 +144,17 @@ class RepositorioPersonaSQL(IRepositorioPersona):
             )
             resumen = c.fetchone()
             total = int(resumen["total"] or 0)
+            por_pagina = 25
+            paginas = max(1, (total + por_pagina - 1) // por_pagina)
+            pagina = min(filtros.get("pagina", 1), paginas)
             c.execute(
                 CONSULTA + where
-                + " ORDER BY p.apellidos, p.nombres",
-                tuple(valores),
+                + " ORDER BY p.apellidos, p.nombres, p.dni LIMIT %s OFFSET %s",
+                (*valores, por_pagina, (pagina - 1) * por_pagina),
             )
             personas = [FabricaPersona.construir(fila) for fila in c.fetchall()]
         return {
-            "personas": personas,
+            "personas": personas, "pagina": pagina, "paginas": paginas, "aviso": "",
             "resumen": {
                 "total": total,
                 "activas": int(resumen["activas"] or 0),
@@ -216,11 +220,18 @@ class RepositorioPersonaSQL(IRepositorioPersona):
             raise LookupError("No se encontró la persona.")
         if estado_nuevo == EstadoPersona.INACTIVA:
             validar_baja_persona(dni, id_usuario_actor, cuentas, roles)
+            cursor.execute(
+                "DELETE s FROM sesion_acceso s JOIN usuario_sistema u ON u.id_usuario=s.id_usuario "
+                "WHERE u.dni_persona=%s", (dni,),
+            )
 
-    def actualizar_persona(self, persona, dni_actual, id_usuario_actor=None) -> Persona:
+    def actualizar_persona(self, persona, dni_actual, id_usuario_actor=None, *, version) -> Persona:
         tabla, columnas = SUBTIPOS[persona.tipo]
         with self.conexion.sesion(escritura=True) as cursor:
             self._bloquear_persona_para_cambio(cursor, dni_actual, persona.estado, id_usuario_actor)
+            cursor.execute(CONSULTA + " WHERE p.dni=%s FOR UPDATE", (dni_actual,))
+            actual = FabricaPersona.construir(cursor.fetchone())
+            exigir_version(version, version_persona(actual))
             self._validar_identificadores(cursor, persona, dni_actual)
             cursor.execute(f"SELECT dni FROM {tabla} WHERE dni=%s FOR UPDATE", (dni_actual,))
             if cursor.fetchone() is None:

@@ -6,11 +6,6 @@ from abc import ABC, abstractmethod
 
 class IRepositorioRol(ABC):
     @abstractmethod
-    def registrar_rol(self, rol) -> Rol:
-        """Operación administrativa de persistencia; no tiene entrada web en el sistema actual."""
-        raise NotImplementedError
-
-    @abstractmethod
     def consultar_rol(self, id_rol) -> Rol | None:
         """Lectura sin escrituras. Devuelve Rol | None; None indica ausencia y un listado vacío no es un error."""
         raise NotImplementedError
@@ -21,21 +16,11 @@ class IRepositorioRol(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def actualizar_rol(self, rol) -> Rol:
-        """Operación administrativa de persistencia; no tiene entrada web en el sistema actual."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def desactivar_rol(self, id_rol) -> None:
-        """Operación administrativa de persistencia; no tiene entrada web en el sistema actual."""
-        raise NotImplementedError
-
-    @abstractmethod
     def consultar_permisos(self) -> list[Permiso]:
         """Lectura sin escrituras. Devuelve list[Permiso]; None indica ausencia y un listado vacío no es un error."""
         raise NotImplementedError
 
     @abstractmethod
-    def actualizar_matriz_permisos(self, permisos_por_rol) -> None:
+    def actualizar_matriz_permisos(self, permisos_por_rol, *, version) -> None:
         """Escritura explícita. Devuelve None y propaga errores de validación o integridad."""
         raise NotImplementedError

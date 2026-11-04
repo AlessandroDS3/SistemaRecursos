@@ -44,7 +44,7 @@ class ServicioAplicacionRol:
         permisos = self.consultar_permisos()
         matriz = self._construir_matriz(formulario, roles, permisos)
         validar_permisos_administrador(roles, permisos, matriz)
-        self.repositorio.actualizar_matriz_permisos(matriz)
+        self.repositorio.actualizar_matriz_permisos(matriz, version=formulario.get("version"))
 
     def consultar_cuentas_para_roles(self, termino: str) -> list[CuentaParaRol]:
         termino = termino.strip()

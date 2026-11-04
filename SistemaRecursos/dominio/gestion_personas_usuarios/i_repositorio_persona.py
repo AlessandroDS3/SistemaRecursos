@@ -27,7 +27,7 @@ class IRepositorioPersona(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def actualizar_persona(self, persona, dni_actual, id_usuario_actor=None) -> Persona:
+    def actualizar_persona(self, persona, dni_actual, id_usuario_actor=None, *, version) -> Persona:
         """Escritura explícita. Devuelve Persona y propaga errores de validación o integridad."""
         raise NotImplementedError
 

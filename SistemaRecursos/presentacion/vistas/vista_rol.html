@@ -41,6 +41,7 @@
     </div>
     <form method="post" action="{{ url_for('roles.actualizar_matriz_permisos') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="version" value="{{ version }}">
       <div class="tabla matriz-permisos">
         <table>
           <thead>

@@ -16,6 +16,8 @@ class Rol:
 
     def __post_init__(self):
         self.nombre = NombreRol(self.nombre)
+        if self.descripcion is None:
+            self.descripcion = ""
         if not isinstance(self.descripcion, str) or len(self.descripcion) > 255:
             raise ValueError("Descripción de rol: máximo 255 caracteres.")
 

@@ -100,7 +100,8 @@
           {% else %}
             <tr>
               <td colspan="{{ 7 if puede('USUARIOS_GESTIONAR') else 6 }}">
-                <p>{{ 'No hay personas que coincidan con los filtros.' if filtros.values()|select|list else 'No hay personas registradas.' }}</p>
+                {% if aviso %}<p role="status">{{ aviso }}</p>
+                {% else %}<p>{{ 'No hay personas que coincidan con los filtros.' if filtros.values()|select|list else 'No hay personas registradas.' }}</p>{% endif %}
                 {% if filtros.values()|select|list %}
                   <a class="boton" href="{{ url_for('personas.consultar_personas') }}">Limpiar filtros</a>
                 {% elif puede("PERSONAS_GESTIONAR") %}
@@ -115,6 +116,13 @@
       </table>
     </div>
 
+    {% if paginas > 1 %}
+      <nav aria-label="Páginas del directorio">
+        {% if pagina > 1 %}<a href="{{ url_for('personas.consultar_personas', pagina=pagina-1, **filtros) }}">Anterior</a>{% endif %}
+        Página {{ pagina }} de {{ paginas }}
+        {% if pagina < paginas %}<a href="{{ url_for('personas.consultar_personas', pagina=pagina+1, **filtros) }}">Siguiente</a>{% endif %}
+      </nav>
+    {% endif %}
   {% elif modo == "formulario" %}
   <h1>{{ 'Editar persona' if persona else 'Registrar persona' }}</h1>
   {% macro campo_persona(nombre, etiqueta, obligatorio=false, tipo='text', limite=100) %}
@@ -131,6 +139,7 @@
   {% endmacro %}
   <form method="post" action="{{ url_for('personas.actualizar_persona', dni=persona.dni) if persona else url_for('personas.registrar_persona') }}" class="panel persona-formulario" id="form-persona">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if persona %}<input type="hidden" name="version" value="{{ request.form.get('version', version) }}">{% endif %}
     <section aria-labelledby="titulo-datos-personales">
       <h2 id="titulo-datos-personales" class="solo-lector">Datos personales</h2>
       <div class="persona-rejilla">
@@ -284,37 +293,15 @@
     </section>
   {% endif %}
   {% if not cuenta and puede("USUARIOS_GESTIONAR") and persona.esta_activa() %}
-    <section class="panel" id="crear-cuenta">
-      <h2>Crear cuenta de acceso</h2>
-      <form method="post"
-            action="{{ url_for('personas.registrar_cuenta', dni=persona.dni) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="campos">
-          <label>
-            Usuario
-            <input name="nombre_usuario" maxlength="50" required autocomplete="off" value="{{ request.form.get('nombre_usuario', '') }}">
-          </label>
-          <label>
-            Contraseña inicial
-            <input name="clave"
-                   type="password"
-                   minlength="12"
-                   maxlength="256"
-                   autocomplete="new-password"
-                   required>
-          </label>
-          <p class="ayuda">El rol se asigna desde Roles y permisos.</p>
-        </div>
-        <p class="ayuda">La cuenta se crea con el rol Usuario.</p>
-        <button class="boton-principal">Crear cuenta</button>
-      </form>
-    </section>
+    {% with dni=persona.dni %}{% include "formulario_alta_cuenta.html" %}{% endwith %}
   {% endif %}
   {% if puede('PERSONAS_CONSULTAR') %}
     <a href="{{ url_for('personas.consultar_personas') }}">Volver al directorio</a>
   {% else %}
     <a href="{{ url_for('inicio') }}">Volver a Inicio</a>
   {% endif %}
+{% elif modo == "alta_cuenta" %}
+  {% include "formulario_alta_cuenta.html" %}
 {% elif modo == "cuenta" %}
   <p class="etiqueta">{{ persona.nombre_completo }}</p>
   <h1>Editar cuenta de acceso</h1>

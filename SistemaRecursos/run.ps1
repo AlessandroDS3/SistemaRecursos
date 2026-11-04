@@ -1,14 +1,11 @@
 $ErrorActionPreference = 'Stop'
 
-# Configuracion local: cada integrante coloca sus propios datos.
-$env:DB_HOST = '127.0.0.1'
-$env:DB_PORT = '3306'
-$env:DB_USER = 'root'
-$env:DB_PASSWORD = 'xxxxxx' # Contrasena local de MySQL; no compartir en repositorios publicos.
-$env:DB_NAME = 'prestamos_escuela_pruebas'
-
-if ($env:DB_PASSWORD -eq 'TU_CONTRASENA_REAL_DE_MYSQL' -or [string]::IsNullOrWhiteSpace($env:DB_PASSWORD)) {
-    throw 'Completa DB_PASSWORD en run.ps1 con tu contrasena de MySQL antes de iniciar.'
+if (-not $env:DB_HOST) { $env:DB_HOST = '127.0.0.1' }
+if (-not $env:DB_PORT) { $env:DB_PORT = '3306' }
+if (-not $env:DB_USER) { $env:DB_USER = 'root' }
+if (-not $env:DB_NAME) { $env:DB_NAME = 'prestamos_escuela_pruebas' }
+if ([string]::IsNullOrWhiteSpace($env:DB_PASSWORD)) {
+    throw 'Configura DB_PASSWORD en tu entorno antes de iniciar.'
 }
 
 $pythonProyecto = Join-Path $PSScriptRoot '..\.venv\Scripts\python.exe'

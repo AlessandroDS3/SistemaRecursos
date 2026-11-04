@@ -33,7 +33,9 @@ El procesador del servidor revisa los vencimientos aproximadamente cada 30 segun
 
 ## Iniciar aplicación
 
-El archivo `run.ps1` ya configura la conexión local a MySQL (servidor, puerto, usuario, contraseña y base de datos `prestamos_escuela_pruebas`). Si tu configuración es diferente, edita esos valores directamente en `run.ps1`.
+Configura `DB_PASSWORD` en tu entorno antes de ejecutar `run.ps1`. El script respeta también `DB_HOST`, `DB_PORT`, `DB_USER` y `DB_NAME`. Para varias instancias de Flask, configura la misma `FLASK_SECRET_KEY` en todas ellas.
+
+Si actualizas una instalación existente, ejecuta `sql/migracion_acceso.sql` con la base de la aplicación seleccionada antes de arrancar la nueva versión. La migración crea las tablas de sesiones e intentos de acceso y se puede repetir. Las sesiones anteriores a la actualización requieren un nuevo inicio de sesión.
 
 Desde PowerShell, dentro de `SISTEMA_RECURSOS`:
 
@@ -47,7 +49,9 @@ La base `prestamos_escuela_pruebas` debe existir y contener las tablas compatibl
 
 Abre `http://127.0.0.1:5000`. Para iniciar sesión se necesita una cuenta habilitada en la base de datos utilizada; el esquema limpio no agrega usuarios predeterminados.
 
-**Seguridad:** `run.ps1` contiene una contraseña local en texto plano. No lo publiques ni lo compartas con contraseñas reales. Para un despliegue compartido, usa variables de entorno o una configuración local excluida del control de versiones.
+## Pruebas de personas y acceso
+
+Dentro de la carpeta que contiene `app.py`, define `TEST_MYSQL_PORT` para una instancia local de pruebas y ejecuta `python -m unittest discover -s tests -v`. Las pruebas crean y eliminan una base temporal con nombre único. La cuenta de pruebas necesita esos permisos. Puedes indicar sus credenciales con `TEST_MYSQL_USER` y `TEST_MYSQL_PASSWORD`.
 
 ## Código principal
 

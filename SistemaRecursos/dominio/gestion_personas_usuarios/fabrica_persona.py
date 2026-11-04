@@ -10,6 +10,8 @@ class FabricaPersona:
         datos = dict(datos)
         if "dni" not in datos and "documento_identidad" in datos:
             datos["dni"] = datos["documento_identidad"]
+        if datos.get("telefono") is None:
+            datos["telefono"] = ""
         validar_datos_persona(datos)
 
         if datos["tipo"] == "ESTUDIANTE":

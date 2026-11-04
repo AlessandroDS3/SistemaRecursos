@@ -58,6 +58,9 @@ class ResumenPersonas(TypedDict):
 class ResultadoPersonas(TypedDict):
     personas: list[Persona]
     resumen: ResumenPersonas
+    pagina: int
+    paginas: int
+    aviso: str
 
 class ResultadoRecursos(TypedDict):
     recursos: list[RecursoListado]

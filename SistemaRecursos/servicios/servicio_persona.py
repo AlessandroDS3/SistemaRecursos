@@ -28,6 +28,12 @@ class ServicioAplicacionPersona:
         if not isinstance(termino, str) or len(termino) > 120:
             raise ValueError("La búsqueda admite hasta 120 caracteres.")
         filtros["q"] = termino.strip()
+        filtros["pagina"] = identificador(filtros.get("pagina", 1))
+        if filtros["q"] and not any(len(p) >= 2 for p in filtros["q"].split()):
+            return {
+                "personas": [], "resumen": {"total": 0, "activas": 0, "inactivas": 0},
+                "pagina": 1, "paginas": 1, "aviso": "Escribe al menos dos caracteres para buscar.",
+            }
         if filtros.get("tipo", "") not in {"", "ESTUDIANTE", "DOCENTE", "ADMINISTRATIVO"}:
             raise ValueError("Selecciona un tipo de persona válido.")
         if filtros.get("estado", "") not in {"", "ACTIVA", "INACTIVA"}:
@@ -46,7 +52,10 @@ class ServicioAplicacionPersona:
         datos.setdefault("estado", actual.estado)
         for campo in ("codigo_docente", "departamento_academico", "facultad", "escuela_profesional", "codigo_empleado", "area"):
             datos.setdefault(campo, getattr(actual, campo, None))
-        return self.repositorio.actualizar_persona(FabricaPersona.construir(datos), dni_actual=actual.dni, id_usuario_actor=id_usuario_actor)
+        return self.repositorio.actualizar_persona(
+            FabricaPersona.construir(datos), dni_actual=actual.dni,
+            id_usuario_actor=id_usuario_actor, version=datos.get("version"),
+        )
 
     def desactivar_persona(self, dni, id_usuario_actor=None) -> None:
         id_usuario_actor = identificador(id_usuario_actor) if id_usuario_actor is not None else None
