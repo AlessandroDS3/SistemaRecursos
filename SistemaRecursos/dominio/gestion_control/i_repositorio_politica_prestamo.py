@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dominio.gestion_control.politica_prestamo import PoliticaPrestamo
+from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
 from abc import ABC, abstractmethod
 from dominio.gestion_control.horario_atencion import HorarioAtencion
 from dominio.gestion_control.politica_vencimiento_reserva import PoliticaVencimientoReserva
@@ -52,4 +53,14 @@ class IRepositorioPoliticaPrestamo(ABC):
 
     @abstractmethod
     def actualizar_politica_vencimiento_reserva(self, politica: PoliticaVencimientoReserva) -> PoliticaVencimientoReserva:
+        raise NotImplementedError
+
+    @abstractmethod
+    def consultar_limites_articulos(self) -> list[LimiteArticulosPrestamo]:
+        """Consulta los máximos generales por tipo de persona, sin escrituras."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def actualizar_limites_articulos(self, limites: list[LimiteArticulosPrestamo]) -> None:
+        """Guarda en una transacción los máximos elegidos por el administrador."""
         raise NotImplementedError

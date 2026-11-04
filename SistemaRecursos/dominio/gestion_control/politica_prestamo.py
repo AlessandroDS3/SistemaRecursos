@@ -52,3 +52,24 @@ class PoliticaPrestamo:
         if self.unidad_plazo == 'HORAS' and horario is not None:
             return horario.limitar_prestamo_por_horas(fecha_entrega, limite)
         return limite
+
+
+@dataclass(kw_only=True)
+class LimiteArticulosPrestamo:
+    tipo_persona: TipoPersona
+    maximo_articulos: int | None = None
+
+    def __post_init__(self):
+        self.tipo_persona = TipoPersona(self.tipo_persona)
+        if self.maximo_articulos is not None:
+            self.maximo_articulos = entero(self.maximo_articulos, 'Máximo de artículos')
+            if self.maximo_articulos > 2147483647:
+                raise ValueError('El máximo de artículos es demasiado grande.')
+
+    def validar_entrega(self, pendientes: int, nuevos: int) -> None:
+        if self.maximo_articulos is None:
+            raise ValueError(f'El administrador debe configurar el máximo de artículos para {self.tipo_persona.value.lower()} en Políticas.')
+        disponibles = max(0, self.maximo_articulos - pendientes)
+        if nuevos > disponibles:
+            raise ValueError(f'La persona tiene {pendientes} artículo(s) pendiente(s). Su máximo general es {self.maximo_articulos}. '
+                             f'Solo puede recibir {disponibles} artículo(s) más; seleccionaste {nuevos}.')

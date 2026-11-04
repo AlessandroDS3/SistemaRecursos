@@ -9,6 +9,7 @@ from dominio.gestion_prestamos.detalle_prestamo import DetallePrestamo
 from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.horario_atencion_sql import consultar_horario_atencion
+from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
 from repositorio.sanciones_vencimiento_sql import aplicar_sancion_vencimiento
 from repositorio.registro_fuera_servicio_sql import guardar_cambio_fuera_servicio
 from dominio.gestion_recursos.bien_material import EstadoBienMaterial
@@ -99,6 +100,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
 
     def _registrar_prestamo_con_cursor(self, cursor, solicitud, id_bien_reservado):
         personas = self._validar_personas(cursor, solicitud)
+        self._validar_limite_articulos(cursor, solicitud, personas[solicitud.dni_persona]["tipo"])
         bienes = self._consultar_bienes_disponibles(cursor, solicitud, id_bien_reservado)
         tipo_persona = personas[solicitud.dni_persona]["tipo"]
         politicas = self._consultar_politicas(cursor, bienes, tipo_persona, solicitud.salida_solicitada)
@@ -695,3 +697,14 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
                 "Pérdida reportada; el bien sigue pendiente de devolución",
                 dni_encargado,
             )
+
+    @staticmethod
+    def _validar_limite_articulos(cursor, solicitud, tipo_persona):
+        # El solicitante ya está bloqueado en esta transacción para evitar entregas simultáneas sobre su máximo.
+        cursor.execute('SELECT maximo_articulos FROM limite_articulos_prestamo WHERE tipo_persona=%s FOR UPDATE', (tipo_persona,))
+        fila = cursor.fetchone()
+        limite = LimiteArticulosPrestamo(tipo_persona=tipo_persona, maximo_articulos=fila['maximo_articulos'] if fila else None)
+        cursor.execute("""SELECT COUNT(*) AS pendientes FROM detalle_prestamo d
+            JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
+            WHERE pr.dni_persona=%s AND d.estado_devolucion IS NULL""", (solicitud.dni_persona,))
+        limite.validar_entrega(int(cursor.fetchone()['pendientes']), len(solicitud.ids_bienes))

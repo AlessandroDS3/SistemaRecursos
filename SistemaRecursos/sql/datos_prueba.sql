@@ -152,6 +152,14 @@ CREATE TABLE IF NOT EXISTS horario_atencion (
 INSERT INTO horario_atencion(id_horario,hora_apertura,hora_cierre)
 VALUES(1,'08:00:00','16:00:00') ON DUPLICATE KEY UPDATE id_horario=id_horario;
 
+CREATE TABLE IF NOT EXISTS limite_articulos_prestamo (
+  tipo_persona      ENUM('ESTUDIANTE','DOCENTE','ADMINISTRATIVO') PRIMARY KEY,
+  maximo_articulos  INT NULL CHECK (maximo_articulos > 0)
+) ENGINE=InnoDB;
+INSERT INTO limite_articulos_prestamo(tipo_persona,maximo_articulos)
+VALUES('ESTUDIANTE',NULL),('DOCENTE',NULL),('ADMINISTRATIVO',NULL)
+ON DUPLICATE KEY UPDATE tipo_persona=VALUES(tipo_persona);
+
 CREATE TABLE IF NOT EXISTS politica_vencimiento_reserva (
   id_politica    TINYINT PRIMARY KEY CHECK (id_politica=1),
   plazo_espera   INT NOT NULL CHECK (plazo_espera BETWEEN 1 AND 87600),

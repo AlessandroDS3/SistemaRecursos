@@ -3,7 +3,7 @@ from dominio.gestion_control.tipo_persona import TipoPersona
 
 
 class VistaPoliticaPrestamo:
-    def mostrar_consulta(self, politicas, categorias, error=None, horario=None, error_horario=None, vencimientos=None, error_vencimiento=None):
+    def mostrar_consulta(self, politicas, categorias, error=None, horario=None, error_horario=None, vencimientos=None, error_vencimiento=None, limites=None, error_limites=None):
         politicas_por_categoria = {}
         for regla in politicas:
             politicas_por_categoria.setdefault(regla.id_categoria_ref, {})[regla.tipo_persona.value] = regla
@@ -15,6 +15,8 @@ class VistaPoliticaPrestamo:
             error_horario=error_horario,
             vencimientos=vencimientos,
             error_vencimiento=error_vencimiento,
+            limites_por_tipo={limite.tipo_persona.value: limite.maximo_articulos for limite in limites or []},
+            error_limites=error_limites,
             error=error,
             tipos_persona=TipoPersona,
             categorias=categorias,

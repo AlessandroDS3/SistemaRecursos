@@ -1,9 +1,12 @@
 from __future__ import annotations
 from dominio.gestion_control.politica_prestamo import PoliticaPrestamo
+from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
 from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
 from dominio.gestion_control.i_repositorio_politica_prestamo import IRepositorioPoliticaPrestamo
 from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
 from servicios.validacion_identificadores import identificador
+from dominio.gestion_control.tipo_persona import TipoPersona
+from dominio.gestion_recursos.validacion_recurso import entero
 from dominio.gestion_control.horario_atencion import HorarioAtencion
 from dominio.gestion_control.politica_vencimiento_reserva import PoliticaVencimientoReserva
 
@@ -77,3 +80,11 @@ class ServicioAplicacionPoliticaPrestamo:
                 f"La política de esta categoría para {tipo_persona} no permite salida de la institución."
             )
         return politica
+
+    def consultar_limites_articulos(self) -> list[LimiteArticulosPrestamo]:
+        return self.repositorio.consultar_limites_articulos()
+
+    def actualizar_limites_articulos(self, datos) -> None:
+        limites = [LimiteArticulosPrestamo(tipo_persona=tipo,
+            maximo_articulos=entero(datos.get('maximo_' + tipo.value), 'Máximo para ' + tipo.value.lower())) for tipo in TipoPersona]
+        self.repositorio.actualizar_limites_articulos(limites)

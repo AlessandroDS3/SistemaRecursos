@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dominio.gestion_control.politica_prestamo import PoliticaPrestamo
+from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
 from dominio.gestion_control.i_repositorio_politica_prestamo import IRepositorioPoliticaPrestamo
 from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
 from dominio.gestion_prestamos.validacion_prestamo import ConflictoPrestamoError
@@ -112,3 +113,17 @@ class RepositorioPoliticaPrestamoSQL(IRepositorioPoliticaPrestamo):
                 (politica.plazo_espera, politica.unidad_espera, politica.plazo_retiro, politica.unidad_retiro),
             )
         return politica
+
+    def consultar_limites_articulos(self) -> list[LimiteArticulosPrestamo]:
+        with self.conexion.sesion() as cursor:
+            cursor.execute('SELECT tipo_persona,maximo_articulos FROM limite_articulos_prestamo ORDER BY tipo_persona')
+            return [LimiteArticulosPrestamo(**fila) for fila in cursor.fetchall()]
+
+    def actualizar_limites_articulos(self, limites: list[LimiteArticulosPrestamo]) -> None:
+        with self.conexion.sesion(escritura=True) as cursor:
+            cursor.execute('SELECT tipo_persona FROM limite_articulos_prestamo ORDER BY tipo_persona FOR UPDATE')
+            cursor.fetchall()
+            for limite in sorted(limites, key=lambda l:l.tipo_persona.value):
+                cursor.execute("""INSERT INTO limite_articulos_prestamo(tipo_persona,maximo_articulos) VALUES(%s,%s)
+                    ON DUPLICATE KEY UPDATE maximo_articulos=VALUES(maximo_articulos)""",
+                    (limite.tipo_persona.value, limite.maximo_articulos))
