@@ -1,72 +1,84 @@
 # Sistema de préstamos escolares
 
-Aplicación web Flask + MySQL para gestionar personas, usuarios, roles, permisos, recursos, bienes, políticas, reservas, préstamos y devoluciones.
+Aplicación web con Flask y MySQL para gestionar personas, usuarios, recursos, bienes, reservas, préstamos y devoluciones.
 
 ## Requisitos
 
 - Python 3.10 o superior.
-- MySQL 8.
+- MySQL 8 en ejecución.
 
-## Instalación
+## Preparar la base de datos
 
-Desde PowerShell, en la carpeta que contiene `app.py`, ejecuta:
+Para probar el sistema, abre `sql/datos_prueba.sql` en MySQL Workbench u otro cliente de MySQL y ejecútalo. Crea la base `prestamos_escuela_pruebas` con datos de ejemplo y las cuentas indicadas más abajo.
+
+Ejecuta ese archivo solo en una instalación nueva; no lo vuelvas a importar sobre una base que ya contiene datos.
+
+Si tienes una base de una versión anterior, ejecuta `sql/migracion_acceso.sql` con esa base seleccionada para crear las tablas de sesiones e intentos de acceso.
+
+También está disponible `sql/schema.sql` para crear la base `prestamos_escuela` sin cuentas ni datos de demostración. Para utilizarla, cambia `DB_NAME` en la configuración de conexión.
+
+## Iniciar la aplicación
+
+Puedes iniciar con `run.ps1` o directamente con `app.py`. Primero, desde PowerShell, en la raíz del repositorio, entra en la carpeta de la aplicación y configura MySQL:
+
+```powershell
+cd .\SistemaRecursos
+$env:DB_HOST = '127.0.0.1'
+$env:DB_PORT = '3306'
+$env:DB_USER = 'root'
+$env:DB_PASSWORD = 'tu_contrasena_mysql'
+$env:DB_NAME = 'prestamos_escuela_pruebas'
+```
+
+Reemplaza `tu_contrasena_mysql` por tu contraseña de MySQL. Ejecuta la opción que prefieras en esa misma ventana de PowerShell.
+
+### Opción 1: con `run.ps1`
 
 ```powershell
 .\run.ps1
 ```
 
-El script crea el entorno virtual en `..\.venv` si no existe e instala las dependencias de `requirements.txt` antes de iniciar la aplicación. No es necesario activar el entorno manualmente.
+El script crea el entorno virtual en `..\.venv` si falta e instala las dependencias automáticamente. No necesitas activar el entorno manualmente.
 
-Si prefieres preparar el entorno sin iniciar la aplicación:
+Si `run.ps1` tiene valores de conexión asignados al inicio, esos valores reemplazan las variables anteriores; ajústalos también si tu configuración es diferente.
+
+### Opción 2: directamente con `app.py`
+
+Si todavía no preparaste el entorno, ejecuta:
 
 ```powershell
-py -m venv ..\.venv
+py -3 -m venv ..\.venv
 ..\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-## Base de datos
-
-El proyecto incluye **dos archivos SQL completos** para instalaciones nuevas:
-
-- `sql/schema.sql`: crea `prestamos_escuela` con las tablas vacías, el horario de atención y la política inicial de vencimientos. No crea cuentas de acceso.
-- `sql/datos_prueba.sql`: crea `prestamos_escuela_pruebas` con las mismas tablas y datos ficticios, incluidos roles, permisos, bienes y cuentas de demostración. Este es el archivo que corresponde al nombre configurado en `run.ps1`.
-
-**Elige uno** para instalar una base nueva. No ejecutes ambos sobre la misma base ni vuelvas a importar `datos_prueba.sql` en una base que ya contiene registros.
-
-Ambos incluyen la tabla `politica_vencimiento_reserva` y los campos `reserva.fecha_preparacion` y `reserva.fecha_limite_vencimiento`. La configuración inicial es 2 días desde el retiro solicitado para solicitudes `EN_ESPERA` y 24 horas desde la preparación para reservas `LISTA_PARA_RETIRO`. Los registros de prueba abiertos reciben su fecha límite al cargarse.
-
-**Una base MySQL existente no se modifica al actualizar estos archivos SQL.** Antes de usar esta versión con una base anterior que ya contiene datos, realiza un respaldo y actualiza su estructura una sola vez con los cambios de vencimientos. No uses `CREATE TABLE IF NOT EXISTS` para suponer que las columnas se agregan a tablas existentes. La ejecución y verificación de esta actualización dependen de tu instalación local.
-
-El procesador del servidor revisa los vencimientos aproximadamente cada 30 segundos mientras la aplicación está activa. Los plazos configurados se guardan individualmente por solicitud; los cambios de política no alteran retroactivamente las fechas ya calculadas.
-
-## Iniciar aplicación
-
-Configura `DB_PASSWORD` en tu entorno antes de ejecutar `run.ps1`. El script respeta también `DB_HOST`, `DB_PORT`, `DB_USER` y `DB_NAME`. Para varias instancias de Flask, configura la misma `FLASK_SECRET_KEY` en todas ellas.
-
-Si actualizas una instalación existente, ejecuta `sql/migracion_acceso.sql` con la base de la aplicación seleccionada antes de arrancar la nueva versión. La migración crea las tablas de sesiones e intentos de acceso y se puede repetir. Las sesiones anteriores a la actualización requieren un nuevo inicio de sesión.
-
-Desde PowerShell, dentro de `SISTEMA_RECURSOS`:
+Luego inicia la aplicación:
 
 ```powershell
-.\run.ps1
+..\.venv\Scripts\python.exe app.py
 ```
 
-El script utiliza el entorno virtual de `..\.venv`, junto a la carpeta de la aplicación, y lo crea automáticamente cuando falta.
+`app.py` utiliza las variables de conexión definidas en esa ventana. Si ya activaste el entorno virtual, puedes usar `python app.py`.
 
-La base `prestamos_escuela_pruebas` debe existir y contener las tablas compatibles con esta versión. Para una instalación nueva con registros ficticios utiliza `sql/datos_prueba.sql`; si ya tiene datos, conserva esa base y actualiza su esquema antes de ejecutar.
+Abre [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
-Abre `http://127.0.0.1:5000`. Para iniciar sesión se necesita una cuenta habilitada en la base de datos utilizada; el esquema limpio no agrega usuarios predeterminados.
+## Usuarios de prueba
 
-## Pruebas de personas y acceso
+Estas cuentas se crean al importar `sql/datos_prueba.sql`:
 
-Dentro de la carpeta que contiene `app.py`, define `TEST_MYSQL_PORT` para una instancia local de pruebas y ejecuta `python -m unittest discover -s tests -v`. Las pruebas crean y eliminan una base temporal con nombre único. La cuenta de pruebas necesita esos permisos. Puedes indicar sus credenciales con `TEST_MYSQL_USER` y `TEST_MYSQL_PASSWORD`.
+| Usuario | Contraseña | Rol |
+| --- | --- | --- |
+| `admin` | `AdminPrueba2026!` | Administrador |
+| `encargado1`, `encargado2` | `EncargadoPrueba2026!` | Encargado de préstamos |
+| `usuario1` | `UsuarioPrueba2026!` | Usuario |
+| `estudiante01` a `estudiante08` | `UsuarioPrueba2026!` | Usuario |
 
-## Código principal
+Son cuentas de demostración para pruebas locales. La contraseña de inicio de sesión es distinta de la contraseña de conexión a MySQL.
 
-- `app.py`: configuración y arranque de Flask.
-- `dominio/`: entidades y reglas del negocio.
-- `servicios/`: casos de uso y operaciones.
-- `repositorio/`: acceso a MySQL.
-- `presentacion/`: rutas, vistas HTML, JavaScript, CSS e imágenes.
-- `sql/schema.sql`: esquema sin datos.
-- `sql/datos_prueba.sql`: esquema con datos ficticios de demostración.
+## Organización del código
+
+- `app.py`: configura e inicia la aplicación.
+- `dominio/`: entidades, validaciones y reglas del negocio.
+- `servicios/`: coordina las operaciones del sistema.
+- `repositorio/`: consulta y guarda los datos en MySQL.
+- `presentacion/`: controladores, vistas y archivos de la interfaz.
+- `sql/`: estructura de la base de datos, migraciones y datos de prueba.
