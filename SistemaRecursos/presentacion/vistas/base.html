@@ -1,0 +1,216 @@
+
+{# ==================== CONFIGURACIÓN ==================== #}
+{% set rol_etiquetas = {
+  "ADMINISTRADOR": "Administrador",
+  "ENCARGADO_PRESTAMOS": "Encargado de préstamos",
+  "USUARIO": "Usuario"
+} %}
+{% set secciones = {
+  "personas": "Personas",
+  "recursos": "Catálogo de recursos",
+  "bienes": "Bienes materiales",
+  "prestamos": "Préstamos",
+  "reservas": "Solicitudes y reservas",
+  "politicas": "Políticas de préstamo",
+  "roles": "Roles y permisos"
+} %}
+{% set es_administracion_recursos = request.blueprint == 'bienes' or request.endpoint in [
+  'recursos.consultar_administracion_recursos', 'recursos.actualizar_recurso',
+  'recursos.mostrar_edicion_recurso', 'recursos.registrar_recurso',
+  'recursos.registrar_categoria', 'recursos.actualizar_categoria',
+  'recursos.eliminar_categoria', 'recursos.eliminar_recurso'
+] %}
+{% set seccion = 'Administración de recursos' if es_administracion_recursos else secciones.get(request.blueprint, 'Inicio') %}
+
+{# ==================== NAVEGACIÓN ==================== #}
+{% set navegacion = [
+  ('inicio', 'Inicio', true, 'inicio'),
+  ('personas.consultar_personas', 'Personas', puede('PERSONAS_CONSULTAR'), 'personas'),
+  ('roles.consultar_roles', 'Roles y permisos', puede('ROLES_CONSULTAR'), 'roles'),
+  ('recursos.consultar_recursos', 'Catálogo de recursos', puede('CATALOGO_CONSULTAR'), 'recursos'),
+  ('recursos.consultar_administracion_recursos', 'Administrar recursos', puede('RECURSOS_GESTIONAR'), 'administracion_recursos'),
+  ('prestamos.consultar_prestamos', 'Préstamos' if puede('PRESTAMOS_GESTIONAR') else 'Mis préstamos',
+    puede('PRESTAMOS_GESTIONAR') or puede('PRESTAMOS_PROPIOS_CONSULTAR'), 'prestamos'),
+  ('reservas.consultar_reservas', 'Solicitudes y reservas' if puede('PRESTAMOS_GESTIONAR') else 'Mis solicitudes y reservas',
+    puede('PRESTAMOS_GESTIONAR') or puede('RESERVAS_PROPIAS_GESTIONAR'), 'reservas'),
+  ('politicas.consultar_politicas', 'Políticas de préstamo', puede('POLITICAS_GESTIONAR'), 'politicas')
+] %}
+
+<!DOCTYPE html>
+<html lang="es">
+<!-- ==================== HEAD ==================== -->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block titulo %}Sistema de préstamos · UNSA{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+  <script src="{{ url_for('static', filename='interfaz.js') }}" defer></script>
+</head>
+<body class="{{ 'pagina-sistema' if g.usuario else 'pagina-acceso' }}">
+  <a class="enlace-saltar-contenido" href="#contenido">Ir al contenido</a>
+  {% if g.usuario %}
+  <!-- ==================== SIDEBAR ==================== -->
+  <aside class="menu-lateral" id="menu-principal" aria-label="Menú del sistema">
+    <!-- Identidad -->
+    <header class="identidad-menu">
+      <a class="logo-institucional" href="{{ url_for('inicio') }}" aria-label="Inicio">
+        <img src="{{ url_for('static', filename='logo-escuela.png') }}"
+             alt="Ciencia de la Computación · UNSA" width="1400" height="800">
+      </a>
+      <div class="nombre-escuela">
+        ESCUELA PROFESIONAL
+        <span>Ciencia de la Computación</span>
+      </div>
+    </header>
+    <!-- Módulos -->
+    <section class="modulos-menu" aria-label="Módulos disponibles">
+      <p class="titulo-menu">SISTEMA DE PRÉSTAMOS</p>
+      <nav aria-label="Módulos">
+        {% for endpoint, etiqueta, visible, grupo in navegacion if visible %}
+          {% set activa = (grupo == 'inicio' and request.endpoint == 'inicio') or
+            (grupo == 'administracion_recursos' and es_administracion_recursos) or
+            (request.blueprint == grupo and not es_administracion_recursos) %}
+          <a class="{{ 'enlace-menu-activo' if activa else 'enlace-menu' }}"
+             href="{{ url_for(endpoint) }}"
+             {% if activa %}aria-current="page"{% endif %}>{{ etiqueta }}</a>
+        {% endfor %}
+      </nav>
+    </section>
+    <!-- Cuenta de usuario -->
+    <section class="pie-menu" aria-label="Cuenta de usuario">
+      <div class="usuario-menu">
+        <span class="iniciales-usuario" aria-hidden="true">{{ g.usuario.persona.nombres[:1] }}{{ g.usuario.persona.apellidos[:1] }}</span>
+        <div>
+          <strong>{{ g.usuario.persona.nombre_completo }}</strong>
+          <small>{{ rol_etiquetas.get(g.usuario.rol.nombre.value, g.usuario.rol.nombre.value) }}</small>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('auth.logout') }}" class="formulario-cierre-sesion">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">Cerrar sesión</button>
+      </form>
+    </section>
+  </aside>
+  <!-- ==================== ENCABEZADO ==================== -->
+  <button class="fondo-menu" id="menu-sombra" aria-label="Cerrar menú" hidden></button>
+  <div class="contenedor-sistema">
+    <header class="barra-superior">
+      <div class="ruta">
+        <button class="boton-menu" id="menu-toggle"
+                aria-controls="menu-principal"
+                aria-expanded="false" aria-label="Abrir menú">
+          <span aria-hidden="true">☰</span>
+        </button>
+        <strong>{{ seccion }}</strong>
+      </div>
+    </header>
+  {% endif %}
+  <!-- ==================== CONTENIDO PRINCIPAL ==================== -->
+  <main id="contenido" class="{{ 'contenido-principal' if g.usuario else 'contenedor-acceso' }}">
+    <!-- Mensajes -->
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+      {% if mensajes %}
+        <div class="mensajes" role="status">
+          {% for categoria, mensaje in mensajes %}
+            <p class="aviso {{ 'aviso-exito' if categoria == 'success' else categoria }}">{{ mensaje }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block contenido %}
+      <!-- ==================== ERRORES ==================== -->
+      {% if mensaje_error is defined %}
+        <section class="panel-error panel">
+          <span class="icono-error" aria-hidden="true">!</span>
+          <h1>Operación no completada</h1>
+          <p role="alert">{{ mensaje_error }}</p>
+          <div class="acciones">
+            <button onclick="history.back()">Volver</button>
+            <a class="boton boton-principal" href="{{ url_for('inicio') }}">
+              {{ 'Ir al inicio' if g.usuario else 'Iniciar sesión' }}
+            </a>
+          </div>
+        </section>
+      {% elif g.usuario %}
+        <!-- ==================== INICIO ==================== -->
+        <section class="inicio" aria-label="Página de inicio">
+          <header class="encabezado">
+            <h1>Inicio</h1>
+          </header>
+          <!-- ==================== ACCIONES ==================== -->
+          <section class="panel acciones-inicio" aria-label="Acciones disponibles">
+            <h2>Acciones</h2>
+            <div class="acciones">
+              {% if puede("RECURSOS_GESTIONAR") or puede("PERSONAS_GESTIONAR") or puede("POLITICAS_GESTIONAR") or puede("ROLES_GESTIONAR") %}
+                {% if puede("RECURSOS_GESTIONAR") %}
+                  <a class="boton boton-principal" href="{{ url_for('recursos.consultar_administracion_recursos', nuevo=1, _anchor='registro-recurso') }}">Registrar recurso</a>
+                {% endif %}
+                {% if puede("PERSONAS_GESTIONAR") %}
+                  <a class="boton" href="{{ url_for('personas.mostrar_formulario_persona') }}">Registrar persona</a>
+                {% endif %}
+                {% if puede("POLITICAS_GESTIONAR") %}
+                  <a class="boton" href="{{ url_for('politicas.consultar_politicas') }}">Configurar políticas</a>
+                {% endif %}
+                {% if puede("ROLES_GESTIONAR") %}
+                  <a class="boton" href="{{ url_for('roles.consultar_roles') }}">Gestionar permisos</a>
+                {% endif %}
+                {% if puede("PRESTAMOS_GESTIONAR") %}
+                  <a class="boton boton-principal" href="{{ url_for('prestamos.mostrar_formulario_prestamo') }}">Registrar préstamo</a>
+                  <a class="boton" href="{{ url_for('prestamos.consultar_prestamos', estado='PENDIENTES') }}">Registrar devolución</a>
+                {% endif %}
+              {% elif puede("PRESTAMOS_GESTIONAR") %}
+                <a class="boton boton-principal" href="{{ url_for('prestamos.mostrar_formulario_prestamo') }}">Registrar préstamo</a>
+                <a class="boton" href="{{ url_for('prestamos.consultar_prestamos', estado='PENDIENTES') }}">Registrar devolución</a>
+                {% if puede("CATALOGO_CONSULTAR") %}
+                  <a class="boton" href="{{ url_for('recursos.consultar_recursos') }}">Consultar disponibilidad</a>
+                {% endif %}
+              {% else %}
+                {% if puede("CATALOGO_CONSULTAR") %}
+                  <a class="boton boton-principal" href="{{ url_for('recursos.consultar_recursos') }}">Consultar catálogo</a>
+                {% endif %}
+                {% if puede("PRESTAMOS_PROPIOS_CONSULTAR") %}
+                  <a class="boton" href="{{ url_for('prestamos.consultar_prestamos') }}">Mis préstamos</a>
+                {% endif %}
+              {% endif %}
+              {% if puede('PRESTAMOS_GESTIONAR') or puede('RESERVAS_PROPIAS_GESTIONAR') %}
+                <a class="boton" href="{{ url_for('reservas.consultar_reservas') }}">
+                  {{ 'Atender solicitudes y reservas' if puede('PRESTAMOS_GESTIONAR') else 'Mis solicitudes y reservas' }}
+                </a>
+              {% endif %}
+            </div>
+          </section>
+          <!-- ==================== ESTADÍSTICAS ==================== -->
+          {% if resumen_inicio %}
+            <section class="resumen-estadisticas resumen-inicio" aria-label="Resumen del sistema">
+              {% if resumen_inicio.prestamos_pendientes is defined %}
+                <article>
+                  <span>Préstamos por devolver</span>
+                  <strong>{{ resumen_inicio.prestamos_pendientes }}</strong>
+                  <a href="{{ url_for('prestamos.consultar_prestamos', estado='PENDIENTES') }}">Ver préstamos</a>
+                </article>
+                <article class="{{ 'alerta' if resumen_inicio.prestamos_vencidos else '' }}">
+                  <span>Préstamos vencidos</span>
+                  <strong>{{ resumen_inicio.prestamos_vencidos }}</strong>
+                  <a href="{{ url_for('prestamos.consultar_prestamos', estado='VENCIDO') }}">Revisar vencidos</a>
+                </article>
+              {% endif %}
+              {% if resumen_inicio.bienes_disponibles is defined %}
+                <article class="indicador-disponibilidad">
+                  <span>Bienes disponibles</span>
+                  <strong>{{ resumen_inicio.bienes_disponibles }}</strong>
+                  <a href="{{ url_for('recursos.consultar_recursos', solo_disponibles='1') }}">Consultar catálogo</a>
+                </article>
+              {% endif %}
+            </section>
+          {% endif %}
+        </section>
+      {% endif %}
+    {% endblock %}
+  </main>
+  {% if g.usuario %}
+  </div>
+  {% endif %}
+  <!-- ==================== SCRIPTS ==================== -->
+  {% block scripts %}{% endblock %}
+</body>
+</html>

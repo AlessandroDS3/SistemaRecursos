@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block titulo %}Bienes físicos · Sistema de préstamos{% endblock %}
+{% block contenido %}
+  {% if modo == "consulta" %}
+    <div class="encabezado">
+      <div>
+        <h1>Bienes físicos</h1>
+      </div>
+      <a class="boton boton-principal"
+         href="{{ url_for('recursos.consultar_administracion_recursos') }}">Administrar recursos</a>
+    </div>
+    <form method="get" class="panel filtros-catalogo">
+      {% if request.args.get('id_recurso') %}<input type="hidden" name="id_recurso" value="{{ request.args.get('id_recurso') }}">{% endif %}
+      <div class="campos">
+        <label>Buscar bien<input type="search" name="q" maxlength="120" placeholder="Código de inventario, recurso o serie" value="{{ request.args.get('q', '') }}"></label>
+        <label>Estado<select name="estado"><option value="">Todos</option>{% for valor, etiqueta in estados %}<option value="{{ valor }}" {{ 'selected' if request.args.get('estado')==valor else '' }}>{{ etiqueta }}</option>{% endfor %}</select></label>
+      </div>
+      <div class="acciones"><button class="boton-principal">Buscar</button><a href="{{ url_for('bienes.consultar_bienes_materiales', id_recurso=request.args.get('id_recurso', '')) }}">Limpiar</a></div>
+    </form>
+    <section class="resumen-estadisticas resumen-cuatro-columnas" aria-label="Resumen del inventario">
+      <article><span>Bienes encontrados</span><strong>{{ resumen.total }}</strong></article>
+      <article><span>Disponibles</span><strong>{{ resumen.disponibles }}</strong></article>
+      <article><span>Prestados</span><strong>{{ resumen.prestados }}</strong></article>
+      <article><span>En mantenimiento</span><strong>{{ resumen.mantenimiento }}</strong></article>
+    </section>
+    <p class="ayuda">Mostrando {{ bienes|length }} bienes.</p>
+    <section class="panel tabla">
+      <table>
+        <thead>
+          <tr>
+            <th>Inventario</th>
+            <th>Recurso</th>
+            <th>Descripción particular</th>
+            <th>Serie</th>
+            <th>Ubicación</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bienes %}
+            <tr>
+              <td><a href="{{ url_for('bienes.consultar_detalle_bien_material', id_bien=b.id_bien) }}">{{ b.codigo_inventario }}</a></td>
+              <td>
+                {% if puede('CATALOGO_CONSULTAR') %}
+                  <a href="{{ url_for('recursos.consultar_recurso', id_recurso=b.id_recurso_ref) }}">{{ b.recurso_nombre }}</a>
+                {% else %}
+                  {{ b.recurso_nombre }}
+                {% endif %}
+              </td>
+              <td>{{ b.descripcion_bien or 'Sin descripción particular' }}</td>
+              <td>{{ b.numero_serie or 'Sin registrar' }}</td>
+              <td>{{ b.ubicacion or 'Sin registrar' }}</td>
+              <td><span class="estado-bien estado-{{ b.estado|lower }}">{{ b.estado|replace('DANADO', 'DAÑADO')|title }}</span></td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6">
+                {% if request.args.get('q') or request.args.get('estado') %}
+                  <p>No hay bienes que coincidan con los filtros.</p>
+                  <a class="boton" href="{{ url_for('bienes.consultar_bienes_materiales', id_recurso=request.args.get('id_recurso', '')) }}">Limpiar filtros</a>
+                {% elif request.args.get('id_recurso') %}
+                  <p>Este recurso no tiene bienes registrados.</p>
+                  <div class="acciones">
+                    <a class="boton boton-principal" href="{{ url_for('bienes.mostrar_formulario_bien_material', recurso=request.args.get('id_recurso')) }}">Agregar bien a este recurso</a>
+                    <a href="{{ url_for('bienes.consultar_bienes_materiales') }}">Ver inventario completo</a>
+                  </div>
+                {% else %}
+                  <p>No hay bienes registrados.</p>
+                  <div class="acciones">
+                    <a class="boton boton-principal" href="{{ url_for('recursos.consultar_administracion_recursos', nuevo=1, _anchor='registro-recurso') }}">Registrar recurso</a>
+                    <a href="{{ url_for('recursos.consultar_administracion_recursos', _anchor='inventario') }}">Elegir un recurso existente</a>
+                  </div>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+  {% elif modo == "formulario" %}
+    <p class="etiqueta">{{ recurso.nombre }}</p>
+    <h1>{{ 'Editar bien físico' if bien else 'Registrar bien físico' }}</h1>
+    {% if error %}<p class="aviso error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post" action="{{ url_for('bienes.actualizar_bien_material', id_bien=bien.id_bien) if bien else url_for('bienes.registrar_bien_material') }}" class="panel">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="id_recurso_ref" value="{{ recurso.id_recurso }}">
+      <div class="campos">
+        <label>
+          Código de inventario
+          <input name="codigo_inventario"
+                 maxlength="40"
+                 required
+                 value="{{ request.form.get('codigo_inventario', bien.codigo_inventario if bien else '') }}">
+        </label>
+        <label>
+          Número de serie
+          <input name="numero_serie"
+                 maxlength="60"
+                 value="{{ request.form.get('numero_serie', bien.numero_serie if bien else '') }}">
+        </label>
+        <label>
+          Fecha de adquisición
+          <input type="date"
+                 name="fecha_adquisicion"
+                 required
+                 max="{{ fecha_hoy }}"
+                 value="{{ request.form.get('fecha_adquisicion', bien.fecha_adquisicion.isoformat() if bien else fecha_hoy) }}">
+        </label>
+        <label>
+          Ubicación
+          <input name="ubicacion"
+                 maxlength="120"
+                 value="{{ request.form.get('ubicacion', bien.ubicacion if bien else '') }}">
+        </label>
+      </div>
+      <label>Descripción particular (opcional)<textarea name="descripcion_bien" maxlength="255" rows="2">{{ request.form.get("descripcion_bien", bien.descripcion_bien if bien else "") }}</textarea></label>
+      <p>{{ 'Cambia el estado desde el detalle del bien.' if bien else 'Estado inicial: disponible.' }}</p>
+      <button class="boton-principal">Guardar bien</button>
+      <a href="{{ url_for('recursos.consultar_administracion_recursos',recurso=recurso.id_recurso,_anchor='recurso-' ~ recurso.id_recurso) }}">Volver a administración</a>
+    </form>
+  {% elif modo == "detalle" %}
+    <p>{{ bien.descripcion_bien or "Sin descripción particular" }}</p>
+    <div class="encabezado">
+      <div>
+        <p class="etiqueta">{{ recurso.nombre }}</p>
+        <h1>Bien {{ bien.codigo_inventario }}</h1>
+      </div>
+      <a class="boton"
+         href="{{ url_for('bienes.mostrar_edicion_bien_material', id_bien=bien.id_bien) }}">Editar datos del bien</a>
+    </div>
+    <section class="panel">
+      <span class="estado-bien estado-{{ bien.estado.value|lower }}">{{ bien.estado.value|replace('DANADO', 'DAÑADO')|title }}</span>
+      <dl class="datos-recurso">
+        <dt>Recurso</dt>
+        <dd>
+          {% if puede('CATALOGO_CONSULTAR') %}
+            <a href="{{ url_for('recursos.consultar_recurso', id_recurso=recurso.id_recurso) }}">{{ recurso.nombre }}</a>
+          {% else %}
+            {{ recurso.nombre }}
+          {% endif %}
+        </dd>
+        <dt>Número de serie</dt>
+        <dd>
+          {{ bien.numero_serie or 'Sin registrar' }}
+        </dd>
+        <dt>Fecha de adquisición</dt>
+        <dd>
+          {{ bien.fecha_adquisicion.strftime("%d/%m/%Y") }}
+        </dd>
+        <dt>Ubicación</dt>
+        <dd>
+          {{ bien.ubicacion or 'Sin registrar' }}
+        </dd>
+      </dl>
+    </section>
+    {% if permite_cambio_manual and not prestamo_pendiente %}
+      <section class="panel">
+        <h2>Cambiar estado</h2>
+        <p>El motivo del cambio es obligatorio.</p>
+        <form method="post"
+              action="{{ url_for('bienes.cambiar_estado_bien_material', id_bien=bien.id_bien) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="estado_esperado" value="{{ bien.estado.value }}">
+          <div class="campos">
+            <label>
+              Nuevo estado
+              <select name="estado" required>
+                {% for estado, etiqueta in estados_manual if estado != bien.estado.value %}
+                  <option value="{{ estado }}">{{ etiqueta }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              Motivo
+              <input name="motivo" maxlength="255" required>
+            </label>
+            <label>
+              Fecha estimada de retorno (opcional)
+              <input type="date" name="fecha_fin_estimada">
+            </label>
+          </div>
+          <label>
+            Descripción del registro fuera de servicio (opcional)
+            <textarea name="descripcion" rows="2" maxlength="255"></textarea>
+          </label>
+          <div class="acciones">
+            <button class="boton-principal">Guardar cambio de estado</button>
+          </div>
+        </form>
+      </section>
+    {% else %}
+      <p class="aviso">
+        Bien en préstamo o reservado. Registra su recepción desde el préstamo o la reserva.
+        {% if prestamo_pendiente and puede("PRESTAMOS_GESTIONAR") %}
+          <a href="{{ url_for('prestamos.consultar_prestamo', id_prestamo=prestamo_pendiente) }}">Abrir préstamo #{{ prestamo_pendiente }}</a>
+        {% endif %}
+      </p>
+    {% endif %}
+    <section class="panel tabla">
+      <h2 id="historial-estados">Historial de estados</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha (UTC)</th>
+            <th>Anterior</th>
+            <th>Nuevo</th>
+            <th>Motivo</th>
+            <th>Responsable</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in historial %}
+            <tr>
+              <td>{{ h.fecha.strftime("%d/%m/%Y %H:%M") }}</td>
+              <td>{{ (h.estado_anterior or 'Inicial')|replace('DANADO', 'DAÑADO')|title }}</td>
+              <td>{{ h.estado_nuevo|replace('DANADO', 'DAÑADO')|title }}</td>
+              <td>{{ h.observacion }}</td>
+              <td>{{ h.responsable or 'Sistema' }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6">No se han registrado cambios de estado.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+    </section>
+    <section class="panel tabla">
+      <h2 id="registros-fuera-servicio">Registros fuera de servicio</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Motivo</th>
+            <th>Inicio (UTC)</th>
+            <th>Retorno estimado</th>
+            <th>Cierre (UTC)</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in registros %}
+            <tr>
+              <td>{{ r.motivo }}{% if r.descripcion %}<small>{{ r.descripcion }}</small>{% endif %}</td>
+              <td>{{ r.fecha_inicio.strftime("%d/%m/%Y %H:%M") }}</td>
+              <td>{{ r.fecha_fin_estimada.strftime("%d/%m/%Y") if r.fecha_fin_estimada else 'Sin fecha' }}</td>
+              <td>{{ r.fecha_fin_real.strftime("%d/%m/%Y %H:%M") if r.fecha_fin_real else 'Pendiente' }}</td>
+              <td>{{ r.estado.value|title }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6">El bien no tiene registros fuera de servicio.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+    </section>
+    {% if bien.esta_disponible() and not tiene_movimientos %}
+      <form method="post"
+            action="{{ url_for('bienes.eliminar_bien_material', id_bien=bien.id_bien) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button onclick="return confirm('¿Eliminar este bien? Solo se permite si no tiene historial ni préstamos asociados.')">Eliminar bien sin historial</button>
+      </form>
+    {% endif %}
+    <p><a href="{{ url_for('bienes.consultar_bienes_materiales') }}">Volver al inventario</a></p>
+  {% endif %}
+{% endblock %}

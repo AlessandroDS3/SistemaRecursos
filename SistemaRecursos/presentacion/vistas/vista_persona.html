@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+{% block titulo %}Personas · Sistema de préstamos{% endblock %}
+{% block contenido %}
+  {% if error and not errores %}<p class="aviso error" role="alert">{{ error }}</p>{% endif %}
+  {% if modo == "consulta" %}
+    <div class="encabezado">
+      <div>
+        <h1>Personas</h1>
+      </div>
+      {% if puede("PERSONAS_GESTIONAR") %}
+        <a class="boton boton-principal" href="{{ url_for('personas.mostrar_formulario_persona') }}">Registrar persona</a>
+      {% endif %}
+    </div>
+    <section class="resumen-estadisticas" aria-label="Personas que coinciden con los filtros">
+      <article><span>Personas encontradas</span><strong>{{ resumen.total }}</strong></article>
+      <article><span>Activas</span><strong>{{ resumen.activas }}</strong></article>
+      <article><span>Inactivas</span><strong>{{ resumen.inactivas }}</strong></article>
+    </section>
+    <form method="get"
+          class="panel filtros-catalogo filtros-personas {{ 'con-filtro-cuenta' if puede('USUARIOS_GESTIONAR') else 'sin-filtro-cuenta' }}">
+      <div class="campos">
+        <label>
+          Buscar persona
+          <input name="q" maxlength="120" placeholder="Apellidos, DNI o CUI" value="{{ filtros.get('q', '') }}">
+        </label>
+        <label>
+          Tipo
+          <select name="tipo">
+            <option value="">Todos</option>
+            {% for valor, etiqueta in [('ESTUDIANTE','Estudiante'),('DOCENTE','Docente'),('ADMINISTRATIVO','Administrativo')] %}
+              <option value="{{ valor }}" {{ 'selected' if filtros.get('tipo') == valor else '' }}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          Estado
+          <select name="estado">
+            <option value="">Todos</option>
+            {% for valor, etiqueta in [('ACTIVA','Activa'),('INACTIVA','Inactiva')] %}
+              <option value="{{ valor }}" {{ 'selected' if filtros.get('estado') == valor else '' }}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% if puede("USUARIOS_GESTIONAR") %}
+          <label>
+            Cuenta
+            <select name="cuenta">
+              <option value="">Todas</option>
+              <option value="CON_ACCESO" {{ 'selected' if filtros.get('cuenta') == 'CON_ACCESO' else '' }}>Con acceso</option>
+              <option value="SIN_CUENTA" {{ 'selected' if filtros.get('cuenta') == 'SIN_CUENTA' else '' }}>Sin cuenta</option>
+              <option value="ACCESO_INACTIVO" {{ 'selected' if filtros.get('cuenta') == 'ACCESO_INACTIVO' else '' }}>Acceso inactivo</option>
+            </select>
+          </label>
+        {% endif %}
+      </div>
+      <div class="acciones">
+        <button class="boton-principal" type="submit">Aplicar filtros</button>
+        <a class="boton" href="{{ url_for('personas.consultar_personas') }}">Limpiar</a>
+      </div>
+    </form>
+    <div class="panel tabla tabla-personas">
+      <table>
+        <thead>
+          <tr>
+            <th>CUI</th>
+            <th>DNI</th>
+            <th>Persona</th>
+            <th>Correo</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            {% if puede("USUARIOS_GESTIONAR") %}<th>Cuenta de acceso</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in personas %}
+            <tr>
+              <td>{{ p.cui if p.tipo == 'ESTUDIANTE' else '—' }}</td>
+              <td>{{ p.dni }}</td>
+              <td><a href="{{ url_for('personas.consultar_persona', dni=p.dni) }}">{{ p.nombre_completo }}</a></td>
+              <td>{{ p.correo }}</td>
+              <td>{{ p.tipo|title }}</td>
+              <td><span class="estado-bien {{ 'estado-disponible' if p.esta_activa() else 'estado-inactiva' }}">{{ 'Activa' if p.esta_activa() else 'Inactiva' }}</span></td>
+              {% if puede("USUARIOS_GESTIONAR") %}
+                {% set cuenta = cuentas_por_persona.get(p.dni) %}
+                <td>
+                  <div class="cuenta-resumen">
+                    {% if cuenta %}
+                      <span class="estado-bien {{ 'estado-disponible' if cuenta.puede_acceder else 'estado-inactiva' }}">{{ 'Con acceso' if cuenta.puede_acceder else 'Sin acceso' }}</span>
+                      <a href="{{ url_for('personas.consultar_persona', dni=p.dni) }}">{{ 'Ver cuenta' if cuenta.puede_acceder else 'Revisar cuenta' }}</a>
+                    {% elif p.esta_activa() %}
+                      <span class="estado-bien">Sin cuenta</span>
+                      <a href="{{ url_for('personas.consultar_persona', dni=p.dni, _anchor='crear-cuenta') }}">Crear acceso</a>
+                    {% else %}
+                      <span class="estado-bien">Sin cuenta</span>
+                    {% endif %}
+                  </div>
+                </td>
+              {% endif %}
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="{{ 7 if puede('USUARIOS_GESTIONAR') else 6 }}">
+                <p>{{ 'No hay personas que coincidan con los filtros.' if filtros.values()|select|list else 'No hay personas registradas.' }}</p>
+                {% if filtros.values()|select|list %}
+                  <a class="boton" href="{{ url_for('personas.consultar_personas') }}">Limpiar filtros</a>
+                {% elif puede("PERSONAS_GESTIONAR") %}
+                  <a class="boton boton-principal" href="{{ url_for('personas.mostrar_formulario_persona') }}">Registrar persona</a>
+                {% else %}
+                  <a class="boton" href="{{ url_for('inicio') }}">Volver a Inicio</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  {% elif modo == "formulario" %}
+  <h1>{{ 'Editar persona' if persona else 'Registrar persona' }}</h1>
+  {% macro campo_persona(nombre, etiqueta, obligatorio=false, tipo='text', limite=100) %}
+    <div class="persona-campo">
+      <label for="persona-{{ nombre }}">{{ etiqueta }}{% if not obligatorio %}<span class="persona-opcional"> (opcional)</span>{% endif %}</label>
+      <input id="persona-{{ nombre }}" name="{{ nombre }}" type="{{ tipo }}" maxlength="{{ limite }}"
+             value="{{ request.form.get(nombre, ((persona|attr(nombre)) or '') if persona else '') }}"
+             {{ 'required' if obligatorio else '' }}
+             {% if nombre in ('cui', 'dni') %}pattern="[0-9]{8}" inputmode="numeric" minlength="8" title="Ingresa exactamente 8 dígitos"{% endif %}
+             {% if nombre == 'ciclo' %}min="1" max="2147483647" step="1"{% endif %}
+             aria-describedby="error-{{ nombre }}" {% if errores.get(nombre) %}aria-invalid="true"{% endif %}>
+      <small class="persona-error" id="error-{{ nombre }}" aria-live="polite">{{ errores.get(nombre, '') }}</small>
+    </div>
+  {% endmacro %}
+  <form method="post" action="{{ url_for('personas.actualizar_persona', dni=persona.dni) if persona else url_for('personas.registrar_persona') }}" class="panel persona-formulario" id="form-persona">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <section aria-labelledby="titulo-datos-personales">
+      <h2 id="titulo-datos-personales" class="solo-lector">Datos personales</h2>
+      <div class="persona-rejilla">
+        {{ campo_persona('nombres','Nombres',true) }}
+        {{ campo_persona('apellidos','Apellidos',true) }}
+        {{ campo_persona('dni','DNI',true,limite=8) }}
+        {{ campo_persona('correo','Correo',true,'email',120) }}
+        {{ campo_persona('telefono','Teléfono',false,'tel',20) }}
+        <div class="persona-campo">
+          <label for="tipo">Tipo</label>
+          <select name="tipo" id="tipo" required aria-describedby="error-tipo" {{ 'disabled' if persona else '' }}>
+            <option value="">Selecciona un tipo</option>
+            {% for tipo in ['ESTUDIANTE','DOCENTE','ADMINISTRATIVO'] %}
+              <option value="{{ tipo }}" {{ 'selected' if (persona.tipo if persona else request.form.get('tipo', ''))==tipo else '' }}>{{ tipo|title }}</option>
+            {% endfor %}
+          </select>
+          {% if persona %}<input type="hidden" name="tipo" value="{{ persona.tipo }}">{% endif %}
+          <small class="persona-error" id="error-tipo" aria-live="polite">{{ errores.get('tipo', '') }}</small>
+        </div>
+      </div>
+    </section>
+    <section class="persona-bloque-tipo" aria-labelledby="titulo-datos-academicos">
+      <h2 id="titulo-datos-academicos">{{ (persona.tipo if persona else request.form.get('tipo', ''))|title or 'Datos del tipo de persona' }}</h2>
+      {% if persona %}
+      <div class="persona-rejilla"><div class="persona-campo"><label for="estado-persona">Estado</label><select id="estado-persona" name="estado">{% for estado in ['ACTIVA','INACTIVA'] %}<option {{ 'selected' if request.form.get('estado', persona.estado.value)==estado else '' }}>{{ estado }}</option>{% endfor %}</select></div></div>
+      {% endif %}
+      {% set es_estudiante = (persona.tipo if persona else request.form.get('tipo', '')) == 'ESTUDIANTE' %}
+      <fieldset data-tipo="ESTUDIANTE" {{ '' if es_estudiante else 'hidden disabled' }}>
+        <legend class="solo-lector">Datos académicos del estudiante</legend>
+        <div class="persona-rejilla">
+          {{ campo_persona('cui','CUI',true,limite=8) }}
+
+          {{ campo_persona('ciclo','Ciclo',false,'number',10) }}
+          {{ campo_persona('semestre_academico','Semestre académico',false,'text',10) }}
+          <div class="persona-campo">
+            <label for="estado-matricula">Estado de matrícula</label>
+            <select name="estado_matricula" id="estado-matricula" required aria-describedby="error-estado_matricula">
+              <option value="">Selecciona un estado</option>
+              {% for valor, etiqueta in [('vigente','Vigente'),('no_vigente','No vigente')] %}<option value="{{ valor }}" {{ 'selected' if request.form.get('estado_matricula', persona.estado_matricula if persona and persona.tipo=='ESTUDIANTE' else '')==valor else '' }}>{{ etiqueta }}</option>{% endfor %}
+            </select>
+            <small class="persona-error" id="error-estado_matricula" aria-live="polite">{{ errores.get('estado_matricula', '') }}</small>
+          </div>
+        </div>
+      </fieldset>
+      {% for tipo_persona, campos in [
+        ('DOCENTE', [('codigo_docente','Código de docente',20),('departamento_academico','Departamento académico',100),('facultad','Facultad',100),('escuela_profesional','Escuela profesional',100)]),
+        ('ADMINISTRATIVO', [('codigo_empleado','Código de empleado',20),('area','Área',100)])
+      ] %}
+      <fieldset data-tipo="{{ tipo_persona }}" {% if (persona.tipo if persona else request.form.get('tipo', '')) != tipo_persona %}hidden disabled{% endif %}>
+        <legend class="solo-lector">{{ tipo_persona|title }}</legend>
+        <div class="persona-rejilla">
+          {% for nombre, etiqueta, limite in campos %}{{ campo_persona(nombre, etiqueta, true, limite=limite) }}{% endfor %}
+        </div>
+      </fieldset>
+      {% endfor %}
+    </section>
+    <div class="persona-acciones">
+      <button class="boton-principal" type="submit">Guardar persona</button>
+      <a href="{{ url_for('personas.consultar_personas') if puede('PERSONAS_CONSULTAR') else url_for('inicio') }}">Volver</a>
+    </div>
+  </form>
+  <script src="{{ url_for('static', filename='persona.js') }}" defer></script>
+{% elif modo == "detalle" %}
+  <h1>{{ persona.nombre_completo }}</h1>
+  <section class="panel">
+    <dl>
+      {% if persona.tipo == 'ESTUDIANTE' %}<dt>CUI</dt>
+      <dd>{{ persona.cui }}</dd>{% endif %}
+      <dt>DNI / documento</dt>
+      <dd>
+        {{ persona.documento_identidad }}
+      </dd>
+      <dt>Correo</dt>
+      <dd>
+        {{ persona.correo }}
+      </dd>
+      <dt>Teléfono</dt>
+      <dd>
+        {{ persona.telefono or 'Sin registrar' }}
+      </dd>
+      <dt>Tipo</dt>
+      <dd>
+        {{ persona.tipo }}
+      </dd>
+      <dt>Estado</dt>
+      <dd>
+        {{ persona.estado.value }}
+      </dd>
+    </dl>
+    {% if puede("PERSONAS_GESTIONAR") %}
+      <a class="boton"
+         href="{{ url_for('personas.mostrar_edicion_persona', dni=persona.dni) }}">Editar</a>
+      {% if persona.esta_activa() %}
+        <a class="boton"
+           href="{{ url_for('personas.mostrar_confirmacion_desactivacion_persona', dni=persona.dni) }}">Desactivar</a>
+      {% endif %}
+    {% endif %}
+  </section>
+  {% if cuenta and puede("USUARIOS_GESTIONAR") %}
+    <section class="panel">
+      <h2>Cuenta de acceso</h2>
+      <dl class="datos-recurso">
+        <dt>Usuario</dt>
+        <dd>
+          {{ cuenta.credenciales.nombre_usuario }}
+        </dd>
+        <dt>Rol</dt>
+        <dd>
+          {{ cuenta.rol.nombre.value|replace('_', ' ')|title }}
+        </dd>
+        <dt>Estado de cuenta</dt>
+        <dd>
+          {{ cuenta.estado_cuenta.value|title }}{{ ' · deshabilitada' if not cuenta.activo else '' }}
+        </dd>
+        <dt>Acceso efectivo</dt>
+        <dd>
+          {{ 'Habilitado' if cuenta.puede_acceder() else 'Sin acceso' }}
+        </dd>
+        <dt>Último ingreso</dt>
+        <dd>
+          {{ cuenta.ultimo_acceso|fecha_local }}
+        </dd>
+      </dl>
+      {% if not persona.esta_activa() %}
+        <p class="aviso">Activa a la persona en «Editar persona» para habilitar su acceso.</p>
+      {% elif not cuenta.rol.activo %}
+        <p class="aviso">Asigna un rol activo desde Roles y permisos para habilitar el acceso.</p>
+      {% endif %}
+      <div class="acciones">
+        <a class="boton"
+           href="{{ url_for('personas.mostrar_edicion_cuenta', dni=persona.dni) }}">Editar cuenta</a>
+        {% if cuenta.activo and cuenta.estado_cuenta.value == "ACTIVA" %}
+          {% if cuenta.id_usuario != g.usuario.id_usuario %}
+            <form method="post"
+                  action="{{ url_for('personas.desactivar_cuenta', dni=persona.dni) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button onclick="return confirm('¿Desactivar esta cuenta? Sus datos e historial se conservarán.')">Desactivar cuenta</button>
+            </form>
+          {% else %}
+            <span>No puedes desactivar tu propia cuenta desde esta sesión.</span>
+          {% endif %}
+        {% else %}
+          <form method="post"
+                action="{{ url_for('personas.activar_cuenta', dni=persona.dni) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="boton-principal"
+                    {{ 'disabled' if not persona.esta_activa() or not cuenta.rol.activo else '' }}>Activar cuenta</button>
+          </form>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+  {% if not cuenta and puede("USUARIOS_GESTIONAR") and persona.esta_activa() %}
+    <section class="panel" id="crear-cuenta">
+      <h2>Crear cuenta de acceso</h2>
+      <form method="post"
+            action="{{ url_for('personas.registrar_cuenta', dni=persona.dni) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="campos">
+          <label>
+            Usuario
+            <input name="nombre_usuario" maxlength="50" required autocomplete="off" value="{{ request.form.get('nombre_usuario', '') }}">
+          </label>
+          <label>
+            Contraseña inicial
+            <input name="clave"
+                   type="password"
+                   minlength="12"
+                   maxlength="256"
+                   autocomplete="new-password"
+                   required>
+          </label>
+          <p class="ayuda">El rol se asigna desde Roles y permisos.</p>
+        </div>
+        <p class="ayuda">La cuenta se crea con el rol Usuario.</p>
+        <button class="boton-principal">Crear cuenta</button>
+      </form>
+    </section>
+  {% endif %}
+  {% if puede('PERSONAS_CONSULTAR') %}
+    <a href="{{ url_for('personas.consultar_personas') }}">Volver al directorio</a>
+  {% else %}
+    <a href="{{ url_for('inicio') }}">Volver a Inicio</a>
+  {% endif %}
+{% elif modo == "cuenta" %}
+  <p class="etiqueta">{{ persona.nombre_completo }}</p>
+  <h1>Editar cuenta de acceso</h1>
+  <form method="post" action="{{ url_for('personas.actualizar_cuenta', dni=persona.dni) }}" class="panel">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="campos">
+      <label>
+        Nombre de usuario
+        <input name="nombre_usuario"
+               maxlength="50"
+               required
+               autocomplete="off"
+               value="{{ request.form.get('nombre_usuario', cuenta.credenciales.nombre_usuario) }}">
+      </label>
+      <p class="ayuda">El rol se asigna desde Roles y permisos.</p>
+      <label>
+        Nueva contraseña (opcional)
+        <input type="password"
+               name="clave"
+               minlength="12"
+               maxlength="256"
+               autocomplete="new-password">
+      </label>
+    </div>
+    <p>Deja la contraseña vacía para conservarla. Cambiarla cerrará las sesiones abiertas.</p>
+    <button class="boton-principal">Guardar cuenta</button>
+    <a href="{{ url_for('personas.consultar_persona', dni=persona.dni) if puede('PERSONAS_CONSULTAR') else url_for('inicio') }}">Cancelar</a>
+  </form>
+{% elif modo == "desactivar" %}
+  <section class="panel">
+    <h1>Desactivar persona</h1>
+    <p>Se desactivará a {{ persona.nombre_completo }} y se impedirá el acceso de su cuenta.</p>
+    <form method="post" action="{{ url_for('personas.desactivar_persona', dni=persona.dni) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="boton-principal">Confirmar desactivación</button>
+      <a href="{{ url_for('personas.consultar_persona', dni=persona.dni) if puede('PERSONAS_CONSULTAR') else url_for('inicio') }}">Cancelar</a>
+    </form>
+  </section>
+{% endif %}
+{% endblock %}

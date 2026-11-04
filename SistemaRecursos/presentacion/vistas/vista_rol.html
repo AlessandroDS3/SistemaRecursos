@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block titulo %}Roles y permisos · Sistema de préstamos{% endblock %}
+{% block contenido %}
+  <h1>Roles y permisos</h1>
+
+  <section class="panel" id="asignar-roles">
+    <h2>Asignar rol a una cuenta</h2>
+    <p>Busca por DNI, apellido o CUI y elige el rol de la persona.</p>
+    {% if error %}<p class="aviso error" role="alert">{{ error }}</p>{% endif %}
+    <form method="get" action="{{ url_for('roles.consultar_roles', _anchor='asignar-roles') }}" class="buscador">
+      <label>Buscar persona<input type="search" name="q" value="{{ termino }}" maxlength="120" minlength="2" placeholder="DNI, apellido o CUI" required></label>
+      <button class="boton-principal">Buscar</button><a href="{{ url_for('roles.consultar_roles') }}">Limpiar</a>
+    </form>
+    {% if cuentas %}
+    <div class="tabla"><table><thead><tr><th>Persona</th><th>DNI / CUI</th><th>Cuenta</th><th>Rol actual</th><th>Asignar rol</th></tr></thead><tbody>
+      {% for cuenta in cuentas %}<tr>
+        <td>{{ cuenta.nombres }} {{ cuenta.apellidos }}</td>
+        <td>{{ cuenta.dni_persona }}<small>{{ 'CUI: ' ~ cuenta.cui if cuenta.cui else 'Sin CUI' }}</small></td>
+        <td>{{ cuenta.nombre_usuario }}<small>{{ cuenta.estado_cuenta|title }}</small></td>
+        <td>{{ rol_etiquetas.get(cuenta.nombre_rol, cuenta.nombre_rol) }}</td>
+        <td>{% if puede('ROLES_GESTIONAR') %}
+          <form method="post" action="{{ url_for('roles.actualizar_rol_cuenta', dni=cuenta.dni_persona) }}" class="acciones">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="q" value="{{ termino }}">
+            <label><span class="solo-lector">Nuevo rol de {{ cuenta.nombres }} {{ cuenta.apellidos }}</span><select name="id_rol" required>
+              {% for rol in roles if rol.activo %}<option value="{{ rol.id_rol }}" {{ 'selected' if rol.id_rol == cuenta.id_rol else '' }}>{{ rol_etiquetas.get(rol.nombre.value, rol.nombre.value) }}</option>{% endfor %}
+            </select></label><button class="boton-principal">Guardar rol</button>
+          </form>{% else %}<span>Solo consulta</span>{% endif %}</td>
+      </tr>{% endfor %}
+    </tbody></table></div>
+    <p class="ayuda"></p>
+    {% elif termino|length >= 2 %}<p>No hay cuentas que coincidan con la búsqueda.</p>
+    {% else %}<p class="ayuda">Escribe al menos dos caracteres para buscar una cuenta.</p>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="encabezado-seccion">
+      <div>
+        <h2>Permisos por rol</h2>
+        <p>Marca los permisos del rol. Se aplican a todas sus cuentas.</p>
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('roles.actualizar_matriz_permisos') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="tabla matriz-permisos">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Permiso</th>
+              {% for rol in roles if rol.activo %}
+                <th scope="col">
+                  {{ rol_etiquetas.get(rol.nombre.value, rol.nombre.value|replace('_', ' ')|title) }}
+                </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for permiso in permisos %}
+              <tr>
+                <th scope="row">{{ permiso|descripcion_permiso }}</th>
+                {% for rol in roles if rol.activo %}
+                  {% set codigos_rol = rol.permisos|map(attribute='codigo')|list %}
+                  <td>
+                    <label class="permiso-casilla">
+                      <input
+                        type="checkbox"
+                        name="permisos_{{ rol.id_rol }}"
+                        value="{{ permiso.id_permiso }}"
+                        aria-label="{{ permiso|descripcion_permiso }}: {{ rol_etiquetas.get(rol.nombre.value, rol.nombre.value) }}"
+                        {% if permiso.codigo in codigos_rol %}checked{% endif %}
+                        {% if not puede("ROLES_GESTIONAR") %}disabled{% endif %}>
+                    </label>
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if puede("ROLES_GESTIONAR") %}
+        <div class="acciones matriz-acciones">
+          <button class="boton-principal" type="submit">Guardar cambios</button>
+        </div>
+      {% endif %}
+    </form>
+  </section>
+
+{% endblock %}

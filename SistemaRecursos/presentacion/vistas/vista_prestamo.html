@@ -1,0 +1,660 @@
+{% extends "base.html" %}
+{% block titulo %}
+  Préstamos y devoluciones
+{% endblock %}
+{% block contenido %}
+  {% if modo == "consulta" %}
+    {# LISTADO Y BUSQUEDA DE PRESTAMOS #}
+    {% if gestionar %}
+      <form method="post" action="{{ url_for('prestamos.actualizar_prestamos_vencidos') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button>Registrar vencimientos en el historial</button>
+      </form>
+    {% endif %}
+    {% set seleccion_devolucion = gestionar and request.args.get('estado') == 'PENDIENTES' %}
+    <div class="encabezado">
+      <div>
+        <h1>
+          {% if seleccion_devolucion %}
+            Registrar devolución
+          {% elif gestionar %}
+            Préstamos y devoluciones
+          {% else %}
+            Mis préstamos
+          {% endif %}
+        </h1>
+      </div>
+      {% if gestionar %}
+        <div class="acciones">
+          <a class="boton boton-principal" href="{{ url_for('prestamos.mostrar_formulario_prestamo') }}">
+            Registrar préstamo
+          </a>
+          {% if not seleccion_devolucion %}
+            <a class="boton" href="{{ url_for('prestamos.consultar_prestamos', estado='PENDIENTES') }}">
+              Registrar devolución
+            </a>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+    {% if seleccion_devolucion %}
+      <p>
+        Busca a la persona y selecciona el préstamo.
+      </p>
+    {% endif %}
+    {% if puede('PRESTAMOS_GESTIONAR') or puede('RESERVAS_PROPIAS_GESTIONAR') %}
+      <p>
+        <a class="boton" href="{{ url_for('reservas.consultar_reservas') }}">
+          Solicitudes y reservas
+        </a>
+        <a class="boton" href="{{ url_for('recursos.consultar_recursos') }}">
+          Solicitar un recurso desde el catálogo
+        </a>
+      </p>
+    {% endif %}
+    <form method="get" class="panel">
+      <div class="campos">
+        <label>
+          {{ 'Buscar por apellidos, DNI, CUI o número de préstamo' if gestionar else 'Buscar por número de préstamo' }}
+          <input name="q" maxlength="120" value="{{ request.args.get('q', '') }}" placeholder="{{ 'Apellidos, DNI, CUI o número' if gestionar else 'Ej.: 4' }}">
+        </label>
+        <label>
+          Estado o seguimiento
+          <select name="estado">
+            <option value="">
+              Todos
+            </option>
+            {% for valor,etiqueta in [('ACTIVO','Activos'),('VENCIDO','Vencidos'),('DEVUELTO','Devueltos'),('PARCIALMENTE_DEVUELTO','Parcialmente devueltos'),('PENDIENTES','Con bienes pendientes'),('PERDIDOS','Con bienes perdidos pendientes')] %}
+              <option value="{{ valor }}" {{ 'selected' if request.args.get("estado")==valor else '' }}>
+                {{ etiqueta }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <button class="boton-principal">
+        Buscar
+      </button>
+      <a href="{{ url_for('prestamos.consultar_prestamos') }}">
+        Limpiar filtros
+      </a>
+    </form>
+    <p class="ayuda">
+      Mostrando {{ prestamos|length }} préstamos.
+    </p>
+    <section class="panel tabla">
+      <table>
+        <thead>
+          <tr>
+            <th>
+              Préstamo
+            </th>
+            <th>
+              Solicitante
+            </th>
+            <th>
+              Fecha del préstamo
+            </th>
+            <th>
+              Fecha límite de devolución
+            </th>
+            <th>
+              Estado
+            </th>
+            <th>
+              Devueltos / Total
+            </th>
+            <th>
+              Acciones
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in prestamos %}
+            <tr>
+              <td>
+                <a href="{{ url_for('prestamos.consultar_prestamo',id_prestamo=p.id_prestamo) }}">
+                  #{{ p.id_prestamo }}
+                </a>
+                <small>
+                  {{ p.tipo_prestamo|title }}
+                </small>
+              </td>
+              <td>
+                {{ p.solicitante }}
+                {% if p.cui %}
+                  <small>
+                    CUI: {{ p.cui }}
+                  </small>
+                {% endif %}
+                <small>
+                  DNI: {{ p.documento_identidad }}
+                </small>
+              </td>
+              <td>
+                {{ p.fecha_entrega|fecha_local }}
+              </td>
+              <td>
+                {{ p.proximo_vencimiento|fecha_local }}
+              </td>
+              <td>
+                {{ p.estado|replace('_', ' ')|title }}
+              </td>
+              <td>
+                {{ p.devueltos }} / {{ p.total }}
+              </td>
+              <td>
+                {% if gestionar and p.total > p.devueltos %}
+                  <a class="boton" href="{{ url_for('prestamos.consultar_prestamo', id_prestamo=p.id_prestamo, _anchor='devolucion') }}">
+                    Registrar devolución
+                  </a>
+                {% else %}
+                  <a href="{{ url_for('prestamos.consultar_prestamo', id_prestamo=p.id_prestamo) }}">
+                    Ver detalle
+                  </a>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="7">
+                <p>
+                  {% if seleccion_devolucion %}
+                    No hay préstamos con bienes pendientes que coincidan con la búsqueda.
+                  {% elif request.args.get('q') or request.args.get('estado') %}
+                    No hay préstamos que coincidan con los filtros.
+                  {% else %}
+                    No hay préstamos registrados.
+                  {% endif %}
+                </p>
+                {% if request.args.get("q") or request.args.get("estado") %}
+                  <a class="boton" href="{{ url_for('prestamos.consultar_prestamos') }}">
+                    Limpiar filtros
+                  </a>
+                {% elif gestionar %}
+                  <a class="boton boton-principal" href="{{ url_for('prestamos.mostrar_formulario_prestamo') }}">
+                    Registrar préstamo
+                  </a>
+                {% elif puede("CATALOGO_CONSULTAR") %}
+                  <a class="boton boton-principal" href="{{ url_for('recursos.consultar_recursos') }}">
+                    Consultar catálogo
+                  </a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+  {% elif modo == "formulario" %}
+    {# REGISTRO DE UN PRESTAMO #}
+    <h1>
+      Registrar préstamo
+    </h1>
+    {% if politicas %}
+      <form method="post" action="{{ url_for('prestamos.registrar_prestamo') }}" class="formulario-prestamo prestamo-disposicion" id="form-prestamo" data-apertura="{{ horario.apertura_texto if horario else '' }}" data-cierre="{{ horario.cierre_texto if horario else '' }}" data-personas-url="{{ url_for('prestamos.consultar_solicitantes') }}" data-bienes-url="{{ url_for('prestamos.consultar_bienes_disponibles') }}" data-recurso="{{ recurso_seleccionado }}" data-bien='{{ (bien_seleccionado|default(none))|tojson }}'>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="dni_persona" id="solicitante">
+        <input type="hidden" id="tipo-solicitante">
+        <div class="prestamo-campos">
+          <section class="seleccion-prestamo panel">
+            <h2>
+              <span class="paso-prestamo">
+                1
+              </span>
+              ¿Quién recibe el préstamo?
+            </h2>
+            <p class="ayuda">
+              Busca y selecciona a la persona registrada.
+            </p>
+            <div id="busqueda-solicitante">
+              <label for="buscar-solicitante">
+                Buscar por apellidos, DNI o CUI
+              </label>
+              <input type="search" id="buscar-solicitante" maxlength="120" placeholder="apellidos, DNI o CUI" autocomplete="off" aria-describedby="resultado-busqueda-persona">
+              <p class="ayuda" id="resultado-busqueda-persona" role="status" aria-live="polite">
+                Escribe al menos 2 caracteres.
+              </p>
+              <div class="resultados-prestamo" id="resultados-solicitante" role="listbox" aria-label="Personas encontradas" hidden>
+              </div>
+            </div>
+            <div class="seleccion-resumen" id="persona-seleccionada" aria-live="polite" hidden>
+            </div>
+            <div class="campos prestamo-opciones">
+              <fieldset class="prestamo-opcion-grupo" id="modalidad">
+                <legend>
+                  Modalidad
+                </legend>
+                <div class="prestamo-opciones-radio">
+                  <label>
+                    <input type="radio" name="tipo_prestamo" value="INDIVIDUAL" checked>
+                    Individual
+                  </label>
+                  <label>
+                    <input type="radio" name="tipo_prestamo" value="GRUPAL">
+                    Grupal
+                  </label>
+                </div>
+              </fieldset>
+              <fieldset class="prestamo-opcion-grupo" id="uso-bienes">
+                <legend>
+                  Uso de los bienes
+                </legend>
+                <div class="prestamo-opciones-radio">
+                  <label>
+                    <input type="radio" name="salida_solicitada" value="0" checked>
+                    Dentro de la institución
+                  </label>
+                  <label>
+                    <input type="radio" name="salida_solicitada" value="1">
+                    Fuera
+                  </label>
+                </div>
+              </fieldset>
+            </div>
+          </section>
+          <fieldset class="panel" id="grupo" hidden disabled>
+            <legend>
+              Otros participantes
+            </legend>
+            <p>
+              Agrega a los demás participantes. El solicitante ya está incluido.
+            </p>
+            <label for="buscar-participante">
+              Buscar participante por apellidos, DNI o CUI
+            </label>
+            <input type="search" id="buscar-participante" maxlength="120" placeholder="Apellidos, DNI o CUI" autocomplete="off">
+            <p class="ayuda" id="estado-participantes" role="status" aria-live="polite">
+              Escribe al menos 2 caracteres.
+            </p>
+            <div class="resultados-prestamo" id="resultados-participantes" role="listbox" aria-label="Personas encontradas" hidden>
+            </div>
+            <div class="selecciones-prestamo" id="participantes-seleccionados">
+            </div>
+          </fieldset>
+          <section class="seleccion-prestamo panel">
+            <h2>
+              <span class="paso-prestamo">
+                2
+              </span>
+              ¿Qué bienes se llevará?
+            </h2>
+            {% if recurso_seleccionado %}
+              <p>
+                Puedes agregar bienes de otros recursos.
+              </p>
+            {% else %}
+              <p>
+                Busca por código de inventario, nombre, marca o modelo.
+              </p>
+            {% endif %}
+            <label for="buscar-bien">
+              Buscar bien disponible
+            </label>
+            <input type="search" id="buscar-bien" maxlength="120" placeholder="Código de inventario o nombre del recurso" autocomplete="off">
+            <p class="ayuda" id="estado-bienes" role="status" aria-live="polite">
+              Escribe al menos 2 caracteres para buscar.
+            </p>
+            <div class="resultados-prestamo" id="resultados-bienes" role="listbox" aria-label="Bienes disponibles" hidden>
+            </div>
+            <p class="etiqueta prestamo-cantidad" id="cantidad-bienes">
+              BIENES SELECCIONADOS · 0
+            </p>
+            <div class="selecciones-prestamo" id="bienes-seleccionados">
+            </div>
+            <p class="ayuda" id="bienes-vacios">
+              Agrega al menos un bien.
+            </p>
+          </section>
+          <p class="ayuda">Atención: {{ horario.apertura_texto if horario else '' }} a {{ horario.cierre_texto if horario else '' }}. Los préstamos por horas terminan como máximo al cierre.</p>
+          <p id="atencion-cerrada" class="aviso" tabindex="-1" hidden>La atención está cerrada. Registra la entrega dentro del horario indicado.</p>
+          <p id="politica-faltante" class="aviso" tabindex="-1" hidden>
+            Configura las políticas faltantes antes de prestar.
+          </p>
+          <p id="salida-no-permitida" class="aviso" tabindex="-1" hidden>
+            Hay un bien sin salida autorizada. Elige uso interno o retíralo de la selección.
+          </p>
+          <template id="reglas">
+            {% for p in politicas %}
+              <span data-persona="{{ p.tipo_persona.value }}" data-categoria="{{ p.id_categoria_ref }}" data-unidad="{{ p.unidad_plazo }}" data-plazo="{{ p.plazo_texto }}" data-horas="{{ p.plazo_maximo * (1 if p.unidad_plazo == 'HORAS' else 24) }}" data-salida="{{ '1' if p.permite_salida else '0' }}">
+              </span>
+            {% endfor %}
+          </template>
+          <section class="panel prestamo-observaciones">
+            <label>
+              Observaciones del préstamo
+              <textarea name="observaciones" maxlength="220" rows="2">
+              </textarea>
+            </label>
+          </section>
+        </div>
+        <aside class="panel prestamo-resumen" aria-labelledby="titulo-resumen-prestamo">
+          <h2 id="titulo-resumen-prestamo">
+            Resumen del préstamo
+          </h2>
+          <dl>
+            <div>
+              <dt>
+                Solicitante
+              </dt>
+              <dd id="resumen-persona">
+                Sin seleccionar
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Modalidad
+              </dt>
+              <dd id="resumen-modalidad">
+                Individual
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Uso
+              </dt>
+              <dd id="resumen-uso">
+                Dentro de la institución
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Bienes
+              </dt>
+              <dd id="resumen-bienes">
+                0
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Primera devolución
+              </dt>
+              <dd id="resumen-devolucion">
+                —
+              </dd>
+            </div>
+          </dl>
+          <p class="ayuda">
+            Las fechas se confirman al registrar la entrega.
+          </p>
+          <label class="opcion-casilla">
+            <input type="checkbox" name="acepta_condiciones" value="1" required>
+            He comunicado el plazo y el permiso de salida al solicitante.
+          </label>
+          <button class="boton-principal" id="confirmar-prestamo">
+            Registrar préstamo
+          </button>
+          <a href="{{ url_for('prestamos.consultar_prestamos') }}">
+            Cancelar
+          </a>
+        </aside>
+      </form>
+    {% else %}
+      <section class="panel">
+        <h2>
+          Antes de registrar un préstamo
+        </h2>
+        <p>
+          El administrador debe configurar las políticas antes de prestar.
+        </p>
+        <a href="{{ url_for('prestamos.consultar_prestamos') }}">
+          Volver a préstamos
+        </a>
+        {% if puede("POLITICAS_GESTIONAR") %}
+          ·
+          <a href="{{ url_for('politicas.consultar_politicas') }}">
+            Configurar políticas
+          </a>
+        {% endif %}
+      </section>
+    {% endif %}
+  {% elif modo == "detalle" %}
+    {# DETALLE, DEVOLUCIONES E HISTORIAL #}
+    <div class="encabezado">
+      <div>
+        <p class="etiqueta">
+          {{ prestamo.tipo_prestamo|title }}
+        </p>
+        <h1>
+          Préstamo #{{ prestamo.id_prestamo }}
+        </h1>
+      </div>
+      <span class="estado-bien">
+        {{ prestamo.estado|replace('_', ' ')|title }}
+      </span>
+    </div>
+    <section class="panel prestamo-ficha">
+      <dl class="prestamo-datos-compactos">
+        <div>
+          <dt>Solicitante</dt>
+          <dd>
+            <strong>{{ prestamo.solicitante }}</strong>
+            <small>DNI: {{ prestamo.documento_identidad }}{% if prestamo.cui %} · CUI: {{ prestamo.cui }}{% endif %}</small>
+          </dd>
+        </div>
+        <div>
+          <dt>Fecha del préstamo</dt>
+          <dd>{{ prestamo.fecha_entrega|fecha_local }}</dd>
+        </div>
+        <div>
+          <dt>Registrado por</dt>
+          <dd>{{ prestamo.encargado }}</dd>
+        </div>
+        {% if prestamo.observaciones %}
+          <div class="prestamo-datos-observaciones">
+            <dt>Observaciones</dt>
+            <dd>{{ prestamo.observaciones }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+      {% if prestamo.participantes %}
+        <details class="prestamo-desplegable prestamo-participantes">
+          <summary>Participantes del grupo ({{ prestamo.participantes|length }})</summary>
+          <ul>
+            {% for p in prestamo.participantes %}
+              <li>{{ p.nombre }} · {{ p.rol_participacion }}{{ ' (responsable)' if p.responsable else '' }}</li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+    </section>
+    {% set pendientes = prestamo.detalles|selectattr('estado_devolucion', 'none')|list %}
+    <section class="panel prestamo-panel-devolucion" id="devolucion">
+      <div class="prestamo-titulo-devolucion">
+        <h2>{{ 'Registrar devolución' if gestionar and pendientes else 'Bienes del préstamo' }}</h2>
+        <span class="contador-resultados">{{ pendientes|length }} pendiente{{ 's' if pendientes|length != 1 else '' }}</span>
+      </div>
+      <form method="post" action="{{ url_for('prestamos.registrar_devolucion',id_prestamo=prestamo.id_prestamo) }}">
+        {% if gestionar %}
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% endif %}
+        <div class="tabla prestamo-tabla-contenedor">
+          <table class="tabla-devoluciones{{ ' tabla-devoluciones-gestion' if gestionar else '' }}">
+            <thead>
+              <tr>
+                {% if gestionar %}<th class="columna-devolver">Devolver</th>{% endif %}
+                <th>Bien</th>
+                <th>Fecha límite</th>
+                <th>Seguimiento</th>
+                <th>Sanción por tardanza</th>
+                {% if gestionar %}
+                  <th>Estado al devolver</th>
+                  <th>Observaciones</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in prestamo.detalles %}
+                <tr class="{{ 'fila-devolucion-pendiente' if d.estado_devolucion is none else 'fila-devolucion-recibida' }}">
+                  {% if gestionar %}
+                    <td class="columna-devolver">
+                      {% if d.estado_devolucion is none %}
+                        <input type="checkbox" name="detalles" value="{{ d.id_detalle }}" aria-label="Devolver {{ d.codigo_inventario }}">
+                      {% endif %}
+                    </td>
+                  {% endif %}
+                  <td class="prestamo-celda-bien">
+                    <strong>{{ d.codigo_inventario }}</strong>
+                    <small>{{ d.recurso }}</small>
+                  </td>
+                  <td>
+                    <span class="prestamo-fecha{{ ' prestamo-fecha-vencida' if d.estado_devolucion is none and d.fecha_limite_devolucion and d.fecha_limite_devolucion < ahora_utc else '' }}">
+                      {{ d.fecha_limite_devolucion|fecha_local }}
+                    </span>
+                  </td>
+                  <td>
+                    {% if d.estado_devolucion is not none %}
+                      <span class="estado-bien estado-disponible">Recibido · {{ d.estado_devolucion|replace('DANADO', 'DAÑADO')|title }}</span>
+                      <small>{{ d.fecha_devolucion|fecha_local }} · {{ d.encargado_devolucion }}</small>
+                      {% if d.observaciones_devolucion %}<small>{{ d.observaciones_devolucion }}</small>{% endif %}
+                    {% else %}
+                      <span class="estado-bien estado-{{ d.estado_actual|lower }}">
+                        {{ d.estado_actual|replace('DANADO', 'DAÑADO')|title }}
+                      </span>
+                    {% endif %}
+                  </td>
+                  <td class="prestamo-celda-sancion">
+                    {% if d.estado_sancion_vencimiento == 'ACTIVA' %}
+                      <span class="prestamo-sancion-vigente">Vigente</span>
+                      {% if gestionar %}
+                        <details class="prestamo-sancion-detalle">
+                          <summary>Quitar sanción</summary>
+                          <label for="justificacion-{{ d.id_detalle }}">Justificación</label>
+                          <input id="justificacion-{{ d.id_detalle }}" name="justificacion" form="quitar-sancion-{{ d.id_detalle }}" maxlength="255" required placeholder="Motivo">
+                          <button type="submit" form="quitar-sancion-{{ d.id_detalle }}">Confirmar</button>
+                        </details>
+                      {% endif %}
+                    {% elif d.estado_sancion_vencimiento == 'LEVANTADA' %}
+                      <span class="prestamo-sancion-retirada">Retirada</span>
+                      {% if d.justificacion_levantamiento %}<small>{{ d.justificacion_levantamiento }}</small>{% endif %}
+                    {% else %}
+                      <span class="prestamo-sin-sancion">—</span>
+                    {% endif %}
+                  </td>
+                  {% if gestionar %}
+                    <td>
+                      {% if d.estado_devolucion is none %}
+                        <select name="estado_{{ d.id_detalle }}" aria-label="Estado al devolver {{ d.codigo_inventario }}">
+                          <option value="DISPONIBLE">Disponible</option>
+                          <option value="DANADO">Dañado</option>
+                          <option value="MANTENIMIENTO">Mantenimiento</option>
+                        </select>
+                      {% endif %}
+                    </td>
+                    <td class="prestamo-celda-observaciones">
+                      {% if d.estado_devolucion is none %}
+                        <input name="observacion_{{ d.id_detalle }}" maxlength="255" aria-label="Observaciones de {{ d.codigo_inventario }}" placeholder="Opcional">
+                      {% endif %}
+                    </td>
+                  {% endif %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if gestionar and pendientes %}
+          <div class="prestamo-acciones-devolucion">
+            <button class="boton-principal" type="submit">Confirmar devolución</button>
+          </div>
+        {% endif %}
+      </form>
+      {% if gestionar %}
+        {% for d in prestamo.detalles if d.estado_sancion_vencimiento == 'ACTIVA' %}
+          <form id="quitar-sancion-{{ d.id_detalle }}" method="post" action="{{ url_for('prestamos.levantar_sancion_vencimiento', id_prestamo=prestamo.id_prestamo, id_detalle=d.id_detalle) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          </form>
+        {% endfor %}
+      {% endif %}
+    </section>
+    {% if gestionar %}
+      {% set reportables = pendientes|selectattr('estado_actual', 'equalto', 'PRESTADO')|list %}
+      {% if reportables %}
+        <section class="panel">
+          <h2>
+            Reportar un bien perdido
+          </h2>
+          <form method="post" action="{{ url_for('prestamos.reportar_perdida',id_prestamo=prestamo.id_prestamo) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="campos">
+              <label>
+                Bien pendiente
+                <select name="id_detalle" required>
+                  {% for d in reportables %}
+                    <option value="{{ d.id_detalle }}">
+                      {{ d.codigo_inventario }} · {{ d.recurso }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label>
+                Descripción de la pérdida
+                <input name="motivo" maxlength="255" required>
+              </label>
+            </div>
+            <button>
+              Registrar pérdida
+            </button>
+          </form>
+        </section>
+      {% endif %}
+    {% endif %}
+    <details class="panel prestamo-historial">
+      <summary>Historial del préstamo ({{ prestamo.historial|length }})</summary>
+      <div class="tabla">
+        <table>
+        <thead>
+          <tr>
+            <th>
+              Fecha
+            </th>
+            <th>
+              Anterior
+            </th>
+            <th>
+              Nuevo
+            </th>
+            <th>
+              Movimiento
+            </th>
+            <th>
+              Responsable
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in prestamo.historial %}
+            <tr>
+              <td>
+                {{ h.fecha|fecha_local }}
+              </td>
+              <td>
+                {{ (h.estado_anterior or 'Inicio')|replace('_', ' ')|title }}
+              </td>
+              <td>
+                {{ h.estado_nuevo|replace('_', ' ')|title }}
+              </td>
+              <td>
+                {{ h.observacion }}
+              </td>
+              <td>
+                {{ h.responsable }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        </table>
+      </div>
+    </details>
+    <a href="{{ url_for('prestamos.consultar_prestamos') }}">
+      Volver al listado
+    </a>
+  {% endif %}
+{% endblock %}
+{% block scripts %}
+  {% if modo == "formulario" %}
+    <script src="{{ url_for('static', filename='prestamo.js') }}" defer></script>
+  {% elif modo == "detalle" and gestionar %}
+    <script src="{{ url_for('static', filename='devolucion.js') }}" defer></script>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block titulo %}Iniciar sesión · UNSA{% endblock %}
+{% block contenido %}
+  <section class="presentacion-acceso">
+    <div class="logo-institucional">
+      <img src="{{ url_for('static', filename='logo-escuela.png') }}"
+           alt="Ciencia de la Computación · UNSA"
+           width="1400"
+           height="800">
+    </div>
+    <div class="identidad-acceso">
+      <h1>
+        Sistema de
+        <br>
+        préstamos
+      </h1>
+    </div>
+    <div class="ilustracion-acceso" aria-hidden="true">
+      <svg viewBox="0 0 400 210" fill="none">
+        <rect x="55" y="24" width="228" height="136" rx="10" />
+        <rect x="67" y="36" width="204" height="108" rx="3" />
+        <path d="M55 160 30 187h278l-25-27M140 172h60" />
+        <path d="m286 68 70-14 20 112-70 14zM297 91l45-9M300 107l45-9M303 123l45-9M306 139l33-7" />
+        <circle cx="165" cy="88" r="24" />
+        <path d="m153 88 9 9 17-19" />
+      </svg>
+    </div>
+    <div class="institucion-acceso">Universidad Nacional de San Agustín de Arequipa</div>
+  </section>
+  <section class="panel-acceso">
+    <div class="contenido-panel-acceso">
+      <h2>Iniciar sesión</h2>
+      {% if error %}
+        <p class="aviso error" role="alert">{{ error }}</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('auth.login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="usuario">
+          Usuario
+          <input id="usuario"
+                 name="usuario"
+                 autocomplete="username"
+                 maxlength="50"
+                 required
+                 autofocus>
+        </label>
+        <label for="clave">
+          Contraseña
+          <input id="clave" name="clave"
+                 type="password"
+                 autocomplete="current-password"
+                 maxlength="256"
+                 required>
+        </label>
+        <label class="opcion-casilla mostrar-clave">
+          <input type="checkbox" id="mostrar-clave">Mostrar contraseña
+        </label>
+        <button class="boton-principal"
+                type="submit">Iniciar sesión</button>
+      </form>
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,558 @@
+{% extends "base.html" %}
+{% block titulo %}
+  {% if modo == "administracion" %}
+    Administración de recursos
+  {% elif modo == "editar_recurso" %}
+    Editar recurso
+  {% elif modo == "detalle" %}
+    Detalle del recurso
+  {% else %}
+    Catálogo de recursos
+  {% endif %}
+  · Sistema de préstamos
+{% endblock %}
+{% macro campos_recurso(recurso, datos, fecha_hoy) %}
+  {% if recurso %}
+    {% set categoria_actual = recurso.id_categoria_ref|string %}
+  {% else %}
+    {% set categoria_actual = "" %}
+  {% endif %}
+  {% set categoria_seleccionada = datos.get("id_categoria_ref", categoria_actual) %}
+  <div class="campos">
+    <label>
+      Nombre
+      <input name="nombre" maxlength="120" value="{{ datos.get('nombre', recurso.nombre if recurso else '') }}" required>
+    </label>
+    <label>
+      Categoría
+      <select name="id_categoria_ref" required>
+        <option value="">Seleccione una categoría</option>
+        {% for c in categorias %}
+          <option value="{{ c.id_categoria }}" {% if categoria_seleccionada == c.id_categoria|string %}selected{% endif %}>{{ c.nombre }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Marca (opcional)
+      <input name="marca" maxlength="80" value="{{ datos.get('marca', recurso.marca if recurso else '') }}">
+    </label>
+    <label>
+      Modelo (opcional)
+      <input name="modelo" maxlength="80" value="{{ datos.get('modelo', recurso.modelo if recurso else '') }}">
+    </label>
+  </div>
+  <label>
+    Descripción general (opcional)
+    <textarea name="descripcion"
+              maxlength="255"
+              rows="3">{{ datos.get('descripcion', recurso.descripcion if recurso else '') }}</textarea>
+  </label>
+  {% if not recurso %}
+    <fieldset>
+      <legend>Primer bien físico (opcional)</legend>
+      <p>Deja el código vacío si agregarás los bienes después.</p>
+      <div class="campos">
+        <label>
+          Código de inventario
+          <input name="codigo_inventario" maxlength="40" value="{{ datos.get('codigo_inventario', '') }}">
+        </label>
+        <label>
+          Número de serie (opcional)
+          <input name="numero_serie" maxlength="60" value="{{ datos.get('numero_serie', '') }}">
+        </label>
+        <label>
+          Fecha de adquisición
+          <input type="date" name="fecha_adquisicion" max="{{ fecha_hoy }}" value="{{ datos.get('fecha_adquisicion', fecha_hoy) }}">
+        </label>
+        <label>
+          Ubicación (opcional)
+          <input name="ubicacion" maxlength="120" value="{{ datos.get('ubicacion', '') }}">
+        </label>
+      </div>
+      <label>Descripción del bien (opcional)<textarea name="descripcion_bien" maxlength="255" rows="2">{{ datos.get("descripcion_bien", "") }}</textarea></label>
+      <p>Estado inicial: disponible.</p>
+    </fieldset>
+  {% endif %}
+{% endmacro %}
+{# Campos del formulario de categoría. #}
+{% macro campos_categoria(categoria, datos) %}
+  {% if categoria %}
+    {% set id_actual = categoria.id_categoria %}
+    {% set nombre_actual = categoria.nombre %}
+    {% set descripcion_actual = categoria.descripcion %}
+  {% else %}
+    {% set id_actual = "" %}
+    {% set nombre_actual = "" %}
+    {% set descripcion_actual = "" %}
+  {% endif %}
+  {% set id_categoria = datos.get("id_categoria", id_actual) %}
+  {% if id_categoria %}
+    <input type="hidden" name="id_categoria" value="{{ id_categoria }}">
+  {% endif %}
+  <div class="campos">
+    <label>
+      Nombre de categoría
+      <input id="nombre-categoria" name="nombre" maxlength="80" required value="{{ datos.get('nombre', nombre_actual) }}">
+    </label>
+    <label>
+      Descripción (opcional)
+      <input id="descripcion-categoria" name="descripcion" maxlength="255" value="{{ datos.get('descripcion', descripcion_actual) }}">
+    </label>
+  </div>
+{% endmacro %}
+{% macro resumen_politicas(id_categoria, politicas_por_categoria) %}
+  {% if puede('POLITICAS_GESTIONAR') %}
+    {% set reglas = politicas_por_categoria.get(id_categoria, []) %}
+    {% set personas = reglas|map(attribute='tipo_persona.value')|list %}
+    <section class="resumen-politicas" aria-label="Políticas de la categoría">
+      <h3>Políticas de esta categoría</h3>
+      {% if reglas %}
+        <ul>{% for regla in reglas %}
+          <li>{{ regla.tipo_persona.value|title }}: {{ regla.plazo_texto }} · {{ 'Permite salida fuera de la institución' if regla.permite_salida else 'Uso dentro de la institución' }}
+            <a href="{{ url_for('politicas.consultar_politicas', _anchor='politica-categoria-' ~ id_categoria) }}">Editar</a></li>
+        {% endfor %}</ul>
+        {% for persona in ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRATIVO'] if persona not in personas %}
+          <p class="politica-pendiente">Sin política para {{ persona|lower }}.</p>
+        {% endfor %}
+      {% else %}
+        <p class="aviso">Configura una política antes de prestar.</p>
+      {% endif %}
+      <a class="boton" href="{{ url_for('politicas.consultar_politicas', categoria=id_categoria) }}">Configurar política</a>
+    </section>
+  {% endif %}
+{% endmacro %}
+{% block contenido %}
+  {% if modo == "consulta" %}
+    {# CATALOGO #}
+    <div class="encabezado">
+      <div>
+        <h1>Catálogo de recursos</h1>
+      </div>
+      {% if puede("RECURSOS_GESTIONAR") %}
+        <div class="acciones">
+          <a class="boton boton-principal" href="{{ url_for('recursos.consultar_administracion_recursos') }}">Administrar recursos</a>
+        </div>
+      {% endif %}
+    </div>
+    <form method="get" class="panel filtros-catalogo">
+      <div class="campos">
+        <label>
+          Buscar recurso
+          <input name="q" maxlength="120" placeholder="Nombre, marca, modelo o código de inventario" value="{{ request.args.get('q', '') }}">
+        </label>
+        <label>
+          Categoría
+          <select name="id_categoria_ref" id="filtro-categoria-catalogo" onchange="this.form.elements.id_recurso.value=''; this.form.elements.id_bien.value=''; this.form.requestSubmit()">
+            <option value="">Todas las categorías</option>
+            {% for c in categorias %}
+              <option value="{{ c.id_categoria }}" {{ 'selected' if request.args.get("id_categoria_ref") == c.id_categoria|string else '' }}>{{ c.nombre }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          Recurso
+          <select name="id_recurso" id="filtro-recurso-catalogo" {{ 'disabled' if not request.args.get('id_categoria_ref') else '' }} onchange="this.form.elements.id_bien.value=''; this.form.requestSubmit()">
+            <option value="">{{ 'Todos los recursos de la categoría' if request.args.get('id_categoria_ref') else 'Seleccione primero una categoría' }}</option>
+            {% for r in opciones_filtro.recursos %}
+              <option value="{{ r.id_recurso }}" {{ 'selected' if request.args.get('id_recurso') == r.id_recurso|string else '' }}>{{ r.nombre }} (#{{ r.id_recurso }})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          Bien físico
+          <select name="id_bien" id="filtro-bien-catalogo" {{ 'disabled' if not opciones_filtro.bienes else '' }}>
+            <option value="">{{ 'Todos los bienes del recurso' if opciones_filtro.bienes else 'Seleccione un recurso con bienes físicos' }}</option>
+            {% for b in opciones_filtro.bienes %}
+              <option value="{{ b.id_bien }}" {{ 'selected' if request.args.get('id_bien') == b.id_bien|string else '' }}>{{ b.codigo_inventario }}{{ ' · ' ~ b.descripcion_bien if b.descripcion_bien else '' }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          Disponibilidad
+          <select name="solo_disponibles">
+            <option value="">Todos</option>
+            <option value="1" {{ 'selected' if request.args.get("solo_disponibles") == '1' else '' }}>Con bienes disponibles</option>
+          </select>
+        </label>
+      </div>
+      <div class="acciones">
+        <button class="boton-principal">Buscar</button>
+        <a href="{{ url_for('recursos.consultar_recursos') }}">Limpiar</a>
+      </div>
+    </form>
+    <div class="encabezado-seccion">
+      <h2>{{ "Recursos de " ~ categoria_catalogo.nombre if categoria_catalogo else "Recursos" }}</h2>
+      <span class="contador-resultados">Mostrando {{ recursos|length }}</span>
+    </div>
+    <section class="lista-recursos" aria-label="Recursos encontrados">
+      {% for r in recursos %}
+        <article class="tarjeta-recurso">
+          <div class="ilustracion-recurso">
+            <img src="{{ url_for('static', filename='imagenes/recursos/recurso.svg') }}"
+                 alt="" width="64" height="51" loading="lazy">
+          </div>
+          <div class="contenido-tarjeta-recurso">
+            <span class="categoria-tarjeta-recurso">{{ r.categoria_nombre }}</span>
+            <h3>
+              <a href="{{ url_for('recursos.consultar_recurso', id_recurso=r.id_recurso) }}">{{ r.nombre }}</a>
+            </h3>
+            <p class="marca-modelo-recurso">{{ r.marca or 'Sin marca' }} {{ r.modelo or '' }}</p>
+            <div class="pie-tarjeta-recurso">
+              <div>
+                <strong>{{ r.disponibles }} disponibles</strong>
+                <small class="total-bienes-recurso">{{ r.total_bienes }} bienes en total</small>
+              </div>
+              <a class="boton" href="{{ url_for('recursos.consultar_recurso', id_recurso=r.id_recurso) }}">
+                Ver detalle
+              </a>
+            </div>
+          </div>
+        </article>
+      {% else %}
+        <div class="mensaje-sin-resultados panel">
+          {% set filtrado = request.args.get('q') or request.args.get('id_categoria_ref') or request.args.get('id_recurso') or request.args.get('id_bien') or request.args.get('solo_disponibles') %}
+          <h2>{{ 'Sin resultados' if filtrado else 'No hay recursos registrados' }}</h2>
+          {% if filtrado %}
+            <p>No hay recursos que coincidan con los filtros.</p>
+            <a class="boton" href="{{ url_for('recursos.consultar_recursos') }}">Limpiar filtros</a>
+          {% elif puede("RECURSOS_GESTIONAR") %}
+            {% if categorias %}
+              <a class="boton boton-principal" href="{{ url_for('recursos.consultar_administracion_recursos',nuevo=1,_anchor='registro-recurso') }}">Registrar recurso</a>
+            {% else %}
+              <a class="boton boton-principal" href="{{ url_for('recursos.consultar_administracion_recursos',_anchor='nombre-categoria') }}">Registrar categoría</a>
+            {% endif %}
+          {% else %}
+            <a class="boton" href="{{ url_for('inicio') }}">Volver a Inicio</a>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </section>
+
+  {% elif modo == "administracion" %}
+    {# ADMINISTRACION #}
+    <div class="encabezado">
+      <div>
+        <h1>Administración de recursos</h1>
+      </div>
+      <div class="acciones">
+        {% if puede('CATALOGO_CONSULTAR') %}
+          <a class="boton" href="{{ url_for('recursos.consultar_recursos') }}">Ver catálogo</a>
+        {% endif %}
+        <a class="boton boton-principal" href="#registro-recurso" data-abrir-registro>Registrar recurso</a>
+      </div>
+    </div>
+    {% if error %}
+      <p class="aviso error" role="alert">{{ error }}</p>
+    {% endif %}
+    {% if recurso_continuacion %}
+      <section class="panel continuar-registro" id="continuar-registro" aria-label="Continuar registro">
+        <div>
+          <h2>{{ recurso_continuacion.nombre }}</h2>
+        </div>
+        <div class="acciones">
+          <a class="boton boton-principal" href="{{ url_for('bienes.mostrar_formulario_bien_material',recurso=recurso_continuacion.id_recurso) }}">Agregar otro bien físico</a>
+          <a class="boton" href="{{ url_for('recursos.consultar_administracion_recursos',nuevo=1,_anchor='registro-recurso') }}">Registrar otro recurso</a>
+        </div>
+      </section>
+    {% endif %}
+    <section class="resumen-estadisticas" aria-label="Resumen del inventario">
+      <article>
+        <span>Recursos registrados</span>
+        <strong>{{ recursos|length }}</strong>
+      </article>
+      <article>
+        <span>Bienes encontrados</span>
+        <strong>{{ recursos|sum(attribute='total_bienes') }}</strong>
+      </article>
+      <article>
+        <span>Bienes disponibles</span>
+        <strong>{{ recursos|sum(attribute='disponibles') }}</strong>
+      </article>
+    </section>
+    <details class="panel registro-integrado" id="registro-recurso" {{ 'open' if not recursos or seccion_error == 'recurso' or request.args.get("nuevo") == '1' else '' }}>
+      <summary>
+        <div>
+          <h2>Registrar recurso</h2>
+        </div>
+        <span class="indicador-desplegable" aria-hidden="true">⌄</span>
+      </summary>
+      {% if categorias %}
+        <form method="post" action="{{ url_for('recursos.registrar_recurso') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {{ campos_recurso(none,datos_recurso,fecha_hoy) }}
+          <div class="acciones">
+            <button class="boton-principal">Guardar recurso</button>
+          </div>
+        </form>
+      {% else %}
+        <p>
+          No hay categorías registradas.
+          <a href="#categorias">Registrar categoría</a>
+        </p>
+      {% endif %}
+    </details>
+    <section class="panel" id="categorias">
+      <div class="encabezado-seccion">
+        <div>
+          <h2>Categorías de recursos</h2>
+        </div>
+        <span class="contador-resultados">{{ categorias|length }} registradas</span>
+      </div>
+      <div class="categorias-integradas">
+        <div class="lista-categorias">
+          {% for c in categorias %}
+            <div class="fila-categoria">
+              <div>
+                <strong>{{ c.nombre }}</strong>
+                {% if c.descripcion %}
+                  <small>{{ c.descripcion }}</small>
+                {% endif %}
+              </div>
+              <div class="acciones">
+                <a href="{{ url_for('recursos.consultar_administracion_recursos',editar_categoria=c.id_categoria,_anchor='categorias') }}" aria-label="Editar categoría {{ c.nombre }}">Editar categoría</a>
+                <form method="post" action="{{ url_for('recursos.eliminar_categoria', id_categoria=c.id_categoria) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
+                  <button onclick="return confirm('¿Eliminar esta categoría? Debe estar sin recursos asociados.')" aria-label="Eliminar categoría {{ c.nombre }}">Eliminar categoría</button>
+                </form>
+              </div>
+            </div>
+          {% else %}
+            <p>No hay categorías registradas.</p>
+          {% endfor %}
+        </div>
+        {% set id_categoria_edicion = datos_categoria.get('id_categoria') or (categoria.id_categoria if categoria else none) %}
+        <form method="post" action="{{ url_for('recursos.actualizar_categoria', id_categoria=id_categoria_edicion) if id_categoria_edicion else url_for('recursos.registrar_categoria') }}">
+          <h3>{{ 'Editar categoría' if categoria or datos_categoria.get("id_categoria") else 'Registrar categoría' }}</h3>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {{ campos_categoria(categoria, datos_categoria) }}
+          <div class="acciones">
+            <button class="boton-principal">Guardar categoría</button>
+            {% if categoria or datos_categoria.get("id_categoria") %}
+              <a href="{{ url_for('recursos.consultar_administracion_recursos',_anchor='categorias') }}">Cancelar edición</a>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </section>
+    <section id="inventario">
+      <div class="encabezado-seccion">
+        <h2>Recursos y bienes registrados</h2>
+        <a href="{{ url_for('bienes.consultar_bienes_materiales') }}">Ver inventario completo</a>
+      </div>
+      <form method="get" action="{{ url_for('recursos.consultar_administracion_recursos', _anchor='inventario') }}" class="panel filtros-catalogo">
+        <div class="campos">
+          <label>
+            Nombre o código de inventario
+            <input name="q" maxlength="120" placeholder="Nombre del recurso o código del ejemplar" value="{{ filtros.get('q', '') }}">
+          </label>
+          <label>
+            Categoría
+            <select name="id_categoria_ref">
+              <option value="">Todas las categorías</option>
+              {% for c in categorias %}
+                <option value="{{ c.id_categoria }}" {{ 'selected' if filtros.get('id_categoria_ref') == c.id_categoria else '' }}>{{ c.nombre }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Estado del bien físico
+            <select name="estado">
+              <option value="">Todos los estados</option>
+              {% for estado in estados %}
+                <option value="{{ estado.value }}" {{ 'selected' if filtros.get('estado') == estado.value else '' }}>{{ estado.value|replace('DANADO','DAÑADO')|title }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="acciones">
+          <button class="boton-principal">Buscar</button>
+          <a href="{{ url_for('recursos.consultar_administracion_recursos', _anchor='inventario') }}">Limpiar filtros</a>
+        </div>
+      </form>
+      <p class="ayuda">El filtro de estado muestra recursos con al menos un bien en ese estado.</p>
+      {% for r in recursos %}
+        <details class="panel recurso-inventario" id="recurso-{{ r.id_recurso }}" {{ 'open' if request.args.get("recurso") == r.id_recurso|string else '' }}>
+          <summary>
+            <div class="identidad-recurso">
+              <span class="categoria-tarjeta-recurso">{{ r.categoria_nombre }}</span>
+              <h3>{{ r.nombre }}</h3>
+              <small>{{ r.marca or '' }} {{ r.modelo or '' }}</small>
+            </div>
+            <div class="totales-recurso">
+              <strong>{{ r.disponibles }} {{ 'disponible' if r.disponibles == 1 else 'disponibles' }}</strong>
+              <small>{{ r.total_bienes }} {{ 'bien' if r.total_bienes == 1 else 'bienes' }}</small>
+            </div>
+            <span class="indicador-desplegable" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="acciones">
+            <a class="boton" href="{{ url_for('recursos.mostrar_edicion_recurso',id_recurso=r.id_recurso) }}">Editar recurso</a>
+            <a class="boton boton-principal" href="{{ url_for('bienes.mostrar_formulario_bien_material',recurso=r.id_recurso) }}">Agregar bien</a>
+            {% if puede('POLITICAS_GESTIONAR') %}
+              <a class="boton" href="{{ url_for('politicas.consultar_politicas', categoria=r.id_categoria_ref) }}">Configurar política de la categoría</a>
+            {% endif %}
+            {% if puede('CATALOGO_CONSULTAR') %}
+              <a href="{{ url_for('recursos.consultar_recurso',id_recurso=r.id_recurso) }}">Ver detalle</a>
+            {% endif %}
+          </div>
+          {{ resumen_politicas(r.id_categoria_ref, politicas_por_categoria) }}
+          <a href="{{ url_for('bienes.consultar_bienes_materiales', id_recurso=r.id_recurso, estado=filtros.get('estado', '')) }}">Consultar bienes físicos</a>
+        </details>
+      {% else %}
+        <div class="mensaje-sin-resultados">
+          {% if filtros.get('q') or filtros.get('id_categoria_ref') or filtros.get('estado') %}
+            <h2>No hay recursos que coincidan con los filtros</h2>
+            <a class="boton" href="{{ url_for('recursos.consultar_administracion_recursos', _anchor='inventario') }}">Limpiar filtros</a>
+          {% else %}
+            <h2>No hay recursos registrados</h2>
+            {% if categorias %}
+              <a class="boton boton-principal" href="#registro-recurso" data-abrir-registro>Registrar recurso</a>
+            {% else %}
+              <a class="boton boton-principal" href="#nombre-categoria">Registrar categoría</a>
+            {% endif %}
+          {% endif %}
+        </div>
+      {% endfor %}
+    </section>
+
+  {% elif modo == "editar_recurso" %}
+    {# EDICIÓN DEL RECURSO #}
+    <h1>Editar recurso</h1>
+    {% if error %}
+      <p class="aviso error" role="alert">{{ error }}</p>
+    {% endif %}
+    {% if categorias %}
+      <form method="post" action="{{ url_for('recursos.actualizar_recurso', id_recurso=recurso.id_recurso) }}" class="panel">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ campos_recurso(recurso,request.form,fecha_hoy) }}
+        <div class="acciones">
+          <button class="boton-principal">Guardar cambios</button>
+          {% if puede('CATALOGO_CONSULTAR') %}
+            <a href="{{ url_for('recursos.consultar_recursos') }}">Volver al catálogo</a> · <a href="{{ url_for('recursos.consultar_recursos', id_categoria_ref=recurso.id_categoria_ref) }}">Ver recursos de esta categoría</a>
+          {% else %}
+            <a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Volver a administración</a>
+          {% endif %}
+        </div>
+      </form>
+    {% else %}
+      <section class="panel">
+        <p>Primero necesitas registrar una categoría.</p>
+        <a class="boton boton-principal" href="{{ url_for('recursos.consultar_administracion_recursos', _anchor='categorias') }}">Registrar categoría</a>
+      </section>
+    {% endif %}
+  {% elif modo == "detalle" %}
+    {# DETALLE DEL RECURSO #}
+    <div class="encabezado">
+      <div>
+        <p class="etiqueta">{{ categoria.nombre }}</p>
+        <h1>{{ recurso.nombre }}</h1>
+      </div>
+      <div class="acciones">
+        {% if puede("RECURSOS_GESTIONAR") %}
+          <a class="boton" href="{{ url_for('recursos.mostrar_edicion_recurso', id_recurso=recurso.id_recurso) }}">Editar recurso</a>
+          <a class="boton" href="{{ url_for('bienes.mostrar_formulario_bien_material', recurso=recurso.id_recurso) }}">Agregar bien físico</a>
+        {% endif %}
+        {% if puede("PRESTAMOS_GESTIONAR") or puede("RESERVAS_PROPIAS_GESTIONAR") %}
+          <a class="boton boton-principal" href="{{ url_for('reservas.mostrar_formulario_reserva', recurso=recurso.id_recurso, tipo='PRESTAMO') }}">Solicitar préstamo</a>
+        {% endif %}
+        {% if puede("PRESTAMOS_GESTIONAR") and disponibles > 0 %}
+          <a class="boton boton-principal" href="{{ url_for('prestamos.mostrar_formulario_prestamo', recurso=recurso.id_recurso) }}">Registrar préstamo</a>
+        {% endif %}
+        {% if puede("PRESTAMOS_GESTIONAR") or puede("RESERVAS_PROPIAS_GESTIONAR") %}
+          <a class="boton" href="{{ url_for('reservas.mostrar_formulario_reserva', recurso=recurso.id_recurso, tipo='RESERVA') }}">Reservar recurso</a>
+        {% endif %}
+      </div>
+    </div>
+    <section class="panel">
+      <div class="resumen-inventario">
+        <div>
+          <span>Disponibles</span>
+          <strong>{{ disponibles }}</strong>
+        </div>
+        <div>
+          <span>Bienes registrados</span>
+          <strong>{{ total }}</strong>
+        </div>
+      </div>
+      <dl class="datos-recurso">
+        <dt>Marca y modelo</dt>
+        <dd>{{ recurso.marca or 'Sin marca' }} {{ recurso.modelo }}</dd>
+        <dt>Descripción</dt>
+        <dd>{{ recurso.descripcion or 'Sin descripción' }}</dd>
+      </dl>
+    </section>
+    {{ resumen_politicas(recurso.id_categoria_ref, politicas_por_categoria) }}
+    {% if puede("RECURSOS_GESTIONAR") or puede("PRESTAMOS_GESTIONAR") %}
+      <section class="panel tabla">
+        <h2>Bienes físicos de este recurso</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Inventario</th>
+              <th>Descripción particular</th>
+              <th>Serie</th>
+              <th>Ubicación</th>
+              <th>Estado</th>
+              {% if puede("PRESTAMOS_GESTIONAR") %}
+                <th>Acción</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in bienes %}
+              <tr>
+                <td>
+                  {% if puede("RECURSOS_GESTIONAR") %}
+                    <a href="{{ url_for('bienes.consultar_detalle_bien_material', id_bien=b.id_bien) }}">{{ b.codigo_inventario }}</a>
+                  {% else %}
+                    {{ b.codigo_inventario }}
+                  {% endif %}
+                </td>
+                <td>{{ b.descripcion_bien or 'Sin descripción particular' }}</td>
+                <td>{{ b.numero_serie or 'Sin registrar' }}</td>
+                <td>{{ b.ubicacion or 'Sin registrar' }}</td>
+                <td>
+                  <span class="estado-bien estado-{{ b.estado|lower }}">{{ b.estado|replace('DANADO', 'DAÑADO')|title }}</span>
+                </td>
+                {% if puede("PRESTAMOS_GESTIONAR") %}
+                  <td>
+                    {% if b.estado == 'DISPONIBLE' %}
+                      <a class="boton boton-principal" href="{{ url_for('prestamos.mostrar_formulario_prestamo', bien=b.id_bien) }}" aria-label="Prestar {{ b.codigo_inventario }}">Prestar</a>
+                    {% else %}
+                      <span class="ayuda">No disponible</span>
+                    {% endif %}
+                  </td>
+                {% endif %}
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="{{ 6 if puede('PRESTAMOS_GESTIONAR') else 5 }}">
+                  No hay bienes registrados para este recurso.
+                  {% if puede("RECURSOS_GESTIONAR") %}
+                    <div class="acciones">
+                      <a class="boton boton-principal" href="{{ url_for('bienes.mostrar_formulario_bien_material',recurso=recurso.id_recurso) }}">Agregar primer bien físico</a>
+                    </div>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      {% if total == 0 and puede("RECURSOS_GESTIONAR") %}
+        <form method="post" action="{{ url_for('recursos.eliminar_recurso', id_recurso=recurso.id_recurso) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button onclick="return confirm('¿Eliminar este recurso sin bienes?')">Eliminar recurso sin bienes</button>
+        </form>
+      {% endif %}
+    {% endif %}
+    <p>
+      <a href="{{ url_for('recursos.consultar_recursos') }}">Volver al catálogo</a> · <a href="{{ url_for('recursos.consultar_recursos', id_categoria_ref=recurso.id_categoria_ref) }}">Ver recursos de esta categoría</a>
+      {% if puede("RECURSOS_GESTIONAR") %}
+        ·
+        <a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Administrar recursos</a>
+      {% endif %}
+    </p>
+  {% endif %}
+{% endblock %}
