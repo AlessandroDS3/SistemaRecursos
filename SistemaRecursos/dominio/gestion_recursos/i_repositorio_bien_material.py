@@ -9,47 +9,47 @@ from abc import ABC, abstractmethod
 class IRepositorioBienMaterial(ABC):
     @abstractmethod
     def registrar_bien_material(self, bien_material) -> BienMaterial:
-        """Escritura explícita. Devuelve BienMaterial y propaga errores de validación o integridad."""
+        """Guarda un nuevo bien."""
         raise NotImplementedError
 
     @abstractmethod
     def existen_por_recurso(self, id_recurso) -> bool:
-        """Escritura explícita. Devuelve bool y propaga errores de validación o integridad."""
+        """Indica si el recurso tiene bienes registrados."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_bien_material(self, id_bien) -> BienMaterial | None:
-        """Lectura sin escrituras. Devuelve BienMaterial | None; None indica ausencia y un listado vacío no es un error."""
+        """Busca un bien por su ID; devuelve None si no existe."""
         raise NotImplementedError
 
     @abstractmethod
     def actualizar_bien_material(self, bien_material) -> BienMaterial:
-        """Escritura explícita. Devuelve BienMaterial y propaga errores de validación o integridad."""
+        """Actualiza los datos de un bien."""
         raise NotImplementedError
 
     @abstractmethod
     def eliminar_bien_material(self, id_bien) -> None:
-        """Escritura explícita. Devuelve None y propaga errores de validación o integridad."""
+        """Elimina un bien."""
         raise NotImplementedError
 
     @abstractmethod
     def contar_disponibles(self) -> int:
-        """Escritura explícita. Devuelve int y propaga errores de validación o integridad."""
+        """Cuenta los bienes disponibles."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_bienes_por_recurso(self, id_recurso=None) -> list[BienListado]:
-        """Lectura sin escrituras. Devuelve list[BienListado]; None indica ausencia y un listado vacío no es un error."""
+        """Lista los bienes de un recurso, o todos si no se indica uno."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_bienes_materiales(self, filtros) -> ResultadoBienes:
-        """Lectura sin escrituras. Devuelve ResultadoBienes; None indica ausencia y un listado vacío no es un error."""
+        """Consulta los bienes y su resumen según los filtros."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_bienes_disponibles(self, texto="", id_recurso=None) -> list[BienDisponible]:
-        """Lectura sin escrituras. Devuelve list[BienDisponible]; None indica ausencia y un listado vacío no es un error."""
+        """Busca bienes disponibles por texto y recurso."""
         raise NotImplementedError
 
     @abstractmethod
@@ -63,20 +63,20 @@ class IRepositorioBienMaterial(ABC):
         fecha_fin_estimada=None,
         descripcion="",
     ) -> BienMaterial:
-        """Escritura explícita. Devuelve BienMaterial y propaga errores de validación o integridad."""
+        """Cambia el estado de un bien y registra el motivo y el responsable."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_prestamo_pendiente(self, id_bien) -> int | None:
-        """Lectura sin escrituras. Devuelve int | None; None indica ausencia y un listado vacío no es un error."""
+        """Devuelve el ID del préstamo pendiente del bien, o None si no tiene."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_historial_bien_material(self, id_bien) -> list[dict[str, Any]]:
-        """Devuelve todos los registros de estado."""
+        """Consulta el historial de estados del bien."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_registros_fuera_servicio(self, id_bien) -> list[RegistroFueraServicio]:
-        """Devuelve todas las entidades de registros fuera de servicio."""
+        """Consulta los registros del bien fuera de servicio."""
         raise NotImplementedError

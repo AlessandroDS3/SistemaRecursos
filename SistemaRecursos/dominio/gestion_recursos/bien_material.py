@@ -1,6 +1,8 @@
-from enum import Enum
+
 from dataclasses import dataclass
 from datetime import date
+from enum import Enum
+
 from dominio.gestion_recursos.validacion_recurso import entero, texto, fecha
 
 
@@ -14,13 +16,50 @@ class EstadoBienMaterial(str, Enum):
 
 
 ESTADOS_FUERA_SERVICIO = frozenset({
-    EstadoBienMaterial.DANADO, EstadoBienMaterial.MANTENIMIENTO, EstadoBienMaterial.PERDIDO,
+    EstadoBienMaterial.DANADO,
+    EstadoBienMaterial.MANTENIMIENTO,
+    EstadoBienMaterial.PERDIDO,
 })
-ESTADOS_CAMBIO_MANUAL = ESTADOS_FUERA_SERVICIO | {EstadoBienMaterial.DISPONIBLE}
-ESTADOS_GESTION_PRESTAMOS = frozenset({EstadoBienMaterial.PRESTADO, EstadoBienMaterial.RESERVADO})
+
+ESTADOS_CAMBIO_MANUAL = ESTADOS_FUERA_SERVICIO | {
+    EstadoBienMaterial.DISPONIBLE
+}
+
+ESTADOS_GESTION_PRESTAMOS = frozenset({
+    EstadoBienMaterial.PRESTADO,
+    EstadoBienMaterial.RESERVADO,
+})
+
 ESTADOS_RECEPCION = frozenset({
-    EstadoBienMaterial.DISPONIBLE, EstadoBienMaterial.DANADO, EstadoBienMaterial.MANTENIMIENTO,
+    EstadoBienMaterial.DISPONIBLE,
+    EstadoBienMaterial.DANADO,
+    EstadoBienMaterial.MANTENIMIENTO,
 })
+
+
+TRANSICIONES_PERMITIDAS = {
+    EstadoBienMaterial.DISPONIBLE: (
+        ESTADOS_FUERA_SERVICIO | ESTADOS_GESTION_PRESTAMOS
+    ),
+    EstadoBienMaterial.PRESTADO: (
+        ESTADOS_RECEPCION | {EstadoBienMaterial.PERDIDO}
+    ),
+    EstadoBienMaterial.RESERVADO: {
+        EstadoBienMaterial.DISPONIBLE,
+        EstadoBienMaterial.PRESTADO,
+    },
+    EstadoBienMaterial.DANADO: {
+        EstadoBienMaterial.DISPONIBLE,
+        EstadoBienMaterial.MANTENIMIENTO,
+        EstadoBienMaterial.PERDIDO,
+    },
+    EstadoBienMaterial.MANTENIMIENTO: {
+        EstadoBienMaterial.DISPONIBLE,
+        EstadoBienMaterial.DANADO,
+        EstadoBienMaterial.PERDIDO,
+    },
+    EstadoBienMaterial.PERDIDO: ESTADOS_RECEPCION,
+}
 
 
 @dataclass(kw_only=True)
@@ -43,10 +82,7 @@ class BienMaterial:
         self.fecha_adquisicion = fecha(self.fecha_adquisicion, "Fecha de adquisición")
         if self.fecha_adquisicion > date.today():
             raise ValueError("La fecha de adquisición no puede ser futura.")
-        try:
-            self.estado = EstadoBienMaterial(self.estado)
-        except (ValueError, TypeError):
-            raise ValueError("Selecciona un estado de bien válido.") from None
+        self.estado = EstadoBienMaterial(self.estado)
 
     def esta_disponible(self):
         return self.estado == EstadoBienMaterial.DISPONIBLE
@@ -63,17 +99,3 @@ class BienMaterial:
         if nuevo not in TRANSICIONES_PERMITIDAS[self.estado]:
             raise ValueError(f"No se puede cambiar de {self.estado.value} a {nuevo.value}.")
         self.estado = nuevo
-
-
-TRANSICIONES_PERMITIDAS = {
-    EstadoBienMaterial.DISPONIBLE: ESTADOS_FUERA_SERVICIO | ESTADOS_GESTION_PRESTAMOS,
-    EstadoBienMaterial.PRESTADO: ESTADOS_RECEPCION | {EstadoBienMaterial.PERDIDO},
-    EstadoBienMaterial.RESERVADO: frozenset({EstadoBienMaterial.DISPONIBLE, EstadoBienMaterial.PRESTADO}),
-    EstadoBienMaterial.DANADO: frozenset({
-        EstadoBienMaterial.DISPONIBLE, EstadoBienMaterial.MANTENIMIENTO, EstadoBienMaterial.PERDIDO,
-    }),
-    EstadoBienMaterial.MANTENIMIENTO: frozenset({
-        EstadoBienMaterial.DISPONIBLE, EstadoBienMaterial.DANADO, EstadoBienMaterial.PERDIDO,
-    }),
-    EstadoBienMaterial.PERDIDO: ESTADOS_RECEPCION,
-}

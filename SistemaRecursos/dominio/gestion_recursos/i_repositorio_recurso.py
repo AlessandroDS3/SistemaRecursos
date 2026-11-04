@@ -8,55 +8,55 @@ from abc import ABC, abstractmethod
 class IRepositorioRecurso(ABC):
     @abstractmethod
     def registrar_recurso(self, recurso) -> Recurso:
-        """Escritura explícita. Devuelve Recurso y propaga errores de validación o integridad."""
+        """Guarda un nuevo recurso."""
         raise NotImplementedError
 
     @abstractmethod
     def registrar_recurso_con_bien(self, recurso, datos_bien) -> Recurso:
-        """Escritura explícita. Devuelve Recurso y propaga errores de validación o integridad."""
+        """Guarda un nuevo recurso junto con su primer bien."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_recurso(self, id_recurso) -> Recurso | None:
-        """Lectura sin escrituras. Devuelve Recurso | None; None indica ausencia y un listado vacío no es un error."""
+        """Busca un recurso por su ID; devuelve None si no existe."""
         raise NotImplementedError
 
     @abstractmethod
     def actualizar_recurso(self, recurso) -> Recurso:
-        """Escritura explícita. Devuelve Recurso y propaga errores de validación o integridad."""
+        """Actualiza los datos de un recurso."""
         raise NotImplementedError
 
     @abstractmethod
     def eliminar_recurso(self, id_recurso) -> None:
-        """Escritura explícita. Devuelve None y propaga errores de validación o integridad."""
+        """Elimina un recurso."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_recursos(self, filtros=None) -> list[RecursoListado]:
-        """Lectura sin escrituras. Devuelve list[RecursoListado]; None indica ausencia y un listado vacío no es un error."""
+        """Lista los recursos según los filtros."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_categorias(self) -> list[CategoriaRecurso]:
-        """Lectura sin escrituras. Devuelve list[CategoriaRecurso]; None indica ausencia y un listado vacío no es un error."""
+        """Lista las categorías de recursos."""
         raise NotImplementedError
 
     @abstractmethod
     def consultar_categoria(self, id_categoria) -> CategoriaRecurso | None:
-        """Lectura sin escrituras. Devuelve CategoriaRecurso | None; None indica ausencia y un listado vacío no es un error."""
+        """Busca una categoría por su ID; devuelve None si no existe."""
         raise NotImplementedError
 
     @abstractmethod
     def registrar_categoria(self, categoria) -> CategoriaRecurso:
-        """Escritura explícita. Devuelve CategoriaRecurso y propaga errores de validación o integridad."""
+        """Guarda una nueva categoría."""
         raise NotImplementedError
 
     @abstractmethod
     def actualizar_categoria(self, categoria) -> CategoriaRecurso:
-        """Escritura explícita. Devuelve CategoriaRecurso y propaga errores de validación o integridad."""
+        """Actualiza los datos de una categoría."""
         raise NotImplementedError
 
     @abstractmethod
     def eliminar_categoria(self, id_categoria) -> None:
-        """Escritura explícita. Devuelve None y propaga errores de validación o integridad."""
+        """Elimina una categoría."""
         raise NotImplementedError

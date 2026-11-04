@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dominio.gestion_recursos.recurso import Recurso
 from dominio.resultados_consulta import RecursoListado
 from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
@@ -9,6 +10,7 @@ from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_bien_material_sql import insertar_bien_material
 
 
+# Columnas que se reutilizan en las consultas de recursos y categorías.
 CAMPOS_RECURSO = (
     "id_recurso", "id_categoria_ref", "nombre", "marca", "modelo", "descripcion",
 )
@@ -18,38 +20,37 @@ COLUMNAS_CATEGORIA = "id_categoria, nombre, descripcion"
 
 
 class RepositorioRecursoSQL(IRepositorioRecurso):
-    """Guarda recursos y ejemplares en MySQL."""
+    """Consulta y guarda recursos, su primer bien y categorías en MySQL."""
 
+    # 1. Preparar la conexión a MySQL.
     def __init__(self, conexion=None):
         self.conexion = conexion or MySQLConnection()
 
-    @staticmethod
-    def _insertar_recurso(cursor, recurso):
-        cursor.execute(
-            """
-            INSERT INTO recurso (
-                nombre, id_categoria_ref, marca, modelo, descripcion
-            )
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (
-                recurso.nombre,
-                recurso.id_categoria_ref,
-                recurso.marca,
-                recurso.modelo,
-                recurso.descripcion,
-            ),
-        )
-        return cursor.lastrowid
+    #Consultar y el detalle de los recursos.
+    def consultar_recursos(self, filtros=None) -> list[RecursoListado]:
+        sql, parametros = self._consulta_todos(filtros)
+        with self.conexion.sesion() as cursor:
+            cursor.execute(sql + " ORDER BY r.nombre, r.id_recurso", parametros)
+            return cursor.fetchall()
 
+    def consultar_recurso(self, id_recurso) -> Recurso | None:
+        """Busca un recurso por su ID"""
+        with self.conexion.sesion() as cursor:
+            cursor.execute(
+                f"SELECT {COLUMNAS_RECURSO} FROM recurso WHERE id_recurso = %s", (id_recurso,)
+            )
+            fila_recurso = cursor.fetchone()
+            return FabricaRecurso.construir(fila_recurso) if fila_recurso else None
+
+    # Registrar, actualizar y eliminar recursos.
     def registrar_recurso(self, recurso) -> Recurso:
+        """Guarda el recurso y le asigna el ID generado por MySQL."""
         with self.conexion.sesion(escritura=True) as cursor:
             nuevo_id = self._insertar_recurso(cursor, recurso)
         recurso.id_recurso = nuevo_id
         return recurso
 
     def registrar_recurso_con_bien(self, recurso, datos_bien) -> Recurso:
-        # Ambos registros se confirman juntos; cualquier fallo revierte la operación.
         with self.conexion.sesion(escritura=True) as cursor:
             nuevo_id = self._insertar_recurso(cursor, recurso)
             bien = FabricaBienMaterial.construir(
@@ -59,16 +60,9 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
         recurso.id_recurso = nuevo_id
         return recurso
 
-    def consultar_recurso(self, id_recurso) -> Recurso | None:
-        with self.conexion.sesion() as cursor:
-            cursor.execute(
-                f"SELECT {COLUMNAS_RECURSO} FROM recurso WHERE id_recurso = %s", (id_recurso,)
-            )
-            fila_recurso = cursor.fetchone()
-            return FabricaRecurso.construir(fila_recurso) if fila_recurso else None
-
     def actualizar_recurso(self, recurso) -> Recurso:
         with self.conexion.sesion(escritura=True) as cursor:
+            # FOR UPDATE bloquea el registro hasta que termine la transacción.
             cursor.execute(
                 "SELECT id_recurso FROM recurso WHERE id_recurso=%s FOR UPDATE",
                 (recurso.id_recurso,),
@@ -84,7 +78,7 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
                 """,
                 (
                     recurso.nombre,
-                        recurso.id_categoria_ref,
+                    recurso.id_categoria_ref,
                     recurso.marca,
                     recurso.modelo,
                     recurso.descripcion,
@@ -94,57 +88,10 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
         return recurso
 
     def eliminar_recurso(self, id_recurso) -> None:
-        # Las FK impiden eliminar recursos con bienes o reservas asociados.
         with self.conexion.sesion(escritura=True) as cursor:
             cursor.execute("DELETE FROM recurso WHERE id_recurso=%s", (id_recurso,))
 
-    def consultar_recursos(self, filtros=None) -> list[RecursoListado]:
-        sql, parametros = self._consulta_todos(filtros)
-        with self.conexion.sesion() as cursor:
-            cursor.execute(sql + " ORDER BY r.nombre, r.id_recurso", parametros)
-            return cursor.fetchall()
-
-    @staticmethod
-    def _consulta_todos(filtros=None):
-        filtros = filtros or {}
-        condiciones, parametros = [], []
-        if filtros.get("q"):
-            estado_codigo = " AND buscado.estado=%s" if filtros.get("estado") else ""
-            condiciones.append(
-                "(r.nombre LIKE %s OR r.marca LIKE %s OR r.modelo LIKE %s "
-                "OR EXISTS (SELECT 1 FROM bien_material buscado "
-                "WHERE buscado.id_recurso_ref=r.id_recurso AND buscado.codigo_inventario LIKE %s"
-                + estado_codigo + "))"
-            )
-            parametros.extend([filtros["q"] + "%"] * 4)
-            if filtros.get("estado"):
-                parametros.append(filtros["estado"])
-        if filtros.get("estado"):
-            condiciones.append("EXISTS (SELECT 1 FROM bien_material filtrado WHERE filtrado.id_recurso_ref=r.id_recurso AND filtrado.estado=%s)")
-            parametros.append(filtros["estado"])
-        if filtros.get("id_categoria_ref"):
-            condiciones.append("r.id_categoria_ref=%s")
-            parametros.append(filtros["id_categoria_ref"])
-        if filtros.get('id_recurso'):
-            condiciones.append('r.id_recurso=%s')
-            parametros.append(filtros['id_recurso'])
-        if filtros.get('id_bien'):
-            condiciones.append('EXISTS (SELECT 1 FROM bien_material elegido WHERE elegido.id_recurso_ref=r.id_recurso AND elegido.id_bien=%s)')
-            parametros.append(filtros['id_bien'])
-        sql = f"""
-            SELECT {COLUMNAS_RECURSO_LISTADO}, cat.nombre AS categoria_nombre,
-                COUNT(b.id_bien) AS total_bienes,
-                SUM(CASE WHEN b.estado='DISPONIBLE' THEN 1 ELSE 0 END) AS disponibles
-            FROM recurso r JOIN categoria_recurso cat ON cat.id_categoria=r.id_categoria_ref
-            LEFT JOIN bien_material b ON b.id_recurso_ref=r.id_recurso
-        """
-        if condiciones:
-            sql += " WHERE " + " AND ".join(condiciones)
-        sql += " GROUP BY r.id_recurso, cat.id_categoria"
-        if filtros.get("solo_disponibles"):
-            sql += " HAVING disponibles > 0"
-        return sql, tuple(parametros)
-
+    # 4. Consultar y administrar las categorías.
     def consultar_categorias(self) -> list[CategoriaRecurso]:
         with self.conexion.sesion() as cursor:
             cursor.execute(f"SELECT {COLUMNAS_CATEGORIA} FROM categoria_recurso ORDER BY nombre")
@@ -190,3 +137,69 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
     def eliminar_categoria(self, id_categoria) -> None:
         with self.conexion.sesion(escritura=True) as cursor:
             cursor.execute("DELETE FROM categoria_recurso WHERE id_categoria=%s", (id_categoria,))
+
+    # 5. Preparar las consultas y la inserción de recursos.
+    @staticmethod
+    def _consulta_todos(filtros=None):
+        filtros = filtros or {}
+        # Las condiciones forman el WHERE; los valores se envían por separado.
+        condiciones, parametros = [], []
+        if filtros.get("q"):
+            estado_codigo = " AND buscado.estado=%s" if filtros.get("estado") else ""
+            condiciones.append(
+                "(r.nombre LIKE %s OR r.marca LIKE %s OR r.modelo LIKE %s "
+                "OR EXISTS (SELECT 1 FROM bien_material buscado "
+                "WHERE buscado.id_recurso_ref=r.id_recurso AND buscado.codigo_inventario LIKE %s"
+                + estado_codigo + "))"
+            )
+            parametros.extend([filtros["q"] + "%"] * 4)
+            if filtros.get("estado"):
+                parametros.append(filtros["estado"])
+        if filtros.get("estado"):
+            condiciones.append("EXISTS (SELECT 1 FROM bien_material filtrado WHERE filtrado.id_recurso_ref=r.id_recurso AND filtrado.estado=%s)")
+            parametros.append(filtros["estado"])
+        if filtros.get("id_categoria_ref"):
+            condiciones.append("r.id_categoria_ref=%s")
+            parametros.append(filtros["id_categoria_ref"])
+        if filtros.get('id_recurso'):
+            condiciones.append('r.id_recurso=%s')
+            parametros.append(filtros['id_recurso'])
+        if filtros.get('id_bien'):
+            condiciones.append('EXISTS (SELECT 1 FROM bien_material elegido WHERE elegido.id_recurso_ref=r.id_recurso AND elegido.id_bien=%s)')
+            parametros.append(filtros['id_bien'])
+        # Incluye los recursos sin bienes y cuenta los bienes de cada recurso.
+        sql = f"""
+            SELECT {COLUMNAS_RECURSO_LISTADO}, cat.nombre AS categoria_nombre,
+                COUNT(b.id_bien) AS total_bienes,
+                SUM(CASE WHEN b.estado='DISPONIBLE' THEN 1 ELSE 0 END) AS disponibles
+            FROM recurso r JOIN categoria_recurso cat ON cat.id_categoria=r.id_categoria_ref
+            LEFT JOIN bien_material b ON b.id_recurso_ref=r.id_recurso
+        """
+        if condiciones:
+            sql += " WHERE " + " AND ".join(condiciones)
+        sql += " GROUP BY r.id_recurso, cat.id_categoria"
+        # HAVING filtra el resultado después de contar los bienes disponibles.
+        if filtros.get("solo_disponibles"):
+            sql += " HAVING disponibles > 0"
+        return sql, tuple(parametros)
+
+    @staticmethod
+    def _insertar_recurso(cursor, recurso):
+        """Inserta el recurso con el cursor recibido y devuelve su ID."""
+        # Los marcadores %s reciben los valores enviados en la tupla.
+        cursor.execute(
+            """
+            INSERT INTO recurso (
+                nombre, id_categoria_ref, marca, modelo, descripcion
+            )
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                recurso.nombre,
+                recurso.id_categoria_ref,
+                recurso.marca,
+                recurso.modelo,
+                recurso.descripcion,
+            ),
+        )
+        return cursor.lastrowid

@@ -9,7 +9,15 @@ Aplicación web Flask + MySQL para gestionar personas, usuarios, roles, permisos
 
 ## Instalación
 
-Desde PowerShell, en la carpeta `SISTEMA_RECURSOS`:
+Desde PowerShell, en la carpeta que contiene `app.py`, ejecuta:
+
+```powershell
+.\run.ps1
+```
+
+El script crea el entorno virtual en `..\.venv` si no existe e instala las dependencias de `requirements.txt` antes de iniciar la aplicación. No es necesario activar el entorno manualmente.
+
+Si prefieres preparar el entorno sin iniciar la aplicación:
 
 ```powershell
 py -m venv ..\.venv
@@ -43,7 +51,7 @@ Desde PowerShell, dentro de `SISTEMA_RECURSOS`:
 .\run.ps1
 ```
 
-El script espera que el entorno virtual esté en `..\.venv`, es decir, junto a la carpeta `SISTEMA_RECURSOS`, como se describe en **Instalación**.
+El script utiliza el entorno virtual de `..\.venv`, junto a la carpeta de la aplicación, y lo crea automáticamente cuando falta.
 
 La base `prestamos_escuela_pruebas` debe existir y contener las tablas compatibles con esta versión. Para una instalación nueva con registros ficticios utiliza `sql/datos_prueba.sql`; si ya tiene datos, conserva esa base y actualiza su esquema antes de ejecutar.
 
