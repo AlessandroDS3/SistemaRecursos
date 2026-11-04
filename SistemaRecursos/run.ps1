@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $env:DB_HOST = '127.0.0.1'
 $env:DB_PORT = '3306'
 $env:DB_USER = 'root'
-$env:DB_PASSWORD = '20172351' # Contrasena local de MySQL; no compartir en repositorios publicos.
+$env:DB_PASSWORD = 'xxxxxx' # Contrasena local de MySQL; no compartir en repositorios publicos.
 $env:DB_NAME = 'prestamos_escuela_pruebas'
 
 if ($env:DB_PASSWORD -eq 'TU_CONTRASENA_REAL_DE_MYSQL' -or [string]::IsNullOrWhiteSpace($env:DB_PASSWORD)) {
