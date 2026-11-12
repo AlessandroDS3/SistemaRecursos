@@ -99,3 +99,29 @@ Cada fila de `detalle_prestamo` guarda la entrega y su devolución. Una fecha de
 Los cambios de estado de préstamos, bienes, reservas y sanciones se guardan en `historial_estado`. Los campos `entidad` e `id_entidad` identifican a qué registro corresponde cada cambio.
 
 Cada sanción se relaciona con una incidencia, y esta con el detalle del préstamo. La incidencia distingue `RETRASO`, `DANIO` y `PERDIDA`, y permite registrar el DNI de quien la comunica; los retrasos automáticos dejan ese DNI vacío. Solo puede existir una incidencia de retraso por detalle y una sanción por incidencia. Las sanciones siguen activas hasta su levantamiento manual con justificación.
+
+La sanción se obtiene a través de `sancion → incidencia → detalle_prestamo → prestamo`. En préstamos individuales afecta al solicitante; en préstamos grupales afecta al responsable y a todos los integrantes de `participante_prestamo`. No se guarda otro DNI de la persona sancionada en `sancion`. Una misma sanción bloquea nuevos préstamos y reservas para todos los afectados hasta que se levanta. El DNI de quien registra la incidencia y el de quien levanta la sanción identifican a quienes realizan esas operaciones.
+
+## Ampliaciones
+
+Desde el detalle del préstamo, su responsable puede solicitar una nueva fecha para cada bien pendiente. Los demás integrantes del grupo pueden consultar las solicitudes. El encargado o administrador con `PRESTAMOS_GESTIONAR` puede aprobarlas o rechazarlas; el rechazo exige un motivo.
+
+La solicitud no cambia la fecha de devolución. Al aprobar, la nueva fecha y la resolución se guardan juntas, con la cuenta del encargado, la fecha y la observación. El historial del préstamo registra la solicitud y su resolución. Solo puede haber una solicitud pendiente por bien; una ampliación resuelta no se vuelve a resolver.
+
+Cada ampliación puede añadir como máximo otro plazo de la política aplicada al bien. En préstamos por horas se respeta también el cierre de atención. Se vuelve a comprobar el plazo al aprobar: un bien devuelto, perdido, vencido o cuya fecha ya cambió no admite la aprobación de una solicitud antigua. Se puede rechazar una solicitud que haya quedado desactualizada.
+
+El solicitante se obtiene por `ampliacion_prestamo → detalle_prestamo → prestamo`; ya no existe `dni_solicitante` en la ampliación. La resolución identifica al encargado mediante `id_usuario_resolucion`. Los dos SQL contienen la misma estructura actualizada; esta versión se carga en una base nueva o recreando la base de pruebas.
+
+El permiso `AMPLIACIONES_SOLICITAR` se incluye para los tres roles en los datos de demostración. Si se administra una matriz de permisos distinta, debe habilitarse desde Roles y permisos para que el responsable pueda solicitar ampliaciones.
+
+El recorrido de escritura está identificado en `controlador_ampliacion_prestamo.py → servicio_ampliacion_prestamo.py → i_repositorio_ampliacion_prestamo.py → repositorio_ampliacion_prestamo_sql.py`. La regla del plazo y las transiciones están en `dominio/gestion_prestamos/ampliacion_prestamo.py`. El controlador de préstamos consulta ese servicio para mostrar la sección; no ejecuta las decisiones de aprobación.
+
+Las pruebas de este flujo se ejecutan con `python -m unittest discover -s tests -p test_ampliacion_prestamo.py -v`. Las de integración requieren `TEST_MYSQL_PORT`, `TEST_MYSQL_USER` y `TEST_MYSQL_PASSWORD`; crean y eliminan bases temporales propias. Sin MySQL se omiten esos casos y solo se ejecutan las comprobaciones del dominio.
+
+## Reportes
+
+El módulo **Reportes** permite consultar préstamos y devoluciones por fecha de entrega, estado del préstamo, tipo de solicitante, modalidad y búsqueda por persona o bien. Las fechas se interpretan en horario de Lima e incluyen ambos días. El tipo de persona corresponde al solicitante principal; la búsqueda también encuentra integrantes de préstamos grupales.
+
+El resumen cuenta préstamos distintos y bienes sin duplicarlos por cada integrante. Presenta devueltos, pendientes y vencidos; los vencidos son parte de los pendientes. Los resultados muestran hasta 50 bienes por página y la descarga CSV incluye todas las coincidencias de los filtros, con fechas en Lima, separador `;` y codificación UTF-8. Al importar el CSV en Excel, selecciona formato texto para los DNI si necesitas conservar los ceros iniciales. Los campos de texto que podrían interpretarse como fórmulas se exportan como texto.
+
+Se requiere el permiso `REPORTES_CONSULTAR`, incluido para Administrador y Encargado de préstamos en los datos de prueba. En una base ya instalada, un administrador puede habilitarlo desde **Roles y permisos** sin recrear las tablas. No se crean tablas de reportes ni se modifican los préstamos al consultarlos o descargarlos.

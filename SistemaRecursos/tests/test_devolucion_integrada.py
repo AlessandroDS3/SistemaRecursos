@@ -8,6 +8,8 @@ from werkzeug.datastructures import MultiDict
 from app import create_app
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_sancion_sql import RepositorioSancionSQL
+from repositorio.repositorio_reserva_sql import RepositorioReservaSQL
+from dominio.gestion_prestamos.solicitud_prestamo import SolicitudPrestamo
 
 
 @unittest.skipUnless(os.environ.get("TEST_MYSQL_PORT"), "Configura MySQL de pruebas.")
@@ -42,6 +44,28 @@ class DevolucionIntegradaTest(unittest.TestCase):
         datos = MultiDict([("detalles", str(d)) for d in detalles])
         datos.update(condiciones)
         self.servicio.registrar_devolucion(1, datos, "98000002")
+
+    def test_paginas_y_busquedas_del_sistema_con_base_actual(self):
+        client = self.app.test_client()
+        client.get("/login")
+        with client.session_transaction() as s:
+            token = s["csrf_token"]
+        login = client.post("/login", data=dict(usuario="admin", clave="AdminPrueba2026!", csrf_token=token))
+        self.assertEqual(login.status_code, 302)
+        paginas = (
+            "/", "/personas", "/personas/nueva", "/personas/99000001",
+            "/personas/99000001/editar", "/personas/99000001/cuenta/editar",
+            "/roles?q=99000001", "/recursos", "/recursos/1", "/recursos/administracion",
+            "/recursos/1/editar", "/bienes", "/bienes/1", "/bienes/nuevo?recurso=1",
+            "/bienes/1/editar", "/politicas", "/prestamos", "/prestamos/1", "/prestamos/nuevo",
+            "/reservas", "/reservas/1", "/reservas/nueva?recurso=1&tipo=RESERVA",
+            "/prestamos/personas/buscar?q=9900", "/prestamos/bienes/buscar?recurso=1",
+        )
+        for pagina in paginas:
+            with self.subTest(pagina=pagina):
+                respuesta = client.get(pagina)
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertNotIn("Operación no completada".encode(), respuesta.data)
 
     def test_devolucion_parcial_completa_y_condiciones_en_la_vista(self):
         with self.db.sesion(escritura=True) as c:
@@ -133,12 +157,38 @@ class DevolucionIntegradaTest(unittest.TestCase):
             c.execute("SELECT s.estado,i.estado AS estado_incidencia FROM sancion s JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref")
             self.assertEqual(c.fetchall(), [{"estado": "LEVANTADA", "estado_incidencia": "RESUELTA"}])
 
+    def test_sancion_corresponde_a_todos_los_integrantes_del_prestamo_grupal(self):
+        with self.db.sesion(escritura=True) as c:
+            c.execute("SHOW COLUMNS FROM sancion LIKE 'dni_persona'")
+            self.assertIsNone(c.fetchone())
+            c.execute("UPDATE prestamo SET tipo_prestamo='GRUPAL',dni_persona='99000001' WHERE id_prestamo=1")
+            c.execute("""INSERT INTO participante_prestamo(id_prestamo,dni_persona,responsable)
+                         VALUES (1,'99000001',TRUE),(1,'99000002',FALSE)""")
+        self.recibir([1], {"condicion_1": "BUENO"})
+        reservas = RepositorioReservaSQL(self.db)
+        for dni, bloqueado in (("99000001", True), ("99000002", True), ("99000003", False)):
+            with self.subTest(dni=dni):
+                with self.db.sesion(escritura=True) as c:
+                    _, tiene_sancion = reservas._consultar_solicitante(c, dni)
+                    self.assertEqual(tiene_sancion, bloqueado)
+                    solicitud = SolicitudPrestamo(dni_persona=dni, dni_encargado="98000002", ids_bienes=[2])
+                    if bloqueado:
+                        with self.assertRaisesRegex(ValueError, "sanción activa"):
+                            self.repo._validar_personas(c, solicitud)
+                    else:
+                        self.assertIn(dni, self.repo._validar_personas(c, solicitud))
+        sanciones = RepositorioSancionSQL(self.db)
+        sanciones.levantar_sancion_vencimiento(1, 1, "Caso resuelto", "98000002")
+        with self.db.sesion(escritura=True) as c:
+            for dni in ("99000001", "99000002"):
+                self.assertFalse(reservas._consultar_solicitante(c, dni)[1])
+
     def test_reutiliza_incidencia_y_separa_danio_del_retraso(self):
         with self.db.sesion(escritura=True) as c:
             c.execute("INSERT INTO incidencia(id_detalle,tipo,fecha) VALUES (1,'RETRASO',UTC_TIMESTAMP())")
             incidencia = c.lastrowid
             c.execute("INSERT INTO incidencia(id_detalle,tipo,dni_registrador,fecha) VALUES (1,'DANIO','98000002',UTC_TIMESTAMP())")
-            c.execute("INSERT INTO sancion(dni_persona,id_incidencia_ref,motivo,fecha) VALUES ('99000001',%s,'Daño',UTC_TIMESTAMP())", (c.lastrowid,))
+            c.execute("INSERT INTO sancion(id_incidencia_ref,motivo,fecha) VALUES (%s,'Daño',UTC_TIMESTAMP())", (c.lastrowid,))
         with self.assertRaises(mysql.connector.Error):
             with self.db.sesion(escritura=True) as c:
                 c.execute("INSERT INTO incidencia(id_detalle,tipo,fecha) VALUES (1,'RETRASO',UTC_TIMESTAMP())")

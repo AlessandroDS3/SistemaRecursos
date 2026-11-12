@@ -54,6 +54,14 @@ class ConfiguracionGeneralTest(unittest.TestCase):
         horario = self.repo.consultar_horario_atencion()
         self.assertEqual((horario.apertura_texto, horario.cierre_texto), ("09:00", "17:00"))
 
+    def test_esquema_sin_datos_se_importa_desde_cero(self):
+        nombre = self.nombre + "_estructura"
+        self.addCleanup(self.cursor.execute, f"DROP DATABASE IF EXISTS {nombre}")
+        self.ejecutar((self.sql / "schema.sql").read_text(encoding="utf-8").replace("prestamos_escuela", nombre))
+        self.assertEqual(len(self.tablas()), 20)
+        self.cursor.execute("SELECT COUNT(*) FROM persona")
+        self.assertEqual(self.cursor.fetchone()[0], 0)
+
     def test_limites_de_reserva_segun_unidad_en_dominio_y_mysql(self):
         for unidad, limite in (("DIAS", 30), ("HORAS", 720)):
             for valido in (1, limite):

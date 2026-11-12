@@ -99,6 +99,39 @@ CREATE TABLE IF NOT EXISTS bien_material (
 
 
 
+-- 3. CONTROL: REGLAS DEL SERVICIO
+
+CREATE TABLE IF NOT EXISTS configuracion_general (
+  id_configuracion TINYINT PRIMARY KEY CHECK (id_configuracion=1),
+  hora_apertura TIME NOT NULL,
+  hora_cierre TIME NOT NULL,
+  plazo_espera INT NOT NULL,
+  unidad_espera ENUM('HORAS','DIAS') NOT NULL DEFAULT 'DIAS',
+  plazo_retiro INT NOT NULL,
+  unidad_retiro ENUM('HORAS','DIAS') NOT NULL DEFAULT 'HORAS',
+  CHECK (hora_apertura >= '00:00:00' AND hora_apertura < hora_cierre AND hora_cierre < '24:00:00'),
+  CHECK (plazo_espera BETWEEN 1 AND CASE WHEN unidad_espera='HORAS' THEN 720 ELSE 30 END),
+  CHECK (plazo_retiro BETWEEN 1 AND CASE WHEN unidad_retiro='HORAS' THEN 720 ELSE 30 END)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS limite_articulos_prestamo (
+  tipo_persona      ENUM('ESTUDIANTE','DOCENTE','ADMINISTRATIVO') PRIMARY KEY,
+  maximo_articulos  INT NULL CHECK (maximo_articulos > 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS politica_prestamo (
+  id_politica               INT AUTO_INCREMENT PRIMARY KEY,
+  tipo_persona              ENUM('ESTUDIANTE','DOCENTE','ADMINISTRATIVO') NOT NULL,
+  id_categoria            INT NOT NULL,
+  plazo_maximo              INT NOT NULL CHECK (plazo_maximo > 0),
+  unidad_plazo              ENUM('HORAS','DIAS') NOT NULL,
+  permite_salida            BOOLEAN NOT NULL DEFAULT FALSE,
+  vigente                   BOOLEAN NOT NULL DEFAULT TRUE,
+  categoria_vigente         INT GENERATED ALWAYS AS (CASE WHEN vigente THEN id_categoria ELSE NULL END) STORED,
+  UNIQUE KEY uq_politica_persona_categoria_vigente (tipo_persona, categoria_vigente),
+  FOREIGN KEY (id_categoria) REFERENCES categoria_recurso(id_categoria)
+) ENGINE=InnoDB;
+
 -- 4. PRESTAMOS, RESERVAS Y DEVOLUCIONES
 
 CREATE TABLE IF NOT EXISTS prestamo (
@@ -177,14 +210,18 @@ CREATE TABLE IF NOT EXISTS reserva (
 
 CREATE TABLE IF NOT EXISTS ampliacion_prestamo (
   id_ampliacion          INT AUTO_INCREMENT PRIMARY KEY,
-  dni_solicitante     VARCHAR(8) NOT NULL,
   id_detalle         INT NOT NULL,
   fecha_solicitud        DATETIME NOT NULL,
   fecha_limite_anterior  DATETIME NOT NULL,
   fecha_limite_nueva     DATETIME NOT NULL,
   motivo                 VARCHAR(255),
   estado                 ENUM('PENDIENTE','APROBADA','RECHAZADA') NOT NULL DEFAULT 'PENDIENTE',
-  FOREIGN KEY (dni_solicitante) REFERENCES persona(dni) ON UPDATE CASCADE,
+  fecha_resolucion       DATETIME NULL,
+  id_usuario_resolucion   INT NULL,
+  observacion_resolucion  VARCHAR(255) NULL,
+  INDEX idx_ampliacion_detalle_estado (id_detalle, estado),
+  CHECK (fecha_limite_nueva > fecha_limite_anterior),
+  FOREIGN KEY (id_usuario_resolucion) REFERENCES usuario_sistema(id_usuario),
   FOREIGN KEY (id_detalle)     REFERENCES detalle_prestamo(id_detalle) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
@@ -206,7 +243,6 @@ CREATE TABLE IF NOT EXISTS incidencia (
 
 CREATE TABLE IF NOT EXISTS sancion (
   id_sancion         INT AUTO_INCREMENT PRIMARY KEY,
-  dni_persona     VARCHAR(8) NOT NULL,
   id_incidencia_ref  INT NOT NULL UNIQUE,
   motivo             VARCHAR(255) NOT NULL,
   fecha              DATETIME NOT NULL,
@@ -216,41 +252,7 @@ CREATE TABLE IF NOT EXISTS sancion (
   dni_levantamiento            VARCHAR(8) NULL,
   justificacion_levantamiento  VARCHAR(255) NULL,
   FOREIGN KEY (dni_levantamiento) REFERENCES persona(dni) ON UPDATE CASCADE,
-  FOREIGN KEY (dni_persona)    REFERENCES persona(dni) ON UPDATE CASCADE,
   FOREIGN KEY (id_incidencia_ref) REFERENCES incidencia(id_incidencia)
-) ENGINE=InnoDB;
-
--- 3. CONTROL: REGLAS DEL SERVICIO
-
-CREATE TABLE IF NOT EXISTS configuracion_general (
-  id_configuracion TINYINT PRIMARY KEY CHECK (id_configuracion=1),
-  hora_apertura TIME NOT NULL,
-  hora_cierre TIME NOT NULL,
-  plazo_espera INT NOT NULL,
-  unidad_espera ENUM('HORAS','DIAS') NOT NULL DEFAULT 'DIAS',
-  plazo_retiro INT NOT NULL,
-  unidad_retiro ENUM('HORAS','DIAS') NOT NULL DEFAULT 'HORAS',
-  CHECK (hora_apertura >= '00:00:00' AND hora_apertura < hora_cierre AND hora_cierre < '24:00:00'),
-  CHECK (plazo_espera BETWEEN 1 AND CASE WHEN unidad_espera='HORAS' THEN 720 ELSE 30 END),
-  CHECK (plazo_retiro BETWEEN 1 AND CASE WHEN unidad_retiro='HORAS' THEN 720 ELSE 30 END)
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS limite_articulos_prestamo (
-  tipo_persona      ENUM('ESTUDIANTE','DOCENTE','ADMINISTRATIVO') PRIMARY KEY,
-  maximo_articulos  INT NULL CHECK (maximo_articulos > 0)
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS politica_prestamo (
-  id_politica               INT AUTO_INCREMENT PRIMARY KEY,
-  tipo_persona              ENUM('ESTUDIANTE','DOCENTE','ADMINISTRATIVO') NOT NULL,
-  id_categoria            INT NOT NULL,
-  plazo_maximo              INT NOT NULL CHECK (plazo_maximo > 0),
-  unidad_plazo              ENUM('HORAS','DIAS') NOT NULL,
-  permite_salida            BOOLEAN NOT NULL DEFAULT FALSE,
-  vigente                   BOOLEAN NOT NULL DEFAULT TRUE,
-  categoria_vigente         INT GENERATED ALWAYS AS (CASE WHEN vigente THEN id_categoria ELSE NULL END) STORED,
-  UNIQUE KEY uq_politica_persona_categoria_vigente (tipo_persona, categoria_vigente),
-  FOREIGN KEY (id_categoria) REFERENCES categoria_recurso(id_categoria)
 ) ENGINE=InnoDB;
 
 -- 6. HISTORIALES

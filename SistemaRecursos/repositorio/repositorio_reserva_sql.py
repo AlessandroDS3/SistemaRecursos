@@ -143,8 +143,15 @@ class RepositorioReservaSQL(IRepositorioReserva):
         cursor.execute(CONSULTA_PERSONAS + " WHERE p.dni=%s FOR UPDATE", (dni,))
         persona = cursor.fetchone()
         cursor.execute(
-            "SELECT id_sancion FROM sancion WHERE dni_persona=%s AND estado='ACTIVA' FOR UPDATE",
-            (dni,),
+            """SELECT s.id_sancion FROM sancion s
+               JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
+               JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle
+               JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
+               WHERE (pr.dni_persona=%s OR EXISTS (
+                   SELECT 1 FROM participante_prestamo pp
+                   WHERE pp.id_prestamo=pr.id_prestamo AND pp.dni_persona=%s
+               )) AND s.estado='ACTIVA' FOR UPDATE""",
+            (dni, dni),
         )
         return persona, bool(cursor.fetchall())
 

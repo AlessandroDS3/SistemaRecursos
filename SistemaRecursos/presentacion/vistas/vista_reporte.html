@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block titulo %}Reportes · Préstamos y devoluciones{% endblock %}
+{% block contenido %}
+<div class="encabezado">
+  <div><h1>Reportes</h1><p>Préstamos y devoluciones</p></div>
+  {% if resultado and resultado.resumen.bienes %}
+    <a class="boton boton-principal" href="{{ url_csv }}">Descargar CSV</a>
+  {% endif %}
+</div>
+<form method="get" action="{{ url_for('reportes.consultar_prestamos') }}" class="panel">
+  <div class="campos">
+    <label>Entrega desde<input type="date" name="desde" value="{{ filtros.desde }}"></label>
+    <label>Entrega hasta<input type="date" name="hasta" value="{{ filtros.hasta }}"></label>
+    <label>Estado del préstamo
+      <select name="estado"><option value="">Todos</option>
+        {% for estado in estados %}<option value="{{ estado.value }}" {{ 'selected' if filtros.estado == estado.value else '' }}>{{ estado.value|replace('_', ' ')|title }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Tipo de solicitante
+      <select name="tipo_persona"><option value="">Todos</option>
+        {% for tipo in tipos_persona %}<option value="{{ tipo.value }}" {{ 'selected' if filtros.tipo_persona == tipo.value else '' }}>{{ tipo.value|title }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Modalidad
+      <select name="modalidad"><option value="">Todas</option>
+        {% for modalidad in modalidades %}<option value="{{ modalidad.value }}" {{ 'selected' if filtros.modalidad == modalidad.value else '' }}>{{ modalidad.value|title }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Buscar persona o bien<input type="search" name="q" maxlength="120" value="{{ filtros.q }}" placeholder="DNI, nombre, inventario o recurso"></label>
+  </div>
+  <p class="ayuda">Las fechas corresponden a la entrega, en horario de Lima, e incluyen ambos días. Se muestra la situación actual de esos préstamos. El tipo de persona corresponde al solicitante principal.</p>
+  <div class="acciones"><button class="boton-principal" type="submit">Consultar reporte</button><a href="{{ url_for('reportes.consultar_prestamos') }}">Limpiar filtros</a></div>
+</form>
+{% if error %}<p class="aviso error" role="alert">{{ error }}</p>{% endif %}
+{% if resultado %}
+  <section class="resumen-estadisticas resumen-reportes" aria-label="Resumen de todas las coincidencias">
+    {% for campo, etiqueta in [('prestamos','Préstamos'),('bienes','Bienes'),('devueltos','Devueltos'),('pendientes','Pendientes'),('vencidos','Bienes vencidos pendientes')] %}
+      <article><span>{{ etiqueta }}</span><strong>{{ resultado.resumen[campo] }}</strong></article>
+    {% endfor %}
+  </section>
+  <p class="ayuda">Mostrando {{ resultado.filas|length }} de {{ resultado.resumen.bienes }} bienes. Los vencidos forman parte de los pendientes. La descarga incluye todas las páginas con estos filtros.</p>
+  <section class="panel tabla" aria-label="Resultados de préstamos y devoluciones">
+    <table class="tabla-reporte">
+      <thead><tr><th>Préstamo</th><th>Solicitante y grupo</th><th>Bien</th><th>Entrega</th><th>Fecha límite</th><th>Devolución</th><th>Situación del bien</th></tr></thead>
+      <tbody>
+      {% for fila in resultado.filas %}
+        <tr>
+          <td>
+            {% if puede('PRESTAMOS_GESTIONAR') %}<a href="{{ url_for('prestamos.consultar_prestamo', id_prestamo=fila.id_prestamo) }}">#{{ fila.id_prestamo }}</a>{% else %}#{{ fila.id_prestamo }}{% endif %}
+            <small>{{ fila.tipo_prestamo|title }}</small><small>{{ fila.estado|replace('_', ' ')|title }}</small>
+          </td>
+          <td><strong>{{ fila.solicitante }}</strong><small>DNI: {{ fila.dni_persona }} · {{ fila.tipo_persona|title }}</small>
+            {% if fila.integrantes %}<details><summary>Integrantes ({{ fila.integrantes|length }})</summary><ul>
+              {% for persona in fila.integrantes %}<li>{{ persona.nombre }} · DNI: {{ persona.dni }}{{ ' (responsable)' if persona.responsable else '' }}</li>{% endfor %}
+            </ul></details>{% endif %}
+          </td>
+          <td><strong>{{ fila.codigo_inventario }}</strong><small>{{ fila.recurso }}</small></td>
+          <td>{{ fila.fecha_entrega|fecha_local }}</td>
+          <td>{{ fila.fecha_limite_devolucion|fecha_local }}</td>
+          <td>{{ fila.fecha_devolucion|fecha_local }}{% if fila.condicion_devolucion %}<small>{{ fila.condicion_devolucion|replace('DANADO', 'DAÑADO')|title }}</small>{% endif %}</td>
+          <td><span class="estado-bien estado-{{ 'disponible' if fila.situacion == 'DEVUELTO' else 'vencido' if fila.situacion == 'VENCIDO' else 'prestado' }}">{{ fila.situacion|title }}</span></td>
+        </tr>
+      {% else %}<tr><td colspan="7">No hay préstamos ni devoluciones que coincidan con los filtros.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% if resultado.paginas > 1 %}<nav class="acciones" aria-label="Páginas del reporte">
+    {% if resultado.pagina > 1 %}<a class="boton" href="{{ url_pagina(resultado.pagina - 1) }}">Anterior</a>{% endif %}
+    <span>Página {{ resultado.pagina }} de {{ resultado.paginas }}</span>
+    {% if resultado.pagina < resultado.paginas %}<a class="boton" href="{{ url_pagina(resultado.pagina + 1) }}">Siguiente</a>{% endif %}
+  </nav>{% endif %}
+{% endif %}
+{% endblock %}

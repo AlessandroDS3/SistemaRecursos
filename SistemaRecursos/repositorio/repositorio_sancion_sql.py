@@ -20,9 +20,8 @@ class RepositorioSancionSQL(IRepositorioSancion):
         aplicadas = 0
         for prestamo in prestamos:
             with self.conexion.sesion(escritura=True) as cursor:
-                cursor.execute('SELECT dni_persona FROM prestamo WHERE id_prestamo=%s FOR UPDATE', (prestamo['id_prestamo'],))
-                persona = cursor.fetchone()
-                if persona is None:
+                cursor.execute('SELECT id_prestamo FROM prestamo WHERE id_prestamo=%s FOR UPDATE', (prestamo['id_prestamo'],))
+                if cursor.fetchone() is None:
                     continue
                 cursor.execute('''SELECT * FROM detalle_prestamo WHERE id_prestamo=%s
                     AND fecha_devolucion IS NULL AND fecha_limite_devolucion < UTC_TIMESTAMP()
@@ -31,7 +30,7 @@ class RepositorioSancionSQL(IRepositorioSancion):
                 cursor.execute('SELECT UTC_TIMESTAMP() AS ahora')
                 ahora = cursor.fetchone()['ahora']
                 for detalle in detalles:
-                    resultado = aplicar_sancion_vencimiento(cursor, detalle, persona['dni_persona'], ahora)
+                    resultado = aplicar_sancion_vencimiento(cursor, detalle, ahora)
                     if resultado and resultado['creada']:
                         aplicadas += 1
         return aplicadas
@@ -42,7 +41,7 @@ class RepositorioSancionSQL(IRepositorioSancion):
             encargado = cursor.fetchone()
             if not encargado or encargado['estado'] != 'ACTIVA':
                 raise ValueError('El encargado debe ser una persona activa.')
-            cursor.execute('SELECT dni_persona FROM prestamo WHERE id_prestamo=%s FOR UPDATE', (id_prestamo,))
+            cursor.execute('SELECT id_prestamo FROM prestamo WHERE id_prestamo=%s FOR UPDATE', (id_prestamo,))
             prestamo = cursor.fetchone()
             if prestamo is None:
                 raise LookupError('No se encontró el préstamo.')
@@ -53,10 +52,10 @@ class RepositorioSancionSQL(IRepositorioSancion):
                 raise LookupError('El bien no pertenece a este préstamo.')
             cursor.execute('SELECT UTC_TIMESTAMP() AS ahora')
             ahora = cursor.fetchone()['ahora']
-            sancion = aplicar_sancion_vencimiento(cursor, detalle, prestamo['dni_persona'], ahora)
+            sancion = aplicar_sancion_vencimiento(cursor, detalle, ahora)
             if sancion is None:
                 raise ValueError('Este bien no tiene una sanción por tardanza.')
-            modelo = Sancion(dni_persona=prestamo['dni_persona'], id_sancion=sancion['id_sancion'],
+            modelo = Sancion(id_sancion=sancion['id_sancion'],
                 id_incidencia_ref=sancion['id_incidencia_ref'], estado=sancion['estado'])
             modelo.levantar(justificacion, dni_encargado, ahora)
             cursor.execute('''UPDATE sancion SET estado='LEVANTADA',fecha_levantamiento=%s,

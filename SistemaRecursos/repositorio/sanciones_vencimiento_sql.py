@@ -1,7 +1,7 @@
 """Operación común de vencimiento: el llamante bloquea primero préstamo y detalle."""
 
 
-def aplicar_sancion_vencimiento(cursor, detalle, dni_persona, ahora):
+def aplicar_sancion_vencimiento(cursor, detalle, ahora):
     limite = detalle['fecha_limite_devolucion']
     fecha_recepcion = detalle.get('fecha_devolucion')
     if limite >= ahora or (fecha_recepcion is not None and fecha_recepcion <= limite):
@@ -22,9 +22,9 @@ def aplicar_sancion_vencimiento(cursor, detalle, dni_persona, ahora):
             (detalle['id_detalle'], 'Vencimiento del plazo de devolución.', limite))
         id_incidencia = cursor.lastrowid
     cursor.execute('''INSERT INTO sancion
-        (dni_persona,id_incidencia_ref,motivo,fecha,descripcion,estado)
-        VALUES(%s,%s,%s,%s,%s,'ACTIVA')''',
-        (dni_persona, id_incidencia, 'Devolución fuera de plazo', limite,
+        (id_incidencia_ref,motivo,fecha,descripcion,estado)
+        VALUES(%s,%s,%s,%s,'ACTIVA')''',
+        (id_incidencia, 'Devolución fuera de plazo', limite,
          'Sanción automática por vencimiento. Bloquea nuevos préstamos hasta su retiro.'))
     id_sancion = cursor.lastrowid
     cursor.execute('''INSERT INTO historial_estado

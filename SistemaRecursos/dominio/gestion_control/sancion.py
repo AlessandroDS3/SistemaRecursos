@@ -14,7 +14,6 @@ class EstadoSancion(str, Enum):
 
 @dataclass(kw_only=True)
 class Sancion:
-    dni_persona: str
     id_sancion: int | None = None
     id_incidencia_ref: int | None = None
     estado: EstadoSancion = EstadoSancion.ACTIVA
@@ -23,7 +22,6 @@ class Sancion:
     justificacion_levantamiento: str | None = None
 
     def __post_init__(self):
-        self.dni_persona = validar_dni(self.dni_persona)
         self.estado = EstadoSancion(self.estado)
 
     def levantar(self, justificacion, dni_encargado, fecha):

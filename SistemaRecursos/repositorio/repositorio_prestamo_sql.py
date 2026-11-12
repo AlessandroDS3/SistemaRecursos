@@ -210,13 +210,19 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
         marcadores = ",".join(["%s"] * len(dnis_participantes))
         cursor.execute(
             f"""
-            SELECT id_sancion
-            FROM sancion
-            WHERE dni_persona IN ({marcadores})
-              AND estado = 'ACTIVA'
+            SELECT s.id_sancion
+            FROM sancion s
+            JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
+            JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle
+            JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
+            WHERE (pr.dni_persona IN ({marcadores}) OR EXISTS (
+                SELECT 1 FROM participante_prestamo pp
+                WHERE pp.id_prestamo=pr.id_prestamo AND pp.dni_persona IN ({marcadores})
+            ))
+              AND s.estado = 'ACTIVA'
             FOR UPDATE
             """,
-            tuple(sorted(dnis_participantes)),
+            tuple(sorted(dnis_participantes)) * 2,
         )
         if cursor.fetchall():
             raise ConflictoPrestamoError(
@@ -631,7 +637,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             prestamo = self._construir_prestamo(fila, detalles)
             for devolucion in devoluciones:
                 detalle = detalles_por_id[devolucion.id_detalle]
-                aplicar_sancion_vencimiento(cursor, detalle, fila['dni_persona'], ahora)
+                aplicar_sancion_vencimiento(cursor, detalle, ahora)
                 prestamo.registrar_devolucion(
                     detalle["id_detalle"], devolucion.condicion_devolucion, ahora,
                     dni_encargado=dni_encargado, observaciones=devolucion.observaciones,

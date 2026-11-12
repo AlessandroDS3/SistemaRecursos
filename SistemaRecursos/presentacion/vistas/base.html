@@ -12,7 +12,8 @@
   "prestamos": "Préstamos",
   "reservas": "Solicitudes y reservas",
   "politicas": "Políticas de préstamo",
-  "roles": "Roles y permisos"
+  "roles": "Roles y permisos",
+  "reportes": "Reportes"
 } %}
 {% set es_administracion_recursos = request.blueprint == 'bienes' or request.endpoint in [
   'recursos.consultar_administracion_recursos', 'recursos.actualizar_recurso',
@@ -33,7 +34,8 @@
     puede('PRESTAMOS_GESTIONAR') or puede('PRESTAMOS_PROPIOS_CONSULTAR'), 'prestamos'),
   ('reservas.consultar_reservas', 'Solicitudes y reservas' if puede('PRESTAMOS_GESTIONAR') else 'Mis solicitudes y reservas',
     puede('PRESTAMOS_GESTIONAR') or puede('RESERVAS_PROPIAS_GESTIONAR'), 'reservas'),
-  ('politicas.consultar_politicas', 'Políticas de préstamo', puede('POLITICAS_GESTIONAR'), 'politicas')
+    ('politicas.consultar_politicas', 'Políticas de préstamo', puede('POLITICAS_GESTIONAR'), 'politicas'),
+    ('reportes.consultar_prestamos', 'Reportes', puede('REPORTES_CONSULTAR'), 'reportes')
 ] %}
 
 <!DOCTYPE html>

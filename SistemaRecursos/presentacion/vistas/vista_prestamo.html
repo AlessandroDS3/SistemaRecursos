@@ -260,6 +260,7 @@
             </legend>
             <p>
               Agrega a los demás participantes. El solicitante ya está incluido.
+              Las sanciones del préstamo afectarán a todos los integrantes del grupo.
             </p>
             <label for="buscar-participante">
               Buscar participante por apellidos, DNI o CUI
@@ -451,6 +452,7 @@
       {% if prestamo.participantes %}
         <details class="prestamo-desplegable prestamo-participantes">
           <summary>Participantes del grupo ({{ prestamo.participantes|length }})</summary>
+        <p>Las sanciones de este préstamo afectan al responsable y a todos los integrantes del grupo.</p>
           <ul>
             {% for p in prestamo.participantes %}
               <li>{{ p.nombre }} · {{ p.rol_participacion }}{{ ' (responsable)' if p.responsable else '' }}</li>
@@ -566,6 +568,7 @@
         {% endfor %}
       {% endif %}
     </section>
+    {% include 'ampliaciones_prestamo.html' %}
     {% if gestionar %}
       {% set reportables = pendientes|selectattr('estado_actual', 'equalto', 'PRESTADO')|list %}
       {% if reportables %}

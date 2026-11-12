@@ -34,6 +34,12 @@ from presentacion.controladores.controlador_reserva import ControladorReserva
 from repositorio.repositorio_sancion_sql import RepositorioSancionSQL
 from servicios.servicio_sancion import ServicioAplicacionSancion
 from servicios.procesador_vencimientos import iniciar_procesador_vencimientos
+from repositorio.repositorio_reporte_sql import RepositorioReporteSQL
+from servicios.servicio_reporte import ServicioAplicacionReporte
+from repositorio.repositorio_ampliacion_prestamo_sql import RepositorioAmpliacionPrestamoSQL
+from servicios.servicio_ampliacion_prestamo import ServicioAplicacionAmpliacionPrestamo
+from presentacion.controladores.controlador_ampliacion_prestamo import ControladorAmpliacionPrestamo
+from presentacion.controladores.controlador_reporte import ControladorReporte
 
 
 def create_app(config=None, repositorios=None, repositorios_recursos=None):
@@ -79,6 +85,10 @@ def create_app(config=None, repositorios=None, repositorios_recursos=None):
     app.extensions['sanciones'] = servicio_sancion
     servicio_reserva = ServicioAplicacionReserva(RepositorioReservaSQL(conexion))
     app.extensions["reservas"] = servicio_reserva
+    servicio_reporte = ServicioAplicacionReporte(RepositorioReporteSQL(conexion))
+    app.extensions['reportes'] = servicio_reporte
+    servicio_ampliacion = ServicioAplicacionAmpliacionPrestamo(RepositorioAmpliacionPrestamoSQL(conexion))
+    app.extensions['ampliaciones'] = servicio_ampliacion
 
     @app.template_filter("descripcion_permiso")
     def descripcion_permiso(permiso):
@@ -150,8 +160,10 @@ def create_app(config=None, repositorios=None, repositorios_recursos=None):
     app.register_blueprint(ControladorReserva(
         servicio_reserva, servicio_recurso, servicio_politica
     ).blueprint)
-    app.register_blueprint(ControladorPrestamo(servicio_prestamo, servicio_politica, servicio_sancion).blueprint)
+    app.register_blueprint(ControladorPrestamo(servicio_prestamo, servicio_politica, servicio_sancion, servicio_ampliacion).blueprint)
+    app.register_blueprint(ControladorAmpliacionPrestamo(servicio_ampliacion).blueprint)
     app.register_blueprint(ControladorPoliticaPrestamo(servicio_politica).blueprint)
+    app.register_blueprint(ControladorReporte(servicio_reporte).blueprint)
 
     @app.errorhandler(ConflictoEdicion)
     def mostrar_conflicto(error):

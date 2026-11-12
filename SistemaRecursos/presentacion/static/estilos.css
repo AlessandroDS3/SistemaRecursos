@@ -1,3 +1,15 @@
+.resumen-estadisticas.resumen-reportes { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tabla-reporte { min-width: 1100px; }
+.tabla-reporte details { margin-top: 8px; }
+.tabla-reporte summary { cursor: pointer; }
+.tabla-reporte ul { padding-left: 18px; min-width: 210px; }
+@media (max-width: 1000px) {
+  .resumen-estadisticas.resumen-reportes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .resumen-estadisticas.resumen-reportes { grid-template-columns: 1fr; }
+}
+
 :root {
   --fuente: "Segoe UI", Arial, sans-serif;
   --tam-base: 14px;

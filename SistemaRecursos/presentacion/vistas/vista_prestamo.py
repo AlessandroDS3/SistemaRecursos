@@ -21,9 +21,10 @@ class VistaPrestamo:
             gestionar=gestionar,
         )
 
-    def mostrar_detalle(self, prestamo, gestionar):
+    def mostrar_detalle(self, prestamo, gestionar, ampliaciones=(), puede_solicitar_ampliacion=False):
         return render_template(
             "vista_prestamo.html", modo="detalle", prestamo=prestamo, gestionar=gestionar,
+            ampliaciones=ampliaciones, puede_solicitar_ampliacion=puede_solicitar_ampliacion,
             ahora_utc=datetime.now(timezone.utc).replace(tzinfo=None)
         )
 
