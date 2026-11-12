@@ -44,6 +44,8 @@ class ControladorPersona:
             return error.errores
         if isinstance(error, IntegrityError) and error.errno == 1062:
             mensaje = str(error).lower()
+            if "uq_persona_correo" in mensaje:
+                return {"correo": "Este correo ya está registrado."}
             if "uq_estudiante_cui" in mensaje:
                 return {"cui": "Este CUI ya está registrado."}
             if "uq_persona_dni" in mensaje:

@@ -5,7 +5,6 @@ from dominio.gestion_personas_usuarios.i_repositorio_persona import IRepositorio
 from dominio.gestion_personas_usuarios.i_repositorio_acceso import IRepositorioAcceso
 from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
 from hashlib import sha256
-from secrets import token_urlsafe
 from dominio.gestion_personas_usuarios.nombre_rol import NombreRol
 from servicios.validacion_identificadores import identificador
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -39,7 +38,7 @@ class ServicioAplicacionAcceso:
             raise ValueError("La contraseña debe tener entre 12 y 256 caracteres.")
         return generate_password_hash(clave, method="scrypt")
 
-    def autenticar(self, usuario, clave, origen="local"):
+    def autenticar(self, usuario, clave):
         if (
             not isinstance(usuario, str)
             or not isinstance(clave, str)
@@ -48,9 +47,6 @@ class ServicioAplicacionAcceso:
         ):
             return None
         usuario = usuario.strip()
-        ventana = self.usuarios.reservar_intento(usuario, origen)
-        if ventana is None:
-            return None
         cuenta = self.usuarios.consultar_por_nombre_usuario(usuario)
         hash_clave = cuenta.credenciales.contrasena_hash if cuenta else self._hash_inexistente
         try:
@@ -59,23 +55,8 @@ class ServicioAplicacionAcceso:
             correcta = False
         if not correcta or cuenta is None or not cuenta.puede_acceder():
             return None
-        self.usuarios.descontar_intento_exitoso(usuario, origen, ventana)
         self.usuarios.registrar_acceso(cuenta.id_usuario)
         return cuenta
-
-    def abrir_sesion(self, cuenta, segundos):
-        token = token_urlsafe(32)
-        self.usuarios.abrir_sesion(cuenta.id_usuario, token, segundos)
-        return token
-
-    def consultar_sesion(self, id_usuario, token):
-        if not token or not self.usuarios.sesion_vigente(id_usuario, token):
-            return None
-        return self.consultar_usuario_activo(id_usuario)
-
-    def cerrar_sesion(self, token):
-        if token:
-            self.usuarios.cerrar_sesion(token)
 
     def consultar_usuario_activo(self, id_usuario):
         try:
@@ -100,11 +81,11 @@ class ServicioAplicacionAcceso:
             raise RuntimeError("El servicio de acceso requiere un repositorio de roles.")
         nombre_usuario = self._nombre_usuario(nombre_usuario)
         persona = self.personas.consultar_persona(validar_dni(dni))
-        rol = next((rol for rol in self.roles.consultar_roles() if rol.nombre == NombreRol.USUARIO and rol.activo), None)
+        rol = next((rol for rol in self.roles.consultar_roles() if rol.nombre == NombreRol.USUARIO), None)
         if not persona or not persona.esta_activa():
             raise ValueError("La persona debe estar activa para crear su cuenta.")
         if rol is None:
-            raise ValueError("El rol Usuario debe estar activo para crear cuentas.")
+            raise ValueError("El rol Usuario debe existir para crear cuentas.")
         hash_clave = self._hash_clave(clave)
         cuenta = UsuarioSistema(
             persona=persona, rol=rol, credenciales=Credenciales(nombre_usuario, hash_clave)

@@ -173,12 +173,11 @@
           {{ campo_persona('cui','CUI',true,limite=8) }}
 
           {{ campo_persona('ciclo','Ciclo',false,'number',10) }}
-          {{ campo_persona('semestre_academico','Semestre académico',false,'text',10) }}
           <div class="persona-campo">
             <label for="estado-matricula">Estado de matrícula</label>
             <select name="estado_matricula" id="estado-matricula" required aria-describedby="error-estado_matricula">
               <option value="">Selecciona un estado</option>
-              {% for valor, etiqueta in [('vigente','Vigente'),('no_vigente','No vigente')] %}<option value="{{ valor }}" {{ 'selected' if request.form.get('estado_matricula', persona.estado_matricula if persona and persona.tipo=='ESTUDIANTE' else '')==valor else '' }}>{{ etiqueta }}</option>{% endfor %}
+              {% for valor, etiqueta in [('VIGENTE','Vigente'),('NO_VIGENTE','No vigente')] %}<option value="{{ valor }}" {{ 'selected' if request.form.get('estado_matricula', persona.estado_matricula if persona and persona.tipo=='ESTUDIANTE' else '')==valor else '' }}>{{ etiqueta }}</option>{% endfor %}
             </select>
             <small class="persona-error" id="error-estado_matricula" aria-live="polite">{{ errores.get('estado_matricula', '') }}</small>
           </div>
@@ -265,8 +264,6 @@
       </dl>
       {% if not persona.esta_activa() %}
         <p class="aviso">Activa a la persona en «Editar persona» para habilitar su acceso.</p>
-      {% elif not cuenta.rol.activo %}
-        <p class="aviso">Asigna un rol activo desde Roles y permisos para habilitar el acceso.</p>
       {% endif %}
       <div class="acciones">
         <a class="boton"
@@ -286,7 +283,7 @@
                 action="{{ url_for('personas.activar_cuenta', dni=persona.dni) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="boton-principal"
-                    {{ 'disabled' if not persona.esta_activa() or not cuenta.rol.activo else '' }}>Activar cuenta</button>
+                    {{ 'disabled' if not persona.esta_activa() else '' }}>Activar cuenta</button>
           </form>
         {% endif %}
       </div>

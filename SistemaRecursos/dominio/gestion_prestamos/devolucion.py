@@ -1,26 +1,29 @@
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
+"""Datos de entrada para recibir un bien; se guardan en detalle_prestamo."""
 from dataclasses import dataclass
-from datetime import datetime
+from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
 from dominio.gestion_recursos.validacion_recurso import entero, texto
-from dominio.gestion_recursos.bien_material import ESTADOS_RECEPCION
+from dominio.gestion_recursos.bien_material import CondicionBien, EstadoBienMaterial
 
 
 @dataclass(kw_only=True)
 class Devolucion:
-    id_detalle_ref: int
+    id_detalle: int
     dni_encargado: str
-    estado_devolucion: str = "DISPONIBLE"
+    condicion_devolucion: CondicionBien = CondicionBien.BUENO
     observaciones: str = ""
-    fecha: datetime | None = None
-    id_devolucion: int | None = None
 
     def __post_init__(self):
-        self.id_detalle_ref = entero(self.id_detalle_ref, "Detalle del préstamo")
+        self.id_detalle = entero(self.id_detalle, "Detalle del préstamo")
         self.dni_encargado = validar_dni(self.dni_encargado)
-        if self.estado_devolucion not in ESTADOS_RECEPCION:
-            raise ValueError(
-                "La recepción solo permite disponible, dañado o mantenimiento. Una pérdida sigue pendiente de devolución."
-            )
+        try:
+            self.condicion_devolucion = CondicionBien(self.condicion_devolucion)
+        except (ValueError, TypeError):
+            raise ValueError("Selecciona bueno o dañado. Un bien perdido sigue pendiente de devolución.") from None
         self.observaciones = texto(self.observaciones, "Observaciones de devolución", 255)
-        if self.estado_devolucion != "DISPONIBLE" and not self.observaciones:
-            raise ValueError("Describe la condición del bien dañado o en mantenimiento.")
+        if self.condicion_devolucion == CondicionBien.DANADO and not self.observaciones:
+            raise ValueError("Describe los daños del bien recibido.")
+
+    @property
+    def estado_bien(self):
+        return (EstadoBienMaterial.DISPONIBLE if self.condicion_devolucion == CondicionBien.BUENO
+                else EstadoBienMaterial.DANADO)

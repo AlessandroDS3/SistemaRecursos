@@ -16,7 +16,7 @@ class EstadoSancion(str, Enum):
 class Sancion:
     dni_persona: str
     id_sancion: int | None = None
-    id_detalle_vencido_ref: int | None = None
+    id_incidencia_ref: int | None = None
     estado: EstadoSancion = EstadoSancion.ACTIVA
     fecha_levantamiento: datetime | None = None
     dni_levantamiento: str | None = None

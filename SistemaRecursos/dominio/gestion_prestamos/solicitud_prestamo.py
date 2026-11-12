@@ -34,8 +34,8 @@ class SolicitudPrestamo:
             "dni_persona": self.dni_persona, "dni_encargado": self.dni_encargado,
             "tipo_prestamo": self.tipo_prestamo, "observaciones": self.observaciones,
             "participantes": self.participantes, "salida_solicitada": self.salida_solicitada,
-            "detalles": [{"id_bien_ref": bien["id_bien"],
-                          "id_politica_ref": politicas[bien["id_categoria_ref"]].id_politica,
-                          "fecha_limite_devolucion": politicas[bien["id_categoria_ref"]].fecha_limite(ahora, horario),
-                          "estado_entrega": bien["estado"]} for bien in bienes],
+            "detalles": [{"id_bien": bien["id_bien"],
+                          "id_politica": politicas[bien["id_categoria"]].id_politica,
+                          "fecha_limite_devolucion": politicas[bien["id_categoria"]].fecha_limite(ahora, horario),
+                          "condicion_entrega": "BUENO"} for bien in bienes],
         })

@@ -61,7 +61,7 @@ def validar_datos_persona(datos):
         errores["tipo"] = "Selecciona un tipo de persona."
 
     if tipo == "ESTUDIANTE":
-        if datos.get("estado_matricula") not in ("vigente", "no_vigente"):
+        if datos.get("estado_matricula") not in ("VIGENTE", "NO_VIGENTE"):
             errores["estado_matricula"] = "Selecciona Vigente o No vigente."
 
         ciclo = datos.get("ciclo")
@@ -70,9 +70,6 @@ def validar_datos_persona(datos):
             if not re.fullmatch(r"[0-9]+", texto) or not 1 <= int(texto) <= 2147483647:
                 errores["ciclo"] = "El ciclo debe ser un entero positivo o quedar vacío."
 
-        semestre = datos.get("semestre_academico")
-        if semestre is not None and (not isinstance(semestre, str) or len(semestre.strip()) > 10):
-            errores["semestre_academico"] = "El semestre admite hasta 10 caracteres."
 
     if errores:
         raise ValidacionPersonaError(errores)

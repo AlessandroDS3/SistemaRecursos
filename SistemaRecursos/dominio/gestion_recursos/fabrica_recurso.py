@@ -6,7 +6,7 @@ class FabricaRecurso:
     def construir(cls, datos):
         return Recurso(
             nombre=datos.get("nombre"),
-            id_categoria_ref=datos.get("id_categoria_ref"),
+            id_categoria=datos.get("id_categoria"),
             marca=datos.get("marca", ""),
             modelo=datos.get("modelo", ""),
             descripcion=datos.get("descripcion", ""),

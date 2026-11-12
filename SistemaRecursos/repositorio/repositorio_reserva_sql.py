@@ -25,8 +25,8 @@ CONSULTA_RESERVA = """
            b.codigo_inventario
     FROM reserva re
     JOIN persona p ON p.dni = re.dni_persona
-    JOIN recurso r ON r.id_recurso = re.id_recurso_ref
-    LEFT JOIN bien_material b ON b.id_bien = re.id_bien_ref
+    JOIN recurso r ON r.id_recurso = re.id_recurso
+    LEFT JOIN bien_material b ON b.id_bien = re.id_bien
     LEFT JOIN estudiante e ON e.dni = p.dni
     LEFT JOIN docente d ON d.dni = p.dni
     LEFT JOIN administrativo a ON a.dni = p.dni
@@ -92,19 +92,19 @@ class RepositorioReservaSQL(IRepositorioReserva):
         return Reserva(
             id_reserva=fila["id_reserva"],
             dni_persona=fila["dni_persona"],
-            id_recurso_ref=fila["id_recurso_ref"],
+            id_recurso=fila["id_recurso"],
             fecha_requerida=fila["fecha_requerida"],
             tipo_gestion=fila["tipo_gestion"],
             estado=fila["estado"],
             observaciones=fila["observaciones"],
             salida_solicitada=fila["salida_solicitada"],
-            id_bien_ref=fila["id_bien_ref"],
+            id_bien=fila["id_bien"],
             fecha_limite_vencimiento=fila.get("fecha_limite_vencimiento"),
         )
 
     def _bloquear_reserva(self, cursor, id_reserva, accion, dni_responsable, gestionar):
         cursor.execute(
-            "SELECT dni_persona,id_recurso_ref FROM reserva WHERE id_reserva=%s",
+            "SELECT dni_persona,id_recurso FROM reserva WHERE id_reserva=%s",
             (id_reserva,),
         )
         referencia = cursor.fetchone()
@@ -113,7 +113,7 @@ class RepositorioReservaSQL(IRepositorioReserva):
         autorizar_resolucion(referencia["dni_persona"], accion, dni_responsable, gestionar)
         # Mantener este orden evita invertir bloqueos con las entregas simultáneas.
         self._bloquear_personas(cursor, referencia["dni_persona"], dni_responsable)
-        self._consultar_recurso_bloqueado(cursor, referencia["id_recurso_ref"])
+        self._consultar_recurso_bloqueado(cursor, referencia["id_recurso"])
         cursor.execute("SELECT * FROM reserva WHERE id_reserva=%s FOR UPDATE", (id_reserva,))
         fila = cursor.fetchone()
         if not fila:
@@ -149,10 +149,10 @@ class RepositorioReservaSQL(IRepositorioReserva):
         return persona, bool(cursor.fetchall())
 
     @staticmethod
-    def _consultar_politica(cursor, tipo_persona, id_categoria_ref):
+    def _consultar_politica(cursor, tipo_persona, id_categoria):
         cursor.execute(
-            "SELECT * FROM politica_prestamo WHERE vigente=TRUE AND tipo_persona=%s AND id_categoria_ref=%s FOR UPDATE",
-            (tipo_persona, id_categoria_ref),
+            "SELECT * FROM politica_prestamo WHERE vigente=TRUE AND tipo_persona=%s AND id_categoria=%s FOR UPDATE",
+            (tipo_persona, id_categoria),
         )
         fila = cursor.fetchone()
         return FabricaPoliticaPrestamo.construir(fila) if fila else None
@@ -161,8 +161,8 @@ class RepositorioReservaSQL(IRepositorioReserva):
         persona, tiene_sancion = self._consultar_solicitante(cursor, reserva.dni_persona)
         reserva.validar_solicitante(persona, tiene_sancion)
         self.prestamos.validar_sin_prestamos_vencidos(cursor, {reserva.dni_persona})
-        recurso = self._consultar_recurso_bloqueado(cursor, reserva.id_recurso_ref)
-        politica = self._consultar_politica(cursor, persona["tipo"], recurso["id_categoria_ref"])
+        recurso = self._consultar_recurso_bloqueado(cursor, reserva.id_recurso)
+        politica = self._consultar_politica(cursor, persona["tipo"], recurso["id_categoria"])
         reserva.validar_politica(politica)
         return politica
 
@@ -177,10 +177,10 @@ class RepositorioReservaSQL(IRepositorioReserva):
     def _verificar_solicitud_duplicada(cursor, reserva):
         cursor.execute(
             """SELECT id_reserva FROM reserva
-               WHERE dni_persona=%s AND id_recurso_ref=%s
+               WHERE dni_persona=%s AND id_recurso=%s
                  AND estado IN ('EN_ESPERA','LISTA_PARA_RETIRO')
                  AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>UTC_TIMESTAMP()) FOR UPDATE""",
-            (reserva.dni_persona, reserva.id_recurso_ref),
+            (reserva.dni_persona, reserva.id_recurso),
         )
         if cursor.fetchall():
             raise ConflictoPrestamoError("Ya tienes una solicitud o reserva pendiente para este recurso.")
@@ -188,17 +188,12 @@ class RepositorioReservaSQL(IRepositorioReserva):
     @staticmethod
     def _insertar_reserva(cursor, reserva, politica_vencimiento):
         cursor.execute(
-            "SELECT COALESCE(MAX(posicion_en_cola),0)+1 AS posicion FROM reserva WHERE id_recurso_ref=%s",
-            (reserva.id_recurso_ref,),
-        )
-        posicion = cursor.fetchone()["posicion"]
-        cursor.execute(
             """INSERT INTO reserva
-               (dni_persona,id_recurso_ref,fecha_solicitud,fecha_requerida,posicion_en_cola,
+               (dni_persona,id_recurso,fecha_solicitud,fecha_requerida,
                 estado,tipo_gestion,observaciones,salida_solicitada,fecha_limite_vencimiento)
-               VALUES (%s,%s,UTC_TIMESTAMP(),%s,%s,%s,%s,%s,%s,%s)""",
-            (reserva.dni_persona, reserva.id_recurso_ref, reserva.fecha_requerida,
-             posicion, reserva.estado.value, reserva.tipo_gestion.value,
+               VALUES (%s,%s,UTC_TIMESTAMP(),%s,%s,%s,%s,%s,%s)""",
+            (reserva.dni_persona, reserva.id_recurso, reserva.fecha_requerida,
+             reserva.estado.value, reserva.tipo_gestion.value,
              reserva.observaciones, reserva.salida_solicitada,
              politica_vencimiento.vencimiento_espera(reserva.fecha_requerida)),
         )
@@ -208,7 +203,7 @@ class RepositorioReservaSQL(IRepositorioReserva):
     def _primera_solicitud_disponible(cursor, id_recurso):
         cursor.execute(
             """SELECT id_reserva FROM reserva
-               WHERE id_recurso_ref=%s AND estado='EN_ESPERA'
+               WHERE id_recurso=%s AND estado='EN_ESPERA'
                  AND fecha_requerida<=UTC_TIMESTAMP()
                  AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>UTC_TIMESTAMP())
                ORDER BY fecha_solicitud,id_reserva LIMIT 1 FOR UPDATE""",
@@ -221,9 +216,9 @@ class RepositorioReservaSQL(IRepositorioReserva):
     def _consultar_bien_disponible(cursor, id_recurso):
         cursor.execute(
             """SELECT b.id_bien FROM bien_material b
-               WHERE b.id_recurso_ref=%s AND b.estado='DISPONIBLE'
+               WHERE b.id_recurso=%s AND b.estado='DISPONIBLE'
                  AND NOT EXISTS (SELECT 1 FROM detalle_prestamo d
-                   WHERE d.id_bien_ref=b.id_bien AND d.estado_devolucion IS NULL)
+                   WHERE d.id_bien=b.id_bien AND d.fecha_devolucion IS NULL)
                ORDER BY b.id_bien LIMIT 1 FOR UPDATE""",
             (id_recurso,),
         )
@@ -235,12 +230,12 @@ class RepositorioReservaSQL(IRepositorioReserva):
     def _preparar_bien(self, cursor, reserva, dni_responsable):
         _, ahora = self._condiciones_de_retiro(cursor, reserva)
         politica_vencimiento = consultar_politica_vencimiento_reserva(cursor, bloquear=True)
-        id_primera_reserva = self._primera_solicitud_disponible(cursor, reserva.id_recurso_ref)
+        id_primera_reserva = self._primera_solicitud_disponible(cursor, reserva.id_recurso)
         reserva.validar_turno(id_primera_reserva)
-        id_bien = self._consultar_bien_disponible(cursor, reserva.id_recurso_ref)
+        id_bien = self._consultar_bien_disponible(cursor, reserva.id_recurso)
         cursor.execute("UPDATE bien_material SET estado='RESERVADO' WHERE id_bien=%s", (id_bien,))
         cursor.execute(
-            "UPDATE reserva SET id_bien_ref=%s, fecha_preparacion=%s, fecha_limite_vencimiento=%s WHERE id_reserva=%s",
+            "UPDATE reserva SET id_bien=%s, fecha_preparacion=%s, fecha_limite_vencimiento=%s WHERE id_reserva=%s",
             (id_bien, ahora, politica_vencimiento.vencimiento_retiro(ahora), reserva.id_reserva),
         )
         registrar_historial_bien(
@@ -252,7 +247,7 @@ class RepositorioReservaSQL(IRepositorioReserva):
         cursor.execute("SELECT UTC_TIMESTAMP() AS ahora")
         reserva.validar_fecha_retiro(cursor.fetchone()["ahora"])
         solicitud = reserva.preparar_solicitud_prestamo(dni_responsable)
-        prestamo = self.prestamos.registrar_prestamo(solicitud, cursor=cursor, id_bien_reservado=reserva.id_bien_ref)
+        prestamo = self.prestamos.registrar_prestamo(solicitud, cursor=cursor, id_bien_reservado=reserva.id_bien)
         cursor.execute(
             "UPDATE reserva SET id_prestamo_ref=%s WHERE id_reserva=%s",
             (prestamo.id_prestamo, reserva.id_reserva),
@@ -261,22 +256,22 @@ class RepositorioReservaSQL(IRepositorioReserva):
 
     @staticmethod
     def _liberar_bien(cursor, reserva, dni_responsable):
-        if reserva.id_bien_ref is None:
+        if reserva.id_bien is None:
             return
         cursor.execute(
-            "SELECT estado FROM bien_material WHERE id_bien=%s FOR UPDATE", (reserva.id_bien_ref,),
+            "SELECT estado FROM bien_material WHERE id_bien=%s FOR UPDATE", (reserva.id_bien,),
         )
         bien = cursor.fetchone()
         if not bien or bien["estado"] != "RESERVADO":
             raise ConflictoPrestamoError("El estado del bien cambió; revisa el inventario.")
         cursor.execute(
-            "UPDATE bien_material SET estado='DISPONIBLE' WHERE id_bien=%s", (reserva.id_bien_ref,),
+            "UPDATE bien_material SET estado='DISPONIBLE' WHERE id_bien=%s", (reserva.id_bien,),
         )
         registrar_historial_bien(
-            cursor, reserva.id_bien_ref, "RESERVADO", "DISPONIBLE",
+            cursor, reserva.id_bien, "RESERVADO", "DISPONIBLE",
             f"Solicitud #{reserva.id_reserva}: {reserva.estado.value}", dni_responsable,
         )
-        cursor.execute("UPDATE reserva SET id_bien_ref=NULL WHERE id_reserva=%s", (reserva.id_reserva,))
+        cursor.execute("UPDATE reserva SET id_bien=NULL WHERE id_reserva=%s", (reserva.id_reserva,))
 
     def _guardar_resolucion(self, cursor, reserva, estado_anterior, motivo, dni_responsable):
         cursor.execute(
@@ -353,12 +348,12 @@ class RepositorioReservaSQL(IRepositorioReserva):
 
     def _expirar_vencida(self, id_reserva):
         with self.conexion.sesion(escritura=True) as cursor:
-            cursor.execute("SELECT dni_persona,id_recurso_ref FROM reserva WHERE id_reserva=%s", (id_reserva,))
+            cursor.execute("SELECT dni_persona,id_recurso FROM reserva WHERE id_reserva=%s", (id_reserva,))
             referencia = cursor.fetchone()
             if not referencia:
                 return False
             self._bloquear_personas(cursor, referencia["dni_persona"], referencia["dni_persona"])
-            self._consultar_recurso_bloqueado(cursor, referencia["id_recurso_ref"])
+            self._consultar_recurso_bloqueado(cursor, referencia["id_recurso"])
             cursor.execute("SELECT * FROM reserva WHERE id_reserva=%s FOR UPDATE", (id_reserva,))
             fila = cursor.fetchone()
             if not fila or fila["estado"] not in ("EN_ESPERA", "LISTA_PARA_RETIRO"):

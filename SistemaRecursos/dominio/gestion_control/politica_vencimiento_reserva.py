@@ -23,7 +23,7 @@ class PoliticaVencimientoReserva:
                 raise ValueError
         except (TypeError, ValueError):
             raise ValueError(f"{nombre}: introduce un plazo entero válido.") from None
-        limite = 87600 if unidad == "HORAS" else 3650
+        limite = 720 if unidad == "HORAS" else 30
         if not 1 <= numero <= limite:
             raise ValueError(f"{nombre}: el plazo debe estar entre 1 y {limite} {unidad.lower()}.")
         return numero

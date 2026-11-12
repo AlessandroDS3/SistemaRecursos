@@ -3,7 +3,7 @@ from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from dominio.gestion_prestamos.tipo_prestamo import TipoPrestamo
-from dominio.gestion_recursos.bien_material import EstadoBienMaterial, ESTADOS_RECEPCION
+from dominio.gestion_recursos.bien_material import CondicionBien
 from dominio.gestion_recursos.validacion_recurso import entero, texto
 
 
@@ -40,7 +40,7 @@ class Prestamo:
 
     def agregar_detalle(self, detalle):
         for detalle_registrado in self.detalles:
-            if detalle_registrado.id_bien_ref == detalle.id_bien_ref:
+            if detalle_registrado.id_bien == detalle.id_bien:
                 raise ValueError("No se puede incluir el mismo bien dos veces.")
         self.detalles.append(detalle)
 
@@ -49,7 +49,7 @@ class Prestamo:
             raise ValueError("Selecciona al menos un bien para el préstamo.")
         ids_bienes = []
         for detalle in self.detalles:
-            ids_bienes.append(detalle.id_bien_ref)
+            ids_bienes.append(detalle.id_bien)
         if len(set(ids_bienes)) != len(ids_bienes):
             raise ValueError("No se puede incluir el mismo bien dos veces.")
         dnis_participantes = []
@@ -92,15 +92,13 @@ class Prestamo:
         self.estado = self.estado_actual(ahora)
         return self.estado
 
-    def registrar_devolucion(self, id_detalle, estado, ahora=None):
-        detalle = None
-        for detalle_prestamo in self.detalles:
-            if detalle_prestamo.id_detalle == id_detalle:
-                detalle = detalle_prestamo
-                break
-        if not detalle or not detalle.pendiente():
+    def registrar_devolucion(self, id_detalle, condicion, ahora=None, *, dni_encargado, observaciones=""):
+        detalle = next((d for d in self.detalles if d.id_detalle == id_detalle), None)
+        if detalle is None or not detalle.pendiente():
             raise ValueError("El bien no pertenece al préstamo o ya fue devuelto.")
-        if estado not in ESTADOS_RECEPCION:
-            raise ValueError("Selecciona la condición de recepción del bien.")
-        detalle.estado_devolucion = EstadoBienMaterial(estado)
+        condicion = CondicionBien(condicion)
+        detalle.dni_encargado_devolucion = validar_dni(dni_encargado)
+        detalle.condicion_devolucion = condicion
+        detalle.fecha_devolucion = ahora or datetime.now(timezone.utc).replace(tzinfo=None)
+        detalle.observaciones_devolucion = texto(observaciones, "Observaciones de devolución", 255) or None
         self.estado = self.estado_actual(ahora)

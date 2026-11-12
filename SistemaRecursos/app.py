@@ -104,7 +104,7 @@ def create_app(config=None, repositorios=None, repositorios_recursos=None):
         validar_csrf()
         g.usuario = None
         if "id_usuario" in session:
-            g.usuario = acceso.consultar_sesion(session["id_usuario"], session.get("token_acceso"))
+            g.usuario = acceso.consultar_usuario_activo(session["id_usuario"])
             if g.usuario is None or session.get(
                 "version_credenciales"
             ) != acceso.version_credenciales(g.usuario):

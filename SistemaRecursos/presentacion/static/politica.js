@@ -1,5 +1,15 @@
 "use strict";
 
+for (const grupo of document.querySelectorAll("#politicas-vencimiento .politica-plazo")) {
+  const unidad = grupo.querySelector("select");
+  const plazo = grupo.querySelector('input[type="number"]');
+  const actualizar = () => {
+    plazo.max = unidad.value === "HORAS" ? "720" : "30";
+  };
+  unidad.addEventListener("change", actualizar);
+  actualizar();
+}
+
 // La validación definitiva del plazo y la categoría permanece en el servidor.
 for (const formulario of document.querySelectorAll(".politica-celda")) {
   const unidad = formulario.elements.unidad_plazo;

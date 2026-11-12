@@ -4,7 +4,7 @@ from dominio.gestion_control.politica_vencimiento_reserva import PoliticaVencimi
 def consultar_politica_vencimiento_reserva(cursor, bloquear=False):
     cursor.execute(
         "SELECT plazo_espera,unidad_espera,plazo_retiro,unidad_retiro "
-        "FROM politica_vencimiento_reserva WHERE id_politica=1"
+        "FROM configuracion_general WHERE id_configuracion=1"
         + (" FOR UPDATE" if bloquear else "")
     )
     fila = cursor.fetchone()

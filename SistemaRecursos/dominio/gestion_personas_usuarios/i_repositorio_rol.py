@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 
 class IRepositorioRol(ABC):
     @abstractmethod
-    def consultar_rol(self, id_rol) -> Rol | None:
+    def consultar_rol(self, nombre_rol) -> Rol | None:
         """Lectura sin escrituras. Devuelve Rol | None; None indica ausencia y un listado vacío no es un error."""
         raise NotImplementedError
 

@@ -151,7 +151,7 @@
 
   <form method="post" action="{{ url_for('reservas.registrar_reserva') }}" class="panel" id="form-reserva" data-tipo-persona="{{ g.usuario.persona.tipo }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="id_recurso_ref" value="{{ recurso.id_recurso }}">
+    <input type="hidden" name="id_recurso" value="{{ recurso.id_recurso }}">
 
     <p>Solicitante: <strong>{{ g.usuario.persona.nombre_completo }}</strong></p>
 

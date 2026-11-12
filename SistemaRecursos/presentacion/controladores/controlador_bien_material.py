@@ -63,13 +63,12 @@ class ControladorBienMaterial:
     def consultar_detalle_bien_material(self, id_bien):
         detalle = self.servicio.consultar_detalle_bien_material(id_bien)
         bien = detalle["bien"]
-        recurso = self.recursos.consultar_recurso(bien.id_recurso_ref)
+        recurso = self.recursos.consultar_recurso(bien.id_recurso)
 
         return self.vista.mostrar_detalle(
             bien,
             recurso,
             detalle["historial"],
-            detalle["registros"],
             detalle["prestamo_pendiente"],
         )
 
@@ -82,7 +81,7 @@ class ControladorBienMaterial:
 
     @requiere_permiso("RECURSOS_GESTIONAR")
     def registrar_bien_material(self):
-        id_recurso = request.form.get("id_recurso_ref")
+        id_recurso = request.form.get("id_recurso")
         recurso = self.recursos.consultar_recurso(id_recurso)
         try:
             self.servicio.registrar_bien_material(request.form)
@@ -103,13 +102,13 @@ class ControladorBienMaterial:
     @requiere_permiso("RECURSOS_GESTIONAR")
     def mostrar_edicion_bien_material(self, id_bien):
         bien = self.servicio.consultar_bien_material(id_bien)
-        recurso = self.recursos.consultar_recurso(bien.id_recurso_ref)
+        recurso = self.recursos.consultar_recurso(bien.id_recurso)
         return self.vista.mostrar_formulario(recurso, bien)
 
     @requiere_permiso("RECURSOS_GESTIONAR")
     def actualizar_bien_material(self, id_bien):
         bien = self.servicio.consultar_bien_material(id_bien)
-        recurso = self.recursos.consultar_recurso(bien.id_recurso_ref)
+        recurso = self.recursos.consultar_recurso(bien.id_recurso)
         datos_bien = dict(request.form, id_bien=id_bien)
         try:
             self.servicio.actualizar_bien_material(datos_bien)
@@ -130,7 +129,7 @@ class ControladorBienMaterial:
         return redirigir_segun_permiso(
             "recursos.consultar_recurso",
             "CATALOGO_CONSULTAR",
-            id_recurso=bien.id_recurso_ref,
+            id_recurso=bien.id_recurso,
         )
 
     # 6. Cambiar el estado del bien.

@@ -68,15 +68,15 @@ class ServicioAplicacionPrestamo:
         if not bien:
             raise LookupError("No se encontró el ejemplar seleccionado.")
         bien.validar_disponible()
-        recurso = self.recursos.consultar_recurso(bien.id_recurso_ref)
+        recurso = self.recursos.consultar_recurso(bien.id_recurso)
         if not recurso:
             raise LookupError("No se encontró el recurso del ejemplar.")
         return {
             "id_bien": bien.id_bien,
-            "id_recurso_ref": bien.id_recurso_ref,
+            "id_recurso": bien.id_recurso,
             "codigo_inventario": bien.codigo_inventario,
             "recurso_nombre": recurso.nombre,
-            "id_categoria_ref": recurso.id_categoria_ref,
+            "id_categoria": recurso.id_categoria,
             "ubicacion": bien.ubicacion,
         }
 
@@ -182,9 +182,9 @@ class ServicioAplicacionPrestamo:
         devoluciones = []
         for id_detalle in ids_detalles:
             devolucion = Devolucion(
-                id_detalle_ref=id_detalle,
+                id_detalle=id_detalle,
                 dni_encargado=dni_encargado,
-                estado_devolucion=datos.get(f"estado_{id_detalle}", ""),
+                condicion_devolucion=datos.get(f"condicion_{id_detalle}", ""),
                 observaciones=datos.get(f"observacion_{id_detalle}", ""),
             )
             devoluciones.append(devolucion)

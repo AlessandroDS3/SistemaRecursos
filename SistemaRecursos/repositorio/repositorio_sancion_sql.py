@@ -12,8 +12,9 @@ class RepositorioSancionSQL(IRepositorioSancion):
         with self.conexion.sesion() as cursor:
             cursor.execute('''SELECT DISTINCT pr.id_prestamo FROM prestamo pr
                 JOIN detalle_prestamo d ON d.id_prestamo=pr.id_prestamo
-                WHERE d.estado_devolucion IS NULL AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
-                AND NOT EXISTS(SELECT 1 FROM sancion s WHERE s.id_detalle_vencido_ref=d.id_detalle)
+                WHERE d.fecha_devolucion IS NULL AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
+                AND NOT EXISTS(SELECT 1 FROM incidencia i JOIN sancion s ON s.id_incidencia_ref=i.id_incidencia
+                    WHERE i.id_detalle=d.id_detalle AND i.tipo='RETRASO')
                 ORDER BY pr.id_prestamo''')
             prestamos = cursor.fetchall()
         aplicadas = 0
@@ -24,7 +25,7 @@ class RepositorioSancionSQL(IRepositorioSancion):
                 if persona is None:
                     continue
                 cursor.execute('''SELECT * FROM detalle_prestamo WHERE id_prestamo=%s
-                    AND estado_devolucion IS NULL AND fecha_limite_devolucion < UTC_TIMESTAMP()
+                    AND fecha_devolucion IS NULL AND fecha_limite_devolucion < UTC_TIMESTAMP()
                     ORDER BY id_detalle FOR UPDATE''', (prestamo['id_prestamo'],))
                 detalles = cursor.fetchall()
                 cursor.execute('SELECT UTC_TIMESTAMP() AS ahora')
@@ -45,8 +46,7 @@ class RepositorioSancionSQL(IRepositorioSancion):
             prestamo = cursor.fetchone()
             if prestamo is None:
                 raise LookupError('No se encontró el préstamo.')
-            cursor.execute('''SELECT d.*,dev.fecha AS fecha_devolucion FROM detalle_prestamo d
-                LEFT JOIN devolucion dev ON dev.id_detalle_ref=d.id_detalle
+            cursor.execute('''SELECT d.* FROM detalle_prestamo d
                 WHERE d.id_detalle=%s AND d.id_prestamo=%s FOR UPDATE''', (id_detalle, id_prestamo))
             detalle = cursor.fetchone()
             if detalle is None:
@@ -57,7 +57,7 @@ class RepositorioSancionSQL(IRepositorioSancion):
             if sancion is None:
                 raise ValueError('Este bien no tiene una sanción por tardanza.')
             modelo = Sancion(dni_persona=prestamo['dni_persona'], id_sancion=sancion['id_sancion'],
-                id_detalle_vencido_ref=id_detalle, estado=sancion['estado'])
+                id_incidencia_ref=sancion['id_incidencia_ref'], estado=sancion['estado'])
             modelo.levantar(justificacion, dni_encargado, ahora)
             cursor.execute('''UPDATE sancion SET estado='LEVANTADA',fecha_levantamiento=%s,
                 dni_levantamiento=%s,justificacion_levantamiento=%s WHERE id_sancion=%s AND estado='ACTIVA' ''',

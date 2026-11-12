@@ -317,7 +317,7 @@
           </p>
           <template id="reglas">
             {% for p in politicas %}
-              <span data-persona="{{ p.tipo_persona.value }}" data-categoria="{{ p.id_categoria_ref }}" data-unidad="{{ p.unidad_plazo }}" data-plazo="{{ p.plazo_texto }}" data-horas="{{ p.plazo_maximo * (1 if p.unidad_plazo == 'HORAS' else 24) }}" data-salida="{{ '1' if p.permite_salida else '0' }}">
+              <span data-persona="{{ p.tipo_persona.value }}" data-categoria="{{ p.id_categoria }}" data-unidad="{{ p.unidad_plazo }}" data-plazo="{{ p.plazo_texto }}" data-horas="{{ p.plazo_maximo * (1 if p.unidad_plazo == 'HORAS' else 24) }}" data-salida="{{ '1' if p.permite_salida else '0' }}">
               </span>
             {% endfor %}
           </template>
@@ -459,7 +459,7 @@
         </details>
       {% endif %}
     </section>
-    {% set pendientes = prestamo.detalles|selectattr('estado_devolucion', 'none')|list %}
+    {% set pendientes = prestamo.detalles|selectattr('fecha_devolucion', 'none')|list %}
     <section class="panel prestamo-panel-devolucion" id="devolucion">
       <div class="prestamo-titulo-devolucion">
         <h2>{{ 'Registrar devolución' if gestionar and pendientes else 'Bienes del préstamo' }}</h2>
@@ -486,10 +486,10 @@
             </thead>
             <tbody>
               {% for d in prestamo.detalles %}
-                <tr class="{{ 'fila-devolucion-pendiente' if d.estado_devolucion is none else 'fila-devolucion-recibida' }}">
+                <tr class="{{ 'fila-devolucion-pendiente' if d.fecha_devolucion is none else 'fila-devolucion-recibida' }}">
                   {% if gestionar %}
                     <td class="columna-devolver">
-                      {% if d.estado_devolucion is none %}
+                      {% if d.fecha_devolucion is none %}
                         <input type="checkbox" name="detalles" value="{{ d.id_detalle }}" aria-label="Devolver {{ d.codigo_inventario }}">
                       {% endif %}
                     </td>
@@ -499,13 +499,13 @@
                     <small>{{ d.recurso }}</small>
                   </td>
                   <td>
-                    <span class="prestamo-fecha{{ ' prestamo-fecha-vencida' if d.estado_devolucion is none and d.fecha_limite_devolucion and d.fecha_limite_devolucion < ahora_utc else '' }}">
+                    <span class="prestamo-fecha{{ ' prestamo-fecha-vencida' if d.fecha_devolucion is none and d.fecha_limite_devolucion and d.fecha_limite_devolucion < ahora_utc else '' }}">
                       {{ d.fecha_limite_devolucion|fecha_local }}
                     </span>
                   </td>
                   <td>
-                    {% if d.estado_devolucion is not none %}
-                      <span class="estado-bien estado-disponible">Recibido · {{ d.estado_devolucion|replace('DANADO', 'DAÑADO')|title }}</span>
+                    {% if d.fecha_devolucion is not none %}
+                      <span class="estado-bien estado-disponible">Recibido · {{ d.condicion_devolucion|replace('DANADO', 'DAÑADO')|title }}</span>
                       <small>{{ d.fecha_devolucion|fecha_local }} · {{ d.encargado_devolucion }}</small>
                       {% if d.observaciones_devolucion %}<small>{{ d.observaciones_devolucion }}</small>{% endif %}
                     {% else %}
@@ -534,16 +534,15 @@
                   </td>
                   {% if gestionar %}
                     <td>
-                      {% if d.estado_devolucion is none %}
-                        <select name="estado_{{ d.id_detalle }}" aria-label="Estado al devolver {{ d.codigo_inventario }}">
-                          <option value="DISPONIBLE">Disponible</option>
+                      {% if d.fecha_devolucion is none %}
+                        <select name="condicion_{{ d.id_detalle }}" aria-label="Condición al devolver {{ d.codigo_inventario }}">
+                          <option value="BUENO">Bueno</option>
                           <option value="DANADO">Dañado</option>
-                          <option value="MANTENIMIENTO">Mantenimiento</option>
                         </select>
                       {% endif %}
                     </td>
                     <td class="prestamo-celda-observaciones">
-                      {% if d.estado_devolucion is none %}
+                      {% if d.fecha_devolucion is none %}
                         <input name="observacion_{{ d.id_detalle }}" maxlength="255" aria-label="Observaciones de {{ d.codigo_inventario }}" placeholder="Opcional">
                       {% endif %}
                     </td>

@@ -161,7 +161,7 @@ if (formularioPrestamo) {
   function politicaDelBien(bien) {
     for (const regla of reglas) {
       if (regla.dataset.persona === tipoSolicitante.value
-          && regla.dataset.categoria === String(bien.id_categoria_ref)) {
+          && regla.dataset.categoria === String(bien.id_categoria)) {
         return regla.dataset;
       }
     }

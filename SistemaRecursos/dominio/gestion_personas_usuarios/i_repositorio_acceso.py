@@ -35,7 +35,7 @@ class IRepositorioAcceso(ABC):
         self,
         id_usuario,
         nombre_usuario=None,
-        id_rol=None,
+        rol=None,
         contrasena_hash=None,
         activar=None,
         id_usuario_actor=None,
@@ -49,31 +49,11 @@ class IRepositorioAcceso(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def abrir_sesion(self, id_usuario, token, segundos):
-        raise NotImplementedError
-
-    @abstractmethod
-    def cerrar_sesion(self, token):
-        raise NotImplementedError
-
-    @abstractmethod
-    def sesion_vigente(self, id_usuario, token):
-        raise NotImplementedError
-
-    @abstractmethod
-    def reservar_intento(self, usuario, origen):
-        raise NotImplementedError
-
-    @abstractmethod
-    def descontar_intento_exitoso(self, usuario, origen, ventana):
-        raise NotImplementedError
-
-    @abstractmethod
     def consultar_cuentas_para_roles(self, termino: str, limite: int = 20) -> list[CuentaParaRol]:
         """Busca cuentas por apellidos, DNI o CUI. No devuelve hashes ni contraseñas."""
         raise NotImplementedError
 
     @abstractmethod
-    def actualizar_rol_cuenta(self, id_usuario: int, id_rol: int, id_usuario_actor: int) -> UsuarioSistema:
+    def actualizar_rol_cuenta(self, id_usuario: int, rol: str, id_usuario_actor: int) -> UsuarioSistema:
         """Cambia solo el rol, conservando la protección de la última cuenta administradora."""
         raise NotImplementedError

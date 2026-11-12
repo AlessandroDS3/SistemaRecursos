@@ -1,9 +1,9 @@
 $ErrorActionPreference = 'Stop'
 
-$env:DB_HOST = '127.0.0.1'
-$env:DB_PORT = '3306'
-$env:DB_USER = 'root'
-$env:DB_NAME = 'prestamos_escuela_pruebas'
+$configLocal = Join-Path $PSScriptRoot 'config.local.ps1'
+if (Test-Path -LiteralPath $configLocal) {
+    . $configLocal
+}
 
 if (-not $env:DB_HOST) { $env:DB_HOST = '127.0.0.1' }
 if (-not $env:DB_PORT) { $env:DB_PORT = '3306' }

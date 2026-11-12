@@ -31,7 +31,7 @@ class VistaBienMaterial:
         )
 
     def mostrar_detalle(
-        self, bien, recurso, historial, registros, prestamo_pendiente=None,
+        self, bien, recurso, historial, prestamo_pendiente=None,
     ):
         return render_template(
             "vista_bien_material.html",
@@ -43,9 +43,8 @@ class VistaBienMaterial:
             bien=bien,
             recurso=recurso,
             historial=historial,
-            registros=registros,
             prestamo_pendiente=prestamo_pendiente,
-            tiene_movimientos=bool(historial or registros),
+            tiene_movimientos=bool(historial),
         )
 
     def mostrar_mensaje(self, mensaje):

@@ -29,7 +29,7 @@ class ServicioAplicacionRecurso:
         datos = dict(datos)
         datos.pop("id_recurso", None)
         recurso = FabricaRecurso.construir(datos)
-        self.consultar_categoria(recurso.id_categoria_ref)
+        self.consultar_categoria(recurso.id_categoria)
         datos_bien = {
             campo: datos.get(campo, "")
             for campo in ("codigo_inventario", "numero_serie", "fecha_adquisicion", "ubicacion", "descripcion_bien")
@@ -50,7 +50,7 @@ class ServicioAplicacionRecurso:
         actual = self.consultar_recurso(datos.get("id_recurso"))
         datos = dict(datos, id_recurso=actual.id_recurso)
         recurso = FabricaRecurso.construir(datos)
-        self.consultar_categoria(recurso.id_categoria_ref)
+        self.consultar_categoria(recurso.id_categoria)
         return self.repositorio.actualizar_recurso(recurso)
 
     def eliminar_recurso(self, id_recurso) -> None:
@@ -70,8 +70,8 @@ class ServicioAplicacionRecurso:
             "q": texto(filtros.get("q", ""), "Búsqueda", 120),
             "solo_disponibles": filtros.get("solo_disponibles") == "1",
         }
-        if filtros.get("id_categoria_ref"):
-            valores["id_categoria_ref"] = identificador(filtros["id_categoria_ref"])
+        if filtros.get("id_categoria"):
+            valores["id_categoria"] = identificador(filtros["id_categoria"])
         for campo in ('id_recurso', 'id_bien'):
             if filtros.get(campo):
                 valores[campo] = identificador(filtros[campo])
@@ -86,8 +86,8 @@ class ServicioAplicacionRecurso:
         valores = self._validar_filtros(filtros)
         recursos = []
         bienes = []
-        if valores.get('id_categoria_ref'):
-            recursos = self.repositorio.consultar_recursos({'id_categoria_ref': valores['id_categoria_ref']})
+        if valores.get('id_categoria'):
+            recursos = self.repositorio.consultar_recursos({'id_categoria': valores['id_categoria']})
             if valores.get('id_recurso') and any(r['id_recurso'] == valores['id_recurso'] for r in recursos):
                 bienes = self.bienes.consultar_bienes_por_recurso(valores['id_recurso'])
         return {'recursos': recursos, 'bienes': bienes}

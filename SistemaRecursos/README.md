@@ -9,13 +9,18 @@ Aplicación web con Flask y MySQL para gestionar personas, usuarios, recursos, b
 
 ## Preparar la base de datos
 
-Para probar el sistema, abre `sql/datos_prueba.sql` en MySQL Workbench u otro cliente de MySQL y ejecútalo. Crea la base `prestamos_escuela_pruebas` con datos de ejemplo y las cuentas indicadas más abajo.
+La carpeta `sql/` contiene dos archivos independientes:
 
-Ejecuta ese archivo solo en una instalación nueva; no lo vuelvas a importar sobre una base que ya contiene datos.
+| Archivo | Contenido | Base que crea |
+| --- | --- | --- |
+| `schema.sql` | Las 20 tablas, sus relaciones y restricciones, sin ningún registro. | `prestamos_escuela` |
+| `datos_prueba.sql` | Las mismas 20 tablas, configuración inicial y datos de prueba, incluidos usuarios. | `prestamos_escuela_pruebas` |
 
-Si tienes una base de una versión anterior, ejecuta `sql/migracion_acceso.sql` con esa base seleccionada para crear las tablas de sesiones e intentos de acceso.
+Para probar la aplicación, abre `sql/datos_prueba.sql` en MySQL Workbench u otro cliente y ejecútalo sobre una base nueva. No necesitas ejecutar primero `schema.sql`.
 
-También está disponible `sql/schema.sql` para crear la base `prestamos_escuela` sin cuentas ni datos de demostración. Para utilizarla, cambia `DB_NAME` en la configuración de conexión.
+Si solo quieres la estructura vacía, utiliza `sql/schema.sql`. No incluye usuarios, roles, permisos ni configuración inicial. Para conectarte a ella, cambia `DB_NAME` a `prestamos_escuela`.
+
+Durante el desarrollo actualizamos estos dos archivos directamente. Para cargar una nueva versión de los datos de prueba, se recrea la base de desarrollo en lugar de aplicar migraciones.
 
 ## Iniciar la aplicación
 
@@ -40,7 +45,7 @@ Reemplaza `tu_contrasena_mysql` por tu contraseña de MySQL. Ejecuta la opción 
 
 El script crea el entorno virtual en `..\.venv` si falta e instala las dependencias automáticamente. No necesitas activar el entorno manualmente.
 
-Si `run.ps1` tiene valores de conexión asignados al inicio, esos valores reemplazan las variables anteriores; ajústalos también si tu configuración es diferente.
+Opcionalmente, puedes guardar las variables de conexión en `config.local.ps1`, junto a `run.ps1`. El script carga ese archivo antes de iniciar; está excluido de Git para mantener las credenciales solo en tu computadora.
 
 ### Opción 2: directamente con `app.py`
 
@@ -74,6 +79,8 @@ Estas cuentas se crean al importar `sql/datos_prueba.sql`:
 
 Son cuentas de demostración para pruebas locales. La contraseña de inicio de sesión es distinta de la contraseña de conexión a MySQL.
 
+El sistema comprueba la contraseña, el estado de la cuenta y sus permisos. La sesión vence a las 8 horas y se descarta si cambia la contraseña o la cuenta deja de tener acceso. Cerrar sesión elimina la cookie del navegador; no hay revocación individual en el servidor ni límite de intentos de inicio de sesión.
+
 ## Organización del código
 
 - `app.py`: configura e inicia la aplicación.
@@ -81,4 +88,14 @@ Son cuentas de demostración para pruebas locales. La contraseña de inicio de s
 - `servicios/`: coordina las operaciones del sistema.
 - `repositorio/`: consulta y guarda los datos en MySQL.
 - `presentacion/`: controladores, vistas y archivos de la interfaz.
-- `sql/`: estructura de la base de datos, migraciones y datos de prueba.
+- `sql/`: estructura de la base de datos y datos de prueba.
+
+Los roles y el catálogo de permisos están definidos en el código. `usuario_sistema.rol` asigna el rol a cada cuenta y `rol_permiso` permite ajustar sus permisos desde la aplicación. El acceso de la cuenta se determina únicamente por `estado_cuenta`.
+
+Las relaciones con categorías y recursos se identifican como `id_categoria` e `id_recurso`. Las descripciones de recursos y bienes y la fecha de adquisición son opcionales; si se dejan vacías se guardan como `NULL`. Los estados de préstamo y reserva se actualizan junto con sus operaciones en la misma transacción.
+
+Cada fila de `detalle_prestamo` guarda la entrega y su devolución. Una fecha de devolución vacía indica que el bien sigue pendiente; al recibirlo se guardan juntos la fecha, el encargado, la condición (`BUENO` o `DANADO`) y las observaciones. Un bien perdido sigue pendiente. La tabla separada `devolucion` se eliminó.
+
+Los cambios de estado de préstamos, bienes, reservas y sanciones se guardan en `historial_estado`. Los campos `entidad` e `id_entidad` identifican a qué registro corresponde cada cambio.
+
+Cada sanción se relaciona con una incidencia, y esta con el detalle del préstamo. La incidencia distingue `RETRASO`, `DANIO` y `PERDIDA`, y permite registrar el DNI de quien la comunica; los retrasos automáticos dejan ese DNI vacío. Solo puede existir una incidencia de retraso por detalle y una sanción por incidencia. Las sanciones siguen activas hasta su levantamiento manual con justificación.

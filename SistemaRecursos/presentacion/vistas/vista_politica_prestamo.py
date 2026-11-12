@@ -6,7 +6,7 @@ class VistaPoliticaPrestamo:
     def mostrar_consulta(self, politicas, categorias, error=None, horario=None, error_horario=None, vencimientos=None, error_vencimiento=None, limites=None, error_limites=None):
         politicas_por_categoria = {}
         for regla in politicas:
-            politicas_por_categoria.setdefault(regla.id_categoria_ref, {})[regla.tipo_persona.value] = regla
+            politicas_por_categoria.setdefault(regla.id_categoria, {})[regla.tipo_persona.value] = regla
         return render_template(
             "vista_politica_prestamo.html",
             politicas=politicas,

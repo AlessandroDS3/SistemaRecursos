@@ -5,7 +5,7 @@ class FabricaBienMaterial:
     @classmethod
     def construir(cls, datos):
         return BienMaterial(
-            id_recurso_ref=datos.get("id_recurso_ref"),
+            id_recurso=datos.get("id_recurso"),
             codigo_inventario=datos.get("codigo_inventario"),
             fecha_adquisicion=datos.get("fecha_adquisicion"),
             numero_serie=datos.get("numero_serie", ""),

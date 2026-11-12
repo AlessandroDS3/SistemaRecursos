@@ -27,7 +27,7 @@ class ServicioAplicacionReserva:
         if datos.get("acepta_condiciones") != "1":
             raise ValueError("Confirma que revisaste el plazo y el permiso de salida del préstamo.")
         reserva = Reserva(
-            dni_persona=persona, id_recurso_ref=datos.get("id_recurso_ref"),
+            dni_persona=persona, id_recurso=datos.get("id_recurso"),
             tipo_gestion=tipo, fecha_requerida=fecha,
             observaciones=datos.get("observaciones", ""),
             salida_solicitada=datos.get("salida_solicitada") == "1",

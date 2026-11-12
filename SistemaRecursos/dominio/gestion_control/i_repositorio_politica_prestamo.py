@@ -33,7 +33,7 @@ class IRepositorioPoliticaPrestamo(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def consultar_politica_aplicable(self, tipo_persona, id_categoria_ref) -> PoliticaPrestamo | None:
+    def consultar_politica_aplicable(self, tipo_persona, id_categoria) -> PoliticaPrestamo | None:
         """Lectura sin escrituras. Devuelve PoliticaPrestamo | None; None indica ausencia y un listado vacío no es un error."""
         raise NotImplementedError
 

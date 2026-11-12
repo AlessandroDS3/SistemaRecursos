@@ -33,7 +33,7 @@ class ControladorPoliticaPrestamo:
         except (ValueError, IntegrityError) as error:
             return self._mostrar_error_politica(error)
         self.vista.mostrar_mensaje("Política guardada. Ya puede aplicarse a nuevas entregas.")
-        return redirect(url_for("politicas.consultar_politicas", _anchor=f"politica-categoria-{request.form.get('id_categoria_ref', '')}"))
+        return redirect(url_for("politicas.consultar_politicas", _anchor=f"politica-categoria-{request.form.get('id_categoria', '')}"))
 
     @requiere_permiso("POLITICAS_GESTIONAR")
     def consultar_politicas(self):
@@ -42,7 +42,7 @@ class ControladorPoliticaPrestamo:
     @requiere_permiso('POLITICAS_GESTIONAR')
     def mostrar_edicion_politica(self, id_politica):
         politica = self.servicio.consultar_politica(id_politica)
-        return redirect(url_for("politicas.consultar_politicas", _anchor=f"politica-categoria-{politica.id_categoria_ref}"))
+        return redirect(url_for("politicas.consultar_politicas", _anchor=f"politica-categoria-{politica.id_categoria}"))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
     def actualizar_politica(self, id_politica):
@@ -54,7 +54,7 @@ class ControladorPoliticaPrestamo:
         self.vista.mostrar_mensaje(
             "Política actualizada. Los plazos de entregas anteriores se conservan."
         )
-        return redirect(url_for("politicas.consultar_politicas", _anchor=f"politica-categoria-{request.form.get('id_categoria_ref', '')}"))
+        return redirect(url_for("politicas.consultar_politicas", _anchor=f"politica-categoria-{request.form.get('id_categoria', '')}"))
 
     @requiere_permiso("POLITICAS_GESTIONAR")
     def eliminar_politica(self, id_politica):

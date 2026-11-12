@@ -6,7 +6,7 @@ from dominio.gestion_personas_usuarios.version_edicion import version_persona, e
 from dominio.gestion_personas_usuarios.i_repositorio_persona import IRepositorioPersona
 from dominio.gestion_personas_usuarios.fabrica_persona import FabricaPersona
 from repositorio.conexion_mysql import MySQLConnection
-from repositorio.proteccion_administradores_sql import bloquear_cuentas_y_roles, validar_baja_persona
+from dominio.gestion_personas_usuarios.usuario_sistema import validar_baja_persona
 from dominio.gestion_personas_usuarios.persona import EstadoPersona
 from dominio.gestion_personas_usuarios.validacion_persona import ValidacionPersonaError
 from dominio.gestion_personas_usuarios.estudiante import ESTADOS_MATRICULA_VIGENTE
@@ -15,7 +15,7 @@ BASE = ("dni", "nombres", "apellidos", "telefono", "correo", "estado")
 SUBTIPOS = {
     "ESTUDIANTE": (
         "estudiante",
-        ("cui", "ciclo", "semestre_academico", "estado_matricula"),
+        ("cui", "ciclo", "estado_matricula"),
     ),
     "DOCENTE": (
         "docente",
@@ -24,7 +24,7 @@ SUBTIPOS = {
     "ADMINISTRATIVO": ("administrativo", ("codigo_empleado", "area")),
 }
 CONSULTA = """SELECT p.*, e.cui, e.ciclo,
-    e.semestre_academico, e.estado_matricula, d.codigo_docente,
+    e.estado_matricula, d.codigo_docente,
     d.departamento_academico, d.facultad, d.escuela_profesional,
     a.codigo_empleado, a.area,
     CASE WHEN e.dni IS NOT NULL THEN 'ESTUDIANTE'
@@ -51,11 +51,8 @@ ACCESO_ACTIVO = """
     EXISTS (
         SELECT 1
         FROM usuario_sistema us
-        JOIN rol r ON r.id_rol = us.id_rol_ref
         WHERE us.dni_persona = p.dni
-          AND us.activo = TRUE
           AND us.estado_cuenta = 'ACTIVA'
-          AND r.activo = TRUE
           AND p.estado = 'ACTIVA'
     )
 """
@@ -71,11 +68,24 @@ class RepositorioPersonaSQL(IRepositorioPersona):
         self.conexion = conexion or MySQLConnection()
 
     @staticmethod
+    def _bloquear_cuentas(cursor):
+        """Bloquea las cuentas en el mismo orden para proteger al ultimo administrador."""
+        cursor.execute(
+            "SELECT u.id_usuario,u.dni_persona,u.rol,u.estado_cuenta,p.estado AS estado_persona "
+            "FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona "
+            "ORDER BY u.id_usuario FOR UPDATE")
+        return cursor.fetchall()
+
+    @staticmethod
     def _validar_identificadores(cursor, persona, dni_actual=None):
         cursor.execute("SELECT dni FROM persona WHERE dni=%s AND dni<>%s",
                        (persona.dni, dni_actual or ""))
         if cursor.fetchone():
             raise ValidacionPersonaError({"dni": "Este DNI ya está registrado."})
+        cursor.execute("SELECT dni FROM persona WHERE correo=%s AND dni<>%s",
+                       (persona.correo, dni_actual or ""))
+        if cursor.fetchone():
+            raise ValidacionPersonaError({"correo": "Este correo ya está registrado."})
         if persona.tipo == "ESTUDIANTE":
             cursor.execute("SELECT dni FROM estudiante WHERE cui=%s AND dni<>%s",
                            (persona.cui, dni_actual or ""))
@@ -209,9 +219,9 @@ class RepositorioPersonaSQL(IRepositorioPersona):
             return c.fetchall()
     @staticmethod
     def _bloquear_persona_para_cambio(cursor, dni, estado_nuevo, id_usuario_actor):
-        roles, cuentas = {}, []
+        cuentas = []
         if estado_nuevo == EstadoPersona.INACTIVA:
-            roles, cuentas = bloquear_cuentas_y_roles(cursor)
+            cuentas = RepositorioPersonaSQL._bloquear_cuentas(cursor)
         cursor.execute(
             "SELECT dni,estado FROM persona WHERE dni=%s FOR UPDATE",
             (dni,),
@@ -219,11 +229,7 @@ class RepositorioPersonaSQL(IRepositorioPersona):
         if cursor.fetchone() is None:
             raise LookupError("No se encontró la persona.")
         if estado_nuevo == EstadoPersona.INACTIVA:
-            validar_baja_persona(dni, id_usuario_actor, cuentas, roles)
-            cursor.execute(
-                "DELETE s FROM sesion_acceso s JOIN usuario_sistema u ON u.id_usuario=s.id_usuario "
-                "WHERE u.dni_persona=%s", (dni,),
-            )
+            validar_baja_persona(dni, id_usuario_actor, cuentas)
 
     def actualizar_persona(self, persona, dni_actual, id_usuario_actor=None, *, version) -> Persona:
         tabla, columnas = SUBTIPOS[persona.tipo]

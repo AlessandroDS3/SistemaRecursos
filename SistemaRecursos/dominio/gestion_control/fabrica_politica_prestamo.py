@@ -20,7 +20,7 @@ class FabricaPoliticaPrestamo:
 
         return PoliticaPrestamo(
             tipo_persona=datos.get("tipo_persona"),
-            id_categoria_ref=datos.get("id_categoria_ref"),
+            id_categoria=datos.get("id_categoria"),
             plazo_maximo=plazo,
             unidad_plazo=datos.get("unidad_plazo"),
             permite_salida=salida in (True, 1, "1"),

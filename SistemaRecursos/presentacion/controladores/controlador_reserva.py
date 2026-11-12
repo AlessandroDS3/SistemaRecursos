@@ -46,7 +46,7 @@ class ControladorReserva:
         if not request.args.get("recurso"):
             return redirect(url_for("recursos.consultar_recursos"))
         recurso = self.recursos.consultar_recurso(request.args["recurso"])
-        politicas = [p for p in self.politicas.consultar_politicas() if p.id_categoria_ref == recurso.id_categoria_ref
+        politicas = [p for p in self.politicas.consultar_politicas() if p.id_categoria == recurso.id_categoria
                       and p.tipo_persona == g.usuario.persona.tipo]
         return render_template("vista_reserva.html", modo="formulario", gestionar=gestionar,
                                recurso=recurso, politicas=politicas)
@@ -62,9 +62,9 @@ class ControladorReserva:
     def consultar_reserva(self, id_reserva):
         gestionar = self._alcance()
         reserva = self.servicio.consultar_reserva(id_reserva, g.usuario.persona.dni, gestionar)
-        recurso = self.recursos.consultar_recurso(reserva["id_recurso_ref"])
+        recurso = self.recursos.consultar_recurso(reserva["id_recurso"])
         politicas = [p for p in self.politicas.consultar_politicas()
-                     if p.id_categoria_ref == recurso.id_categoria_ref
+                     if p.id_categoria == recurso.id_categoria
                       and p.tipo_persona == reserva["tipo_persona"]]
         return render_template("vista_reserva.html", modo="detalle", gestionar=gestionar,
                                reserva=reserva, politicas=politicas)

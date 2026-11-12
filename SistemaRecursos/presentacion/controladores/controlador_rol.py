@@ -40,7 +40,7 @@ class ControladorRol:
     @requiere_permiso("ROLES_CONSULTAR")
     def actualizar_rol_cuenta(self, dni):
         try:
-            self.servicio.actualizar_rol_cuenta(dni, request.form.get("id_rol"), g.usuario.id_usuario)
+            self.servicio.actualizar_rol_cuenta(dni, request.form.get("nombre_rol"), g.usuario.id_usuario)
         except LookupError as error:
             return self._mostrar_consulta(error=str(error))
         except (ValueError, IntegrityError) as error:

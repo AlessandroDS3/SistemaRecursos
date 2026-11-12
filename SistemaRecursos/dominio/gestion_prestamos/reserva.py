@@ -90,19 +90,19 @@ def autorizar_resolucion(dni_solicitante, accion, dni_responsable, gestionar):
 @dataclass(kw_only=True)
 class Reserva:
     dni_persona: str
-    id_recurso_ref: int
+    id_recurso: int
     fecha_requerida: datetime
     tipo_gestion: TipoSolicitud = TipoSolicitud.RESERVA
     observaciones: str = ""
     salida_solicitada: bool = False
     id_reserva: int | None = None
-    id_bien_ref: int | None = None
+    id_bien: int | None = None
     fecha_limite_vencimiento: datetime | None = None
     estado: EstadoReserva = EstadoReserva.EN_ESPERA
 
     def __post_init__(self):
         self.dni_persona = validar_dni(self.dni_persona)
-        self.id_recurso_ref = entero(self.id_recurso_ref, "Recurso")
+        self.id_recurso = entero(self.id_recurso, "Recurso")
         self.fecha_requerida = instante_utc(self.fecha_requerida, "Fecha requerida")
         try:
             self.tipo_gestion = TipoSolicitud(self.tipo_gestion)
@@ -112,8 +112,8 @@ class Reserva:
         self.observaciones = texto(self.observaciones, "Observaciones", 220)
         if self.fecha_limite_vencimiento is not None:
             self.fecha_limite_vencimiento = instante_utc(self.fecha_limite_vencimiento, "Fecha límite")
-        if self.id_bien_ref is not None:
-            self.id_bien_ref = entero(self.id_bien_ref, "Bien reservado")
+        if self.id_bien is not None:
+            self.id_bien = entero(self.id_bien, "Bien reservado")
 
     def cambiar_estado(self, nuevo):
         nuevo = EstadoReserva(nuevo)
@@ -157,7 +157,7 @@ class Reserva:
             )
 
     def preparar_solicitud_prestamo(self, dni_encargado):
-        if self.id_bien_ref is None:
+        if self.id_bien is None:
             raise ConflictoPrestamoError("Prepara un bien antes de confirmar la entrega.")
         observacion_uso = (
             "Salida externa autorizada. " if self.salida_solicitada
@@ -168,5 +168,5 @@ class Reserva:
             dni_encargado=dni_encargado,
             observaciones=observacion_uso + self.observaciones,
             salida_solicitada=self.salida_solicitada,
-            ids_bienes=[self.id_bien_ref],
+            ids_bienes=[self.id_bien],
         )

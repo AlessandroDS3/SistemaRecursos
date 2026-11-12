@@ -15,7 +15,7 @@ class AmpliacionPrestamo:
     def __init__(self):
         self.id_ampliacion = None
         self.dni_solicitante = None
-        self.id_detalle_ref = None
+        self.id_detalle = None
         self.fecha_solicitud = None
         self.fecha_limite_anterior = None
         self.fecha_limite_nueva = None

@@ -25,18 +25,16 @@ class ServicioAplicacionRol:
     def _construir_matriz(formulario, roles, permisos):
         permisos_validos = set()
         for permiso in permisos:
-            permisos_validos.add(permiso.id_permiso)
+            permisos_validos.add(permiso.codigo)
         matriz = {}
         for rol in roles:
-            if not rol.activo:
-                continue
             seleccionados = set()
-            for valor in formulario.getlist(f"permisos_{rol.id_rol}"):
-                seleccionados.add(identificador(valor))
-            for id_permiso in seleccionados:
-                if id_permiso not in permisos_validos:
+            for valor in formulario.getlist(f"permisos_{rol.nombre.value}"):
+                seleccionados.add(valor)
+            for codigo_permiso in seleccionados:
+                if codigo_permiso not in permisos_validos:
                     raise LookupError("Uno de los permisos seleccionados no existe.")
-            matriz[rol.id_rol] = sorted(seleccionados)
+            matriz[rol.nombre.value] = sorted(seleccionados)
         return matriz
 
     def actualizar_matriz_permisos(self, formulario) -> None:
@@ -54,11 +52,11 @@ class ServicioAplicacionRol:
             return []
         return self.cuentas.consultar_cuentas_para_roles(termino, limite=20)
 
-    def actualizar_rol_cuenta(self, dni: str, id_rol, id_usuario_actor: int) -> UsuarioSistema:
+    def actualizar_rol_cuenta(self, dni: str, nombre_rol, id_usuario_actor: int) -> UsuarioSistema:
         cuenta = self.cuentas.consultar_cuenta_persona(validar_dni(dni))
         if not cuenta:
             raise LookupError("Esta persona todavía no tiene una cuenta de acceso.")
-        rol = self.repositorio.consultar_rol(identificador(id_rol))
-        if not rol or not rol.activo:
-            raise ValueError("Selecciona un rol activo.")
-        return self.cuentas.actualizar_rol_cuenta(cuenta.id_usuario, rol.id_rol, identificador(id_usuario_actor))
+        rol = self.repositorio.consultar_rol(nombre_rol)
+        if not rol:
+            raise ValueError("Selecciona un rol válido.")
+        return self.cuentas.actualizar_rol_cuenta(cuenta.id_usuario, rol.nombre.value, identificador(id_usuario_actor))

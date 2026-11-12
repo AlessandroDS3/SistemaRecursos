@@ -57,7 +57,7 @@
             <th scope="row"><strong>{{ c.nombre }}</strong></th>
             {% for t in tipos_persona %}
               {% set p = politicas_por_categoria.get(c.id_categoria, {}).get(t.value) %}
-              {% set enviado = request.method == 'POST' and request.form.get('origen') == 'matriz' and request.form.get('id_categoria_ref') == c.id_categoria|string and request.form.get('tipo_persona') == t.value %}
+              {% set enviado = request.method == 'POST' and request.form.get('origen') == 'matriz' and request.form.get('id_categoria') == c.id_categoria|string and request.form.get('tipo_persona') == t.value %}
               {% set plazo = request.form.get('plazo_maximo', '') if enviado else (p.plazo_maximo if p else '') %}
               {% set unidad = request.form.get('unidad_plazo', 'DIAS') if enviado else (p.unidad_plazo if p else 'DIAS') %}
               {% set salida = request.form.get('permite_salida', '0') if enviado else ('1' if p and p.permite_salida else '0') %}
@@ -65,7 +65,7 @@
                 <form method="post" class="politica-celda" action="{{ url_for('politicas.actualizar_politica', id_politica=p.id_politica) if p else url_for('politicas.registrar_politica') }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="origen" value="matriz">
-                  <input type="hidden" name="id_categoria_ref" value="{{ c.id_categoria }}">
+                  <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
                   <input type="hidden" name="tipo_persona" value="{{ t.value }}">
                   <div class="politica-plazo">
                     <label><span>Plazo</span><input type="number" name="plazo_maximo" min="1" max="{{ 87600 if unidad == 'HORAS' else 3650 }}" step="1" value="{{ plazo }}" placeholder="Cantidad" required aria-label="Plazo para {{ t.value|lower }} · {{ c.nombre }}"></label>
@@ -85,6 +85,7 @@
   </section>
   <section class="panel politicas-reservas" id="politicas-vencimiento" aria-labelledby="titulo-reservas">
     <h2 id="titulo-reservas">Vencimiento de solicitudes y reservas</h2>
+    <p class="ayuda">Cada plazo admite hasta 30 días o 720 horas.</p>
     {% if error_vencimiento %}<p class="aviso error" role="alert">{{ error_vencimiento }}</p>{% endif %}
     {% set vencimiento_enviado = request.method == 'POST' and request.form.get('origen') == 'vencimientos' %}
     <form method="post" action="{{ url_for('politicas.actualizar_vencimientos') }}">
@@ -95,7 +96,7 @@
           <h3>Solicitudes pendientes</h3>
           {% set espera_unidad = request.form.get('unidad_espera','DIAS') if vencimiento_enviado else vencimientos.unidad_espera %}
           <div class="politica-plazo">
-            <label><span>Plazo</span><input type="number" name="plazo_espera" min="1" max="87600" step="1" value="{{ request.form.get('plazo_espera','') if vencimiento_enviado else vencimientos.plazo_espera }}" required></label>
+            <label><span>Plazo</span><input type="number" name="plazo_espera" min="1" max="{{ 720 if espera_unidad == 'HORAS' else 30 }}" step="1" value="{{ request.form.get('plazo_espera','') if vencimiento_enviado else vencimientos.plazo_espera }}" required></label>
             <label><span>Unidad</span><select name="unidad_espera"><option value="HORAS" {{ 'selected' if espera_unidad == 'HORAS' else '' }}>Horas</option><option value="DIAS" {{ 'selected' if espera_unidad == 'DIAS' else '' }}>Días</option></select></label>
           </div>
         </div>
@@ -103,7 +104,7 @@
           <h3>Reservas listas para retiro</h3>
           {% set retiro_unidad = request.form.get('unidad_retiro','HORAS') if vencimiento_enviado else vencimientos.unidad_retiro %}
           <div class="politica-plazo">
-            <label><span>Plazo</span><input type="number" name="plazo_retiro" min="1" max="87600" step="1" value="{{ request.form.get('plazo_retiro','') if vencimiento_enviado else vencimientos.plazo_retiro }}" required></label>
+            <label><span>Plazo</span><input type="number" name="plazo_retiro" min="1" max="{{ 720 if retiro_unidad == 'HORAS' else 30 }}" step="1" value="{{ request.form.get('plazo_retiro','') if vencimiento_enviado else vencimientos.plazo_retiro }}" required></label>
             <label><span>Unidad</span><select name="unidad_retiro"><option value="HORAS" {{ 'selected' if retiro_unidad == 'HORAS' else '' }}>Horas</option><option value="DIAS" {{ 'selected' if retiro_unidad == 'DIAS' else '' }}>Días</option></select></label>
           </div>
         </div>

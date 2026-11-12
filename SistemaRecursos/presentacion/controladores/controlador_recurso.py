@@ -55,7 +55,7 @@ class ControladorRecurso:
     @requiere_permiso("CATALOGO_CONSULTAR")
     def consultar_recursos(self):
         """Muestra el catálogo con los filtros de la dirección web."""
-        id_categoria = request.args.get("id_categoria_ref")
+        id_categoria = request.args.get("id_categoria")
         categoria_catalogo = None
         if id_categoria:
             categoria_catalogo = self.servicio.consultar_categoria(id_categoria)
@@ -75,7 +75,7 @@ class ControladorRecurso:
         """Muestra el recurso, sus bienes y su disponibilidad."""
         disponibilidad = self.servicio.consultar_disponibilidad_recurso(id_recurso)
         recurso = disponibilidad["recurso"]
-        categoria = self.servicio.consultar_categoria(recurso.id_categoria_ref)
+        categoria = self.servicio.consultar_categoria(recurso.id_categoria)
         politicas = self._consultar_politicas_por_categoria()
         return self.vista.mostrar_detalle(disponibilidad, categoria, politicas)
 
@@ -222,7 +222,7 @@ class ControladorRecurso:
             return resumen
 
         for politica in self.politicas.consultar_politicas():
-            id_categoria = politica.id_categoria_ref
+            id_categoria = politica.id_categoria
             if id_categoria not in resumen:
                 resumen[id_categoria] = []
             resumen[id_categoria].append(politica)

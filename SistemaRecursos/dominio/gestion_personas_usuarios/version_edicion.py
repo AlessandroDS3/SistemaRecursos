@@ -18,10 +18,10 @@ def version_persona(persona):
 
 def version_matriz(roles, permisos):
     asignaciones = sorted(
-        (rol.id_rol, sorted(p.id_permiso for p in rol.permisos))
-        for rol in roles if rol.activo
+        (rol.nombre.value, sorted(p.codigo for p in rol.permisos))
+        for rol in roles
     )
-    return huella([asignaciones, sorted(p.id_permiso for p in permisos)])
+    return huella([asignaciones, sorted(p.codigo for p in permisos)])
 
 
 def exigir_version(recibida, actual):

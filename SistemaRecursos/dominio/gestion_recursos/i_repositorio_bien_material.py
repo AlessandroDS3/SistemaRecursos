@@ -1,6 +1,5 @@
 from __future__ import annotations
 from dominio.gestion_recursos.bien_material import BienMaterial
-from dominio.gestion_recursos.registro_fuera_servicio import RegistroFueraServicio
 from dominio.resultados_consulta import BienDisponible, BienListado, ResultadoBienes
 from typing import Any
 from abc import ABC, abstractmethod
@@ -60,8 +59,6 @@ class IRepositorioBienMaterial(ABC):
         motivo,
         dni_responsable,
         estado_esperado,
-        fecha_fin_estimada=None,
-        descripcion="",
     ) -> BienMaterial:
         """Cambia el estado de un bien y registra el motivo y el responsable."""
         raise NotImplementedError
@@ -74,9 +71,4 @@ class IRepositorioBienMaterial(ABC):
     @abstractmethod
     def consultar_historial_bien_material(self, id_bien) -> list[dict[str, Any]]:
         """Consulta el historial de estados del bien."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def consultar_registros_fuera_servicio(self, id_bien) -> list[RegistroFueraServicio]:
-        """Consulta los registros del bien fuera de servicio."""
         raise NotImplementedError

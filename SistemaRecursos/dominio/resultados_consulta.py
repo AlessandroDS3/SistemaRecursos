@@ -12,7 +12,7 @@ from dominio.gestion_personas_usuarios.persona import Persona
 
 class RecursoListado(TypedDict):
     id_recurso: int
-    id_categoria_ref: int
+    id_categoria: int
     nombre: str
     marca: str | None
     modelo: str | None
@@ -23,19 +23,19 @@ class RecursoListado(TypedDict):
 
 class BienListado(TypedDict):
     id_bien: int
-    id_recurso_ref: int
+    id_recurso: int
     codigo_inventario: str
     estado: str
-    fecha_adquisicion: date
+    fecha_adquisicion: date | None
     recurso_nombre: str
     numero_serie: str | None
     ubicacion: str | None
-    descripcion_bien: str
+    descripcion_bien: str | None
 
 class BienDisponible(TypedDict):
-    id_categoria_ref: int
+    id_categoria: int
     id_bien: int
-    id_recurso_ref: int
+    id_recurso: int
     codigo_inventario: str
     ubicacion: str | None
     recurso_nombre: str
@@ -80,9 +80,14 @@ class PrestamoConsulta(TypedDict):
 
 class DetalleEntregaConsulta(TypedDict):
     id_detalle: int
-    id_bien_ref: int
-    id_politica_ref: int
-    estado_devolucion: str | None
+    id_bien: int
+    id_politica: int
+    condicion_entrega: str
+    condicion_devolucion: str | None
+    fecha_devolucion: datetime | None
+    dni_encargado_devolucion: str | None
+    observaciones_entrega: str | None
+    observaciones_devolucion: str | None
     fecha_limite_devolucion: datetime
     estado_sancion_vencimiento: str | None
     justificacion_levantamiento: str | None
@@ -127,7 +132,7 @@ class ResumenPrestamos(TypedDict):
 class ReservaConsulta(TypedDict):
     id_reserva: int
     dni_persona: str
-    id_recurso_ref: int
+    id_recurso: int
     estado: str
     tipo_gestion: str
     fecha_solicitud: datetime
@@ -150,6 +155,5 @@ class CuentaParaRol(TypedDict):
     apellidos: str
     cui: str | None
     nombre_usuario: str
-    id_rol: int
     nombre_rol: str
     estado_cuenta: str

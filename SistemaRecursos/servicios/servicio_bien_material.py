@@ -4,12 +4,11 @@ from dominio.resultados_consulta import ResultadoBienes
 from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
 from dominio.gestion_recursos.i_repositorio_bien_material import IRepositorioBienMaterial
 from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
-from datetime import datetime, time
 from dominio.gestion_recursos.fabrica_bien_material import FabricaBienMaterial
 from dominio.gestion_recursos.bien_material import (
     EstadoBienMaterial, ESTADOS_CAMBIO_MANUAL, ESTADOS_GESTION_PRESTAMOS,
 )
-from dominio.gestion_recursos.validacion_recurso import texto, fecha, ConflictoRecursoError
+from dominio.gestion_recursos.validacion_recurso import texto, ConflictoRecursoError
 from servicios.validacion_identificadores import identificador
 
 
@@ -22,7 +21,7 @@ class ServicioAplicacionBienMaterial:
         datos = dict(datos, estado="DISPONIBLE")
         datos.pop("id_bien", None)
         bien = FabricaBienMaterial.construir(datos)
-        if not self.recursos.consultar_recurso(bien.id_recurso_ref):
+        if not self.recursos.consultar_recurso(bien.id_recurso):
             raise LookupError("No se encontró el recurso.")
         return self.repositorio.registrar_bien_material(bien)
 
@@ -52,7 +51,7 @@ class ServicioAplicacionBienMaterial:
         datos = dict(
             datos,
             id_bien=actual.id_bien,
-            id_recurso_ref=actual.id_recurso_ref,
+            id_recurso=actual.id_recurso,
             estado=actual.estado.value,
         )
         return self.repositorio.actualizar_bien_material(FabricaBienMaterial.construir(datos))
@@ -74,12 +73,6 @@ class ServicioAplicacionBienMaterial:
                 "El estado cambió. Recarga el bien antes de intentarlo otra vez."
             )
         motivo = texto(datos.get("motivo"), "Motivo", 255, True)
-        descripcion = texto(datos.get("descripcion", ""), "Descripción", 255)
-        estimada = None
-        if datos.get("fecha_fin_estimada"):
-            estimada = datetime.combine(
-                fecha(datos["fecha_fin_estimada"], "Fecha estimada"), time(23, 59, 59)
-            )
         # Validación del dominio antes de persistir; el repositorio vuelve a comprobar
         # la versión del estado bajo bloqueo para evitar cambios concurrentes.
         bien.cambiar_estado(estado)
@@ -89,8 +82,6 @@ class ServicioAplicacionBienMaterial:
             motivo,
             validar_dni(dni_responsable),
             esperado,
-            fecha_fin_estimada=estimada,
-            descripcion=descripcion,
         )
 
     def consultar_detalle_bien_material(self, id_bien):
@@ -98,6 +89,5 @@ class ServicioAplicacionBienMaterial:
         return {
             "bien": bien,
             "historial": self.repositorio.consultar_historial_bien_material(bien.id_bien),
-            "registros": self.repositorio.consultar_registros_fuera_servicio(bien.id_bien),
             "prestamo_pendiente": self.repositorio.consultar_prestamo_pendiente(bien.id_bien),
         }

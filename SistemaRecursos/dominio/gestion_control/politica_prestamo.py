@@ -7,7 +7,7 @@ from dominio.gestion_recursos.validacion_recurso import entero
 @dataclass(kw_only=True)
 class PoliticaPrestamo:
     tipo_persona: TipoPersona
-    id_categoria_ref: int
+    id_categoria: int
     plazo_maximo: int
     unidad_plazo: str
     permite_salida: bool = False
@@ -18,7 +18,7 @@ class PoliticaPrestamo:
             self.tipo_persona = TipoPersona(self.tipo_persona)
         except (ValueError, TypeError):
             raise ValueError("Selecciona un tipo de persona válido.") from None
-        self.id_categoria_ref = entero(self.id_categoria_ref, "Categoría")
+        self.id_categoria = entero(self.id_categoria, "Categoría")
         if self.unidad_plazo not in ("HORAS", "DIAS"):
             raise ValueError("Selecciona horas o días para el plazo.")
 
@@ -33,7 +33,7 @@ class PoliticaPrestamo:
         self.permite_salida = bool(self.permite_salida)
 
     def aplica_a(self, tipo_persona, id_categoria):
-        return self.tipo_persona == tipo_persona and self.id_categoria_ref == id_categoria
+        return self.tipo_persona == tipo_persona and self.id_categoria == id_categoria
 
     @property
     def plazo_texto(self):

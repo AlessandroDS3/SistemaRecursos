@@ -7,11 +7,10 @@ from dominio.gestion_prestamos.validacion_prestamo import validar_persona, Confl
 from dominio.gestion_prestamos.prestamo import Prestamo
 from dominio.gestion_prestamos.detalle_prestamo import DetallePrestamo
 from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
+from dominio.gestion_control.horario_atencion import HorarioAtencion
 from repositorio.conexion_mysql import MySQLConnection
-from repositorio.horario_atencion_sql import consultar_horario_atencion
 from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
 from repositorio.sanciones_vencimiento_sql import aplicar_sancion_vencimiento
-from repositorio.registro_fuera_servicio_sql import guardar_cambio_fuera_servicio
 from dominio.gestion_recursos.bien_material import EstadoBienMaterial
 from repositorio.repositorio_persona_sql import CONSULTA as CONSULTA_PERSONAS
 
@@ -23,14 +22,14 @@ ORIGEN_PRESTAMOS_CON_ESTADO = """
             CASE
               WHEN NOT EXISTS (SELECT 1 FROM detalle_prestamo estado_detalle
                 WHERE estado_detalle.id_prestamo=base.id_prestamo
-                  AND estado_detalle.estado_devolucion IS NULL) THEN 'DEVUELTO'
+                  AND estado_detalle.fecha_devolucion IS NULL) THEN 'DEVUELTO'
               WHEN EXISTS (SELECT 1 FROM detalle_prestamo estado_detalle
                 WHERE estado_detalle.id_prestamo=base.id_prestamo
-                  AND estado_detalle.estado_devolucion IS NULL
+                  AND estado_detalle.fecha_devolucion IS NULL
                   AND estado_detalle.fecha_limite_devolucion < UTC_TIMESTAMP()) THEN 'VENCIDO'
               WHEN EXISTS (SELECT 1 FROM detalle_prestamo estado_detalle
                 WHERE estado_detalle.id_prestamo=base.id_prestamo
-                  AND estado_detalle.estado_devolucion IS NOT NULL) THEN 'PARCIALMENTE_DEVUELTO'
+                  AND estado_detalle.fecha_devolucion IS NOT NULL) THEN 'PARCIALMENTE_DEVUELTO'
               ELSE 'ACTIVO'
             END AS estado
      FROM prestamo base)
@@ -42,6 +41,15 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
 
     def __init__(self, conexion=None):
         self.conexion = conexion or MySQLConnection()
+
+    @staticmethod
+    def _consultar_horario_atencion(cursor, bloquear=False):
+        cursor.execute('SELECT hora_apertura,hora_cierre FROM configuracion_general WHERE id_configuracion=1' +
+                       (' FOR UPDATE' if bloquear else ''))
+        fila = cursor.fetchone()
+        if fila is None:
+            raise ValueError('Configura el horario general de atención en Políticas antes de registrar entregas.')
+        return HorarioAtencion(**fila)
 
     @staticmethod
     def _validar_encargado(cursor, dni):
@@ -57,11 +65,11 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
     def _guardar_historial(cursor, id_prestamo, anterior, nuevo_estado, observacion, responsable):
         cursor.execute(
             """
-            INSERT INTO historial_prestamo (
-                id_prestamo, estado_anterior, estado_nuevo, fecha,
+            INSERT INTO historial_estado (
+                entidad, id_entidad, estado_anterior, estado_nuevo, fecha,
                 observacion, dni_responsable
             )
-            VALUES (%s, %s, %s, UTC_TIMESTAMP(), %s, %s)
+            VALUES ('PRESTAMO', %s, %s, %s, UTC_TIMESTAMP(), %s, %s)
             """,
             (id_prestamo, anterior, nuevo_estado, observacion, responsable),
         )
@@ -81,12 +89,15 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
         for fila_detalle in filas_detalles:
             detalle = DetallePrestamo(
                 id_detalle=fila_detalle["id_detalle"],
-                id_bien_ref=fila_detalle["id_bien_ref"],
-                id_politica_ref=fila_detalle["id_politica_ref"],
+                id_bien=fila_detalle["id_bien"],
+                id_politica=fila_detalle["id_politica"],
                 fecha_limite_devolucion=fila_detalle["fecha_limite_devolucion"],
-                estado_entrega=fila_detalle["estado_entrega"],
-                estado_devolucion=fila_detalle["estado_devolucion"],
-                observaciones=fila_detalle["observaciones"],
+                condicion_entrega=fila_detalle["condicion_entrega"],
+                condicion_devolucion=fila_detalle["condicion_devolucion"],
+                observaciones_entrega=fila_detalle["observaciones_entrega"],
+                fecha_devolucion=fila_detalle["fecha_devolucion"],
+                dni_encargado_devolucion=fila_detalle["dni_encargado_devolucion"],
+                observaciones_devolucion=fila_detalle["observaciones_devolucion"],
             )
             prestamo.detalles.append(detalle)
         return prestamo
@@ -107,7 +118,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
 
         cursor.execute("SELECT UTC_TIMESTAMP() AS ahora")
         ahora = cursor.fetchone()["ahora"]
-        horario = consultar_horario_atencion(cursor, bloquear=True)
+        horario = self._consultar_horario_atencion(cursor, bloquear=True)
         horario.cierre_para_entrega(ahora)
         prestamo = solicitud.construir_prestamo(bienes, politicas, ahora, horario)
         cursor.execute(
@@ -155,7 +166,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
         cursor.execute(
             f"""SELECT pr.id_prestamo FROM prestamo pr
                 JOIN detalle_prestamo d ON d.id_prestamo = pr.id_prestamo
-                WHERE d.estado_devolucion IS NULL
+                WHERE d.fecha_devolucion IS NULL
                   AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
                   AND (pr.dni_persona IN ({marcadores}) OR EXISTS (
                       SELECT 1 FROM participante_prestamo pp
@@ -219,9 +230,9 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
         marcadores = ",".join(["%s"] * len(ids_bienes))
         cursor.execute(
             f"""
-            SELECT b.*, r.id_recurso AS recurso_id, r.id_categoria_ref
+            SELECT b.*, r.id_recurso AS recurso_id, r.id_categoria
             FROM bien_material b
-            JOIN recurso r ON r.id_recurso = b.id_recurso_ref
+            JOIN recurso r ON r.id_recurso = b.id_recurso
             WHERE b.id_bien IN ({marcadores})
             ORDER BY b.id_bien
             FOR UPDATE
@@ -243,8 +254,8 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             f"""
             SELECT id_detalle
             FROM detalle_prestamo
-            WHERE id_bien_ref IN ({marcadores})
-              AND estado_devolucion IS NULL
+            WHERE id_bien IN ({marcadores})
+              AND fecha_devolucion IS NULL
             FOR UPDATE
             """,
             tuple(ids_bienes),
@@ -259,18 +270,18 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
     def _consultar_politicas(cursor, bienes, tipo_persona, salida_solicitada):
         ids_categorias = set()
         for bien in bienes:
-            ids_categorias.add(bien["id_categoria_ref"])
+            ids_categorias.add(bien["id_categoria"])
         ids_categorias = sorted(ids_categorias)
         marcadores = ",".join(["%s"] * len(ids_categorias))
         cursor.execute(
-            "SELECT * FROM politica_prestamo WHERE vigente=TRUE AND tipo_persona=%s AND id_categoria_ref IN ("
+            "SELECT * FROM politica_prestamo WHERE vigente=TRUE AND tipo_persona=%s AND id_categoria IN ("
             + marcadores + ") ORDER BY id_politica FOR UPDATE",
             (tipo_persona, *ids_categorias),
         )
         politicas = {}
         for fila_politica in cursor.fetchall():
             politica = FabricaPoliticaPrestamo.construir(fila_politica)
-            politicas[fila_politica["id_categoria_ref"]] = politica
+            politicas[fila_politica["id_categoria"]] = politica
         if set(ids_categorias) != set(politicas):
             raise ValueError(
                 "Falta una política para el tipo de persona y una de las categorías seleccionadas."
@@ -287,14 +298,15 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             cursor.execute(
                 """
                 INSERT INTO detalle_prestamo (
-                    id_prestamo, id_bien_ref, id_politica_ref,
-                    fecha_limite_devolucion, estado_entrega, observaciones
+                    id_prestamo, id_bien, id_politica,
+                    fecha_limite_devolucion, condicion_entrega, observaciones_entrega
                 )
                 VALUES (%s, %s, %s, %s, %s, %s)
                 """,
                 (
-                    id_prestamo, detalle.id_bien_ref, detalle.id_politica_ref,
-                    detalle.fecha_limite_devolucion, detalle.estado_entrega.value, "",
+                    id_prestamo, detalle.id_bien, detalle.id_politica,
+                    detalle.fecha_limite_devolucion, detalle.condicion_entrega.value,
+                    detalle.observaciones_entrega or None,
                 ),
             )
             detalle.id_detalle = cursor.lastrowid
@@ -334,19 +346,17 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
                 SELECT
                     d.*, b.codigo_inventario, b.estado AS estado_actual,
                     r.nombre AS recurso, r.id_recurso AS recurso_id,
-                    dev.fecha AS fecha_devolucion,
-                    dev.observaciones AS observaciones_devolucion,
                     CASE WHEN s.id_sancion IS NOT NULL THEN s.estado
-                         WHEN d.fecha_limite_devolucion < COALESCE(dev.fecha,UTC_TIMESTAMP()) THEN 'ACTIVA'
+                         WHEN d.fecha_limite_devolucion < COALESCE(d.fecha_devolucion,UTC_TIMESTAMP()) THEN 'ACTIVA'
                          ELSE NULL END AS estado_sancion_vencimiento,
                     s.justificacion_levantamiento,
                     CONCAT(e.nombres, ' ', e.apellidos) AS encargado_devolucion
                 FROM detalle_prestamo d
-                JOIN bien_material b ON b.id_bien = d.id_bien_ref
-                JOIN recurso r ON r.id_recurso = b.id_recurso_ref
-                LEFT JOIN devolucion dev ON dev.id_detalle_ref = d.id_detalle
-                LEFT JOIN sancion s ON s.id_detalle_vencido_ref=d.id_detalle
-                LEFT JOIN persona e ON e.dni = dev.dni_encargado
+                JOIN bien_material b ON b.id_bien = d.id_bien
+                JOIN recurso r ON r.id_recurso = b.id_recurso
+                LEFT JOIN incidencia i ON i.id_detalle=d.id_detalle AND i.tipo='RETRASO'
+                LEFT JOIN sancion s ON s.id_incidencia_ref=i.id_incidencia
+                LEFT JOIN persona e ON e.dni = d.dni_encargado_devolucion
                 WHERE d.id_prestamo = %s
                 ORDER BY d.id_detalle
                 """,
@@ -367,10 +377,10 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             cursor.execute(
                 """
                 SELECT h.*, CONCAT(p.nombres, ' ', p.apellidos) AS responsable
-                FROM historial_prestamo h
-                JOIN persona p ON p.dni = h.dni_responsable
-                WHERE h.id_prestamo = %s
-                ORDER BY h.fecha DESC, h.id_historial DESC
+                FROM historial_estado h
+                LEFT JOIN persona p ON p.dni = h.dni_responsable
+                WHERE h.entidad = 'PRESTAMO' AND h.id_entidad = %s
+                ORDER BY h.fecha DESC, h.id_historial_estado DESC
                 """,
                 (id_prestamo,),
             )
@@ -398,7 +408,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             SELECT COUNT(DISTINCT pr.id_prestamo) AS cantidad
             FROM {ORIGEN_PRESTAMOS_CON_ESTADO} pr
             JOIN detalle_prestamo d ON d.id_prestamo = pr.id_prestamo
-            WHERE d.estado_devolucion IS NULL
+            WHERE d.fecha_devolucion IS NULL
               AND pr.estado IN ('ACTIVO', 'VENCIDO', 'PARCIALMENTE_DEVUELTO')
         """ + condicion_persona
 
@@ -406,7 +416,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             SELECT COUNT(DISTINCT pr.id_prestamo) AS cantidad
             FROM {ORIGEN_PRESTAMOS_CON_ESTADO} pr
             JOIN detalle_prestamo d ON d.id_prestamo = pr.id_prestamo
-            WHERE d.estado_devolucion IS NULL
+            WHERE d.fecha_devolucion IS NULL
               AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
         """ + condicion_persona
 
@@ -478,25 +488,25 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
                 p.dni AS documento_identidad,
                 MAX(CASE WHEN est.dni IS NOT NULL THEN est.cui END) AS cui,
                 COUNT(d.id_detalle) AS total,
-                SUM(CASE WHEN d.estado_devolucion IS NOT NULL THEN 1 ELSE 0 END)
+                SUM(CASE WHEN d.fecha_devolucion IS NOT NULL THEN 1 ELSE 0 END)
                     AS devueltos,
-                SUM(CASE WHEN d.estado_devolucion IS NULL THEN 1 ELSE 0 END)
+                SUM(CASE WHEN d.fecha_devolucion IS NULL THEN 1 ELSE 0 END)
                     AS pendientes,
                 SUM(
                     CASE
-                        WHEN d.estado_devolucion IS NULL AND b.estado = 'PERDIDO'
+                        WHEN d.fecha_devolucion IS NULL AND b.estado = 'PERDIDO'
                         THEN 1 ELSE 0
                     END
                 ) AS perdidos,
                 MIN(
-                    CASE WHEN d.estado_devolucion IS NULL
+                    CASE WHEN d.fecha_devolucion IS NULL
                          THEN d.fecha_limite_devolucion END
                 ) AS proximo_vencimiento
             FROM {ORIGEN_PRESTAMOS_CON_ESTADO} pr
             JOIN persona p ON p.dni = pr.dni_persona
             LEFT JOIN estudiante est ON est.dni = p.dni
             JOIN detalle_prestamo d ON d.id_prestamo = pr.id_prestamo
-            JOIN bien_material b ON b.id_bien = d.id_bien_ref
+            JOIN bien_material b ON b.id_bien = d.id_bien
         """
         if condiciones:
             sql += " WHERE " + " AND ".join(condiciones)
@@ -517,7 +527,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
                       SELECT 1
                       FROM detalle_prestamo d
                       WHERE d.id_prestamo = pr.id_prestamo
-                        AND d.estado_devolucion IS NULL
+                        AND d.fecha_devolucion IS NULL
                         AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
                   )
             """
@@ -562,32 +572,20 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
     def _registrar_devolucion_detalle(
         cursor, id_prestamo, devolucion, detalle, ahora, dni_encargado,
     ):
-        estado = devolucion.estado_devolucion
+        estado = devolucion.estado_bien.value
         cursor.execute(
-            """
-            INSERT INTO devolucion (
-                id_detalle_ref, dni_encargado, fecha, observaciones
-            )
-            VALUES (%s, %s, %s, %s)
-            """,
-            (detalle["id_detalle"], dni_encargado, ahora, devolucion.observaciones),
-        )
-        cursor.execute(
-            "UPDATE detalle_prestamo SET estado_devolucion=%s WHERE id_detalle=%s",
-            (estado, detalle["id_detalle"]),
+            "UPDATE detalle_prestamo SET fecha_devolucion=%s,dni_encargado_devolucion=%s,"
+            "condicion_devolucion=%s,observaciones_devolucion=%s WHERE id_detalle=%s",
+            (ahora,dni_encargado,devolucion.condicion_devolucion.value,
+             devolucion.observaciones or None,detalle["id_detalle"]),
         )
         cursor.execute(
             "UPDATE bien_material SET estado=%s WHERE id_bien=%s",
-            (estado, detalle["id_bien_ref"]),
-        )
-        guardar_cambio_fuera_servicio(
-            cursor, detalle["id_bien_ref"], estado,
-            f"Devolución del préstamo #{id_prestamo}", ahora,
-            descripcion=devolucion.observaciones,
+            (estado, detalle["id_bien"]),
         )
         registrar_historial_bien(
             cursor,
-            detalle["id_bien_ref"],
+            detalle["id_bien"],
             detalle["estado_actual"],
             estado,
             f"Recepción del préstamo #{id_prestamo}",
@@ -595,7 +593,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
         )
 
     def registrar_devolucion(self, id_prestamo, devoluciones, dni_encargado) -> None:
-        if not devoluciones or len({detalle.id_detalle_ref for detalle in devoluciones}) != len(devoluciones):
+        if not devoluciones or len({detalle.id_detalle for detalle in devoluciones}) != len(devoluciones):
             raise ValueError("Selecciona bienes distintos para registrar la devolución.")
         with self.conexion.sesion(escritura=True) as cursor:
             self._validar_encargado(cursor, dni_encargado)
@@ -607,7 +605,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
                 """
                 SELECT d.*, b.estado AS estado_actual
                 FROM detalle_prestamo d
-                JOIN bien_material b ON b.id_bien = d.id_bien_ref
+                JOIN bien_material b ON b.id_bien = d.id_bien
                 WHERE d.id_prestamo = %s
                 ORDER BY b.id_bien
                 FOR UPDATE
@@ -619,8 +617,8 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             for detalle in detalles:
                 detalles_por_id[detalle["id_detalle"]] = detalle
             for devolucion in devoluciones:
-                detalle = detalles_por_id.get(devolucion.id_detalle_ref)
-                if not detalle or detalle["estado_devolucion"] is not None:
+                detalle = detalles_por_id.get(devolucion.id_detalle)
+                if not detalle or detalle["fecha_devolucion"] is not None:
                     raise ConflictoPrestamoError(
                         "Uno de los bienes no pertenece a este préstamo o ya fue devuelto. No se registró ninguna devolución."
                     )
@@ -632,10 +630,12 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             ahora = cursor.fetchone()["ahora"]
             prestamo = self._construir_prestamo(fila, detalles)
             for devolucion in devoluciones:
-                detalle = detalles_por_id[devolucion.id_detalle_ref]
+                detalle = detalles_por_id[devolucion.id_detalle]
                 aplicar_sancion_vencimiento(cursor, detalle, fila['dni_persona'], ahora)
-                estado = devolucion.estado_devolucion
-                prestamo.registrar_devolucion(detalle["id_detalle"], estado, ahora)
+                prestamo.registrar_devolucion(
+                    detalle["id_detalle"], devolucion.condicion_devolucion, ahora,
+                    dni_encargado=dni_encargado, observaciones=devolucion.observaciones,
+                )
                 self._registrar_devolucion_detalle(
                     cursor, id_prestamo, devolucion, detalle, ahora, dni_encargado
                 )
@@ -661,7 +661,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
                 """
                 SELECT d.*, b.estado AS estado_actual
                 FROM detalle_prestamo d
-                JOIN bien_material b ON b.id_bien = d.id_bien_ref
+                JOIN bien_material b ON b.id_bien = d.id_bien
                 WHERE d.id_detalle = %s AND d.id_prestamo = %s
                 FOR UPDATE
                 """,
@@ -670,7 +670,7 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             detalle = cursor.fetchone()
             if (
                 not detalle
-                or detalle["estado_devolucion"] is not None
+                or detalle["fecha_devolucion"] is not None
                 or detalle["estado_actual"] != "PRESTADO"
             ):
                 raise ConflictoPrestamoError(
@@ -678,16 +678,10 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
                 )
             cursor.execute(
                 "UPDATE bien_material SET estado='PERDIDO' WHERE id_bien=%s",
-                (detalle["id_bien_ref"],),
-            )
-            cursor.execute("SELECT UTC_TIMESTAMP() AS ahora")
-            ahora = cursor.fetchone()["ahora"]
-            guardar_cambio_fuera_servicio(
-                cursor, detalle["id_bien_ref"], EstadoBienMaterial.PERDIDO,
-                f"Pérdida durante el préstamo #{id_prestamo}", ahora, descripcion=motivo,
+                (detalle["id_bien"],),
             )
             registrar_historial_bien(
-                cursor, detalle["id_bien_ref"], "PRESTADO", "PERDIDO", motivo, dni_encargado
+                cursor, detalle["id_bien"], "PRESTADO", "PERDIDO", motivo, dni_encargado
             )
             self._guardar_historial(
                 cursor,
@@ -706,5 +700,5 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
         limite = LimiteArticulosPrestamo(tipo_persona=tipo_persona, maximo_articulos=fila['maximo_articulos'] if fila else None)
         cursor.execute("""SELECT COUNT(*) AS pendientes FROM detalle_prestamo d
             JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
-            WHERE pr.dni_persona=%s AND d.estado_devolucion IS NULL""", (solicitud.dni_persona,))
+            WHERE pr.dni_persona=%s AND d.fecha_devolucion IS NULL""", (solicitud.dni_persona,))
         limite.validar_entrega(int(cursor.fetchone()['pendientes']), len(solicitud.ids_bienes))

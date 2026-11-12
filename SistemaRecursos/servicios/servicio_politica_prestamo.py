@@ -20,7 +20,7 @@ class ServicioAplicacionPoliticaPrestamo:
         datos = dict(datos)
         datos.pop("id_politica", None)
         politica = FabricaPoliticaPrestamo.construir(datos)
-        self._validar_categoria(politica.id_categoria_ref)
+        self._validar_categoria(politica.id_categoria)
         return self.repositorio.registrar_politica(politica)
 
     def _validar_categoria(self, id_categoria):
@@ -62,15 +62,15 @@ class ServicioAplicacionPoliticaPrestamo:
         cambios.update(
             id_politica=actual.id_politica,
             tipo_persona=actual.tipo_persona.value,
-            id_categoria_ref=actual.id_categoria_ref,
+            id_categoria=actual.id_categoria,
         )
         return self.repositorio.actualizar_politica(FabricaPoliticaPrestamo.construir(cambios))
 
     def eliminar_politica(self, id_politica) -> None:
         self.repositorio.eliminar_politica(self.consultar_politica(id_politica).id_politica)
 
-    def validar_prestamo(self, tipo_persona, id_categoria_ref, salida=False):
-        politica = self.repositorio.consultar_politica_aplicable(tipo_persona, id_categoria_ref)
+    def validar_prestamo(self, tipo_persona, id_categoria, salida=False):
+        politica = self.repositorio.consultar_politica_aplicable(tipo_persona, id_categoria)
         if not politica:
             raise ValueError(
                 f"No existe una política para {tipo_persona} en esta categoría. El administrador debe registrarla antes de la entrega."

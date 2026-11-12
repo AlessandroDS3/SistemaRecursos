@@ -30,7 +30,6 @@ class FabricaPersona:
                 estado=datos.get("estado", "ACTIVA"),
                 estado_matricula=datos["estado_matricula"],
                 ciclo=ciclo,
-                semestre_academico=datos.get("semestre_academico") or None,
             )
 
         if datos["tipo"] == "DOCENTE":

@@ -86,7 +86,7 @@
               </td>
               <td>
                 {% if puede('CATALOGO_CONSULTAR') %}
-                  <a href="{{ url_for('recursos.consultar_recurso', id_recurso=b.id_recurso_ref) }}">{{ b.recurso_nombre }}</a>
+                  <a href="{{ url_for('recursos.consultar_recurso', id_recurso=b.id_recurso) }}">{{ b.recurso_nombre }}</a>
                 {% else %}
                   {{ b.recurso_nombre }}
                 {% endif %}
@@ -149,7 +149,7 @@
           action="{{ url_for('bienes.actualizar_bien_material', id_bien=bien.id_bien) if bien else url_for('bienes.registrar_bien_material') }}"
           class="panel">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="id_recurso_ref" value="{{ recurso.id_recurso }}">
+      <input type="hidden" name="id_recurso" value="{{ recurso.id_recurso }}">
 
       <div class="campos">
         <label>
@@ -166,12 +166,11 @@
                  value="{{ request.form.get('numero_serie', bien.numero_serie if bien else '') }}">
         </label>
         <label>
-          Fecha de adquisición
+          Fecha de adquisición (opcional)
           <input type="date"
                  name="fecha_adquisicion"
-                 required
                  max="{{ fecha_hoy }}"
-                 value="{{ request.form.get('fecha_adquisicion', bien.fecha_adquisicion.isoformat() if bien else fecha_hoy) }}">
+                 value="{{ request.form.get('fecha_adquisicion', bien.fecha_adquisicion.isoformat() if bien and bien.fecha_adquisicion else '') }}">
         </label>
         <label>
           Ubicación
@@ -183,7 +182,7 @@
 
       <label>
         Descripción particular (opcional)
-        <textarea name="descripcion_bien" maxlength="255" rows="2">{{ request.form.get("descripcion_bien", bien.descripcion_bien if bien else "") }}</textarea>
+        <textarea name="descripcion_bien" maxlength="255" rows="2">{{ request.form.get("descripcion_bien", (bien.descripcion_bien or "") if bien else "") }}</textarea>
       </label>
 
       <p>{{ 'Cambia el estado desde el detalle del bien.' if bien else 'Estado inicial: disponible.' }}</p>
@@ -225,7 +224,7 @@
         <dt>Número de serie</dt>
         <dd>{{ bien.numero_serie or 'Sin registrar' }}</dd>
         <dt>Fecha de adquisición</dt>
-        <dd>{{ bien.fecha_adquisicion.strftime("%d/%m/%Y") }}</dd>
+        <dd>{{ bien.fecha_adquisicion.strftime("%d/%m/%Y") if bien.fecha_adquisicion else "Sin fecha conocida" }}</dd>
         <dt>Ubicación</dt>
         <dd>{{ bien.ubicacion or 'Sin registrar' }}</dd>
       </dl>
@@ -252,16 +251,8 @@
               Motivo
               <input name="motivo" maxlength="255" required>
             </label>
-            <label>
-              Fecha estimada de retorno (opcional)
-              <input type="date" name="fecha_fin_estimada">
-            </label>
           </div>
 
-          <label>
-            Descripción del registro fuera de servicio (opcional)
-            <textarea name="descripcion" rows="2" maxlength="255"></textarea>
-          </label>
 
           <div class="acciones">
             <button class="boton-principal">Guardar cambio de estado</button>
@@ -309,38 +300,6 @@
       </table>
     </section>
 
-    <section class="panel tabla">
-      <h2 id="registros-fuera-servicio">Registros fuera de servicio</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Motivo</th>
-            <th>Inicio (UTC)</th>
-            <th>Retorno estimado</th>
-            <th>Cierre (UTC)</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in registros %}
-            <tr>
-              <td>
-                {{ r.motivo }}
-                {% if r.descripcion %}<small>{{ r.descripcion }}</small>{% endif %}
-              </td>
-              <td>{{ r.fecha_inicio.strftime("%d/%m/%Y %H:%M") }}</td>
-              <td>{{ r.fecha_fin_estimada.strftime("%d/%m/%Y") if r.fecha_fin_estimada else 'Sin fecha' }}</td>
-              <td>{{ r.fecha_fin_real.strftime("%d/%m/%Y %H:%M") if r.fecha_fin_real else 'Pendiente' }}</td>
-              <td>{{ r.estado.value|title }}</td>
-            </tr>
-          {% else %}
-            <tr>
-              <td colspan="5">El bien no tiene registros fuera de servicio.</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
 
     {% if bien.esta_disponible() and not tiene_movimientos %}
       <form method="post" action="{{ url_for('bienes.eliminar_bien_material', id_bien=bien.id_bien) }}">

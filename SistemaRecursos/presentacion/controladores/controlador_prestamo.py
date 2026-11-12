@@ -53,7 +53,7 @@ class ControladorPrestamo:
         recurso = request.args.get("recurso", "")
         if "bien" in request.args:
             bien = self.servicio.seleccionar_bien_para_prestamo(request.args["bien"])
-            recurso = bien["id_recurso_ref"]
+            recurso = bien["id_recurso"]
         return self.vista.mostrar_formulario(
             self.politicas.consultar_politicas(),
             recurso_seleccionado=recurso,

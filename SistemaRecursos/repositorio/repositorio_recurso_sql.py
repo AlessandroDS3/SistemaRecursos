@@ -12,7 +12,7 @@ from repositorio.repositorio_bien_material_sql import insertar_bien_material
 
 # Columnas que se reutilizan en las consultas de recursos y categorías.
 CAMPOS_RECURSO = (
-    "id_recurso", "id_categoria_ref", "nombre", "marca", "modelo", "descripcion",
+    "id_recurso", "id_categoria", "nombre", "marca", "modelo", "descripcion",
 )
 COLUMNAS_RECURSO = ", ".join(CAMPOS_RECURSO)
 COLUMNAS_RECURSO_LISTADO = ", ".join(f"r.{campo}" for campo in CAMPOS_RECURSO)
@@ -54,7 +54,7 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
         with self.conexion.sesion(escritura=True) as cursor:
             nuevo_id = self._insertar_recurso(cursor, recurso)
             bien = FabricaBienMaterial.construir(
-                dict(datos_bien, id_recurso_ref=nuevo_id, estado="DISPONIBLE", id_bien=None)
+                dict(datos_bien, id_recurso=nuevo_id, estado="DISPONIBLE", id_bien=None)
             )
             insertar_bien_material(cursor, bien)
         recurso.id_recurso = nuevo_id
@@ -72,13 +72,13 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
             cursor.execute(
                 """
                 UPDATE recurso
-                SET nombre = %s, id_categoria_ref = %s,
+                SET nombre = %s, id_categoria = %s,
                     marca = %s, modelo = %s, descripcion = %s
                 WHERE id_recurso = %s
                 """,
                 (
                     recurso.nombre,
-                    recurso.id_categoria_ref,
+                    recurso.id_categoria,
                     recurso.marca,
                     recurso.modelo,
                     recurso.descripcion,
@@ -149,31 +149,31 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
             condiciones.append(
                 "(r.nombre LIKE %s OR r.marca LIKE %s OR r.modelo LIKE %s "
                 "OR EXISTS (SELECT 1 FROM bien_material buscado "
-                "WHERE buscado.id_recurso_ref=r.id_recurso AND buscado.codigo_inventario LIKE %s"
+                "WHERE buscado.id_recurso=r.id_recurso AND buscado.codigo_inventario LIKE %s"
                 + estado_codigo + "))"
             )
             parametros.extend([filtros["q"] + "%"] * 4)
             if filtros.get("estado"):
                 parametros.append(filtros["estado"])
         if filtros.get("estado"):
-            condiciones.append("EXISTS (SELECT 1 FROM bien_material filtrado WHERE filtrado.id_recurso_ref=r.id_recurso AND filtrado.estado=%s)")
+            condiciones.append("EXISTS (SELECT 1 FROM bien_material filtrado WHERE filtrado.id_recurso=r.id_recurso AND filtrado.estado=%s)")
             parametros.append(filtros["estado"])
-        if filtros.get("id_categoria_ref"):
-            condiciones.append("r.id_categoria_ref=%s")
-            parametros.append(filtros["id_categoria_ref"])
+        if filtros.get("id_categoria"):
+            condiciones.append("r.id_categoria=%s")
+            parametros.append(filtros["id_categoria"])
         if filtros.get('id_recurso'):
             condiciones.append('r.id_recurso=%s')
             parametros.append(filtros['id_recurso'])
         if filtros.get('id_bien'):
-            condiciones.append('EXISTS (SELECT 1 FROM bien_material elegido WHERE elegido.id_recurso_ref=r.id_recurso AND elegido.id_bien=%s)')
+            condiciones.append('EXISTS (SELECT 1 FROM bien_material elegido WHERE elegido.id_recurso=r.id_recurso AND elegido.id_bien=%s)')
             parametros.append(filtros['id_bien'])
         # Incluye los recursos sin bienes y cuenta los bienes de cada recurso.
         sql = f"""
             SELECT {COLUMNAS_RECURSO_LISTADO}, cat.nombre AS categoria_nombre,
                 COUNT(b.id_bien) AS total_bienes,
                 SUM(CASE WHEN b.estado='DISPONIBLE' THEN 1 ELSE 0 END) AS disponibles
-            FROM recurso r JOIN categoria_recurso cat ON cat.id_categoria=r.id_categoria_ref
-            LEFT JOIN bien_material b ON b.id_recurso_ref=r.id_recurso
+            FROM recurso r JOIN categoria_recurso cat ON cat.id_categoria=r.id_categoria
+            LEFT JOIN bien_material b ON b.id_recurso=r.id_recurso
         """
         if condiciones:
             sql += " WHERE " + " AND ".join(condiciones)
@@ -190,13 +190,13 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
         cursor.execute(
             """
             INSERT INTO recurso (
-                nombre, id_categoria_ref, marca, modelo, descripcion
+                nombre, id_categoria, marca, modelo, descripcion
             )
             VALUES (%s, %s, %s, %s, %s)
             """,
             (
                 recurso.nombre,
-                recurso.id_categoria_ref,
+                recurso.id_categoria,
                 recurso.marca,
                 recurso.modelo,
                 recurso.descripcion,

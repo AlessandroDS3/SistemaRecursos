@@ -30,19 +30,23 @@ ESTADOS_GESTION_PRESTAMOS = frozenset({
     EstadoBienMaterial.RESERVADO,
 })
 
-ESTADOS_RECEPCION = frozenset({
+class CondicionBien(str, Enum):
+    BUENO = "BUENO"
+    DANADO = "DANADO"
+
+
+ESTADOS_TRAS_RECEPCION = frozenset({
     EstadoBienMaterial.DISPONIBLE,
     EstadoBienMaterial.DANADO,
     EstadoBienMaterial.MANTENIMIENTO,
 })
-
 
 TRANSICIONES_PERMITIDAS = {
     EstadoBienMaterial.DISPONIBLE: (
         ESTADOS_FUERA_SERVICIO | ESTADOS_GESTION_PRESTAMOS
     ),
     EstadoBienMaterial.PRESTADO: (
-        ESTADOS_RECEPCION | {EstadoBienMaterial.PERDIDO}
+        ESTADOS_TRAS_RECEPCION | {EstadoBienMaterial.PERDIDO}
     ),
     EstadoBienMaterial.RESERVADO: {
         EstadoBienMaterial.DISPONIBLE,
@@ -58,29 +62,30 @@ TRANSICIONES_PERMITIDAS = {
         EstadoBienMaterial.DANADO,
         EstadoBienMaterial.PERDIDO,
     },
-    EstadoBienMaterial.PERDIDO: ESTADOS_RECEPCION,
+    EstadoBienMaterial.PERDIDO: ESTADOS_TRAS_RECEPCION,
 }
 
 
 @dataclass(kw_only=True)
 class BienMaterial:
-    id_recurso_ref: int
+    id_recurso: int
     codigo_inventario: str
-    fecha_adquisicion: date
+    fecha_adquisicion: date | None = None
     numero_serie: str = ""
-    descripcion_bien: str = ""
+    descripcion_bien: str | None = None
     ubicacion: str = ""
     estado: EstadoBienMaterial = EstadoBienMaterial.DISPONIBLE
     id_bien: int | None = None
 
     def __post_init__(self):
-        self.id_recurso_ref = entero(self.id_recurso_ref, "Recurso")
+        self.id_recurso = entero(self.id_recurso, "Recurso")
         self.codigo_inventario = texto(self.codigo_inventario, "Código de inventario", 40, True)
         self.numero_serie = texto(self.numero_serie, "Número de serie", 60)
-        self.descripcion_bien = texto(self.descripcion_bien, "Descripción del bien", 255)
+        self.descripcion_bien = texto(self.descripcion_bien, "Descripción del bien", 255) or None
         self.ubicacion = texto(self.ubicacion, "Ubicación", 120)
-        self.fecha_adquisicion = fecha(self.fecha_adquisicion, "Fecha de adquisición")
-        if self.fecha_adquisicion > date.today():
+        self.fecha_adquisicion = (None if self.fecha_adquisicion in (None, "")
+                                  else fecha(self.fecha_adquisicion, "Fecha de adquisición"))
+        if self.fecha_adquisicion is not None and self.fecha_adquisicion > date.today():
             raise ValueError("La fecha de adquisición no puede ser futura.")
         self.estado = EstadoBienMaterial(self.estado)
 
