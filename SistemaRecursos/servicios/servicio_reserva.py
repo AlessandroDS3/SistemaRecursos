@@ -1,128 +1,189 @@
-from __future__ import annotations
-from datetime import datetime, timedelta, timezone
-from dominio.gestion_personas_usuarios.personas import validar_dni
-from dominio.gestion_prestamos.prestamos import ConflictoPrestamoError
-from dominio.gestion_prestamos.reservas import (
-    AccionReserva,
-    EstadoReserva,
+from dominio.compartido.validacion import NoEncontrado
+from dominio.compartido.validacion import Conflicto, dni, entero, texto
+from dominio.gestion_personas_usuarios.acceso import exigir_permiso
+from dominio.gestion_control.politica_prestamo import ConfiguracionReservas
+from dominio.gestion_prestamos.prestamo import SolicitudPrestamo
+from dominio.gestion_prestamos.reserva import (
     IRepositorioReserva,
-    Reserva,
-    ReservaDetalle,
-    ResultadoReservas,
-    TipoSolicitud,
+    ESTADOS_RESERVA,
+    nueva_reserva,
+    validar_accion,
+    validar_solicitud,
 )
-from dominio.compartido.validaciones import entero as identificador, texto
 from servicios.servicio_prestamo import ServicioAplicacionPrestamo
 
 
-HORA_LIMA = timezone(timedelta(hours=-5))
-
-
 class ServicioAplicacionReserva:
-    def __init__(self, repositorio_reservas: IRepositorioReserva, prestamos: ServicioAplicacionPrestamo):
-        self.repositorio: IRepositorioReserva = repositorio_reservas
-        self.prestamos = prestamos
+    def __init__(self, repositorio: IRepositorioReserva):
+        self.repositorio = repositorio
 
-    def registrar_reserva(self, datos, persona_actual) -> int:
-        ahora = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
-        persona = validar_dni(persona_actual)
-        try:
-            tipo = TipoSolicitud(datos.get("tipo_gestion", TipoSolicitud.PRESTAMO))
-        except (ValueError, TypeError):
-            raise ValueError("Selecciona solicitud de préstamo o reserva.") from None
-        fecha = self._fecha_requerida(tipo, datos.get("fecha_requerida", ""), ahora)
-        if datos.get("acepta_condiciones") != "1":
-            raise ValueError("Confirma que revisaste el plazo y el permiso de salida del préstamo.")
-        reserva = Reserva(
-            dni_persona=persona, id_recurso=datos.get("id_recurso"),
-            tipo_gestion=tipo, fecha_requerida=fecha,
-            observaciones=datos.get("observaciones", ""),
-            salida_solicitada=datos.get("salida_solicitada") == "1",
+    def opciones(self, documento):
+        return self.repositorio.opciones(dni(documento))
+
+    def listar(self, documento=None, filtros=None):
+        filtros = filtros or {}
+        estado, tipo = filtros.get('estado', ''), filtros.get('tipo_gestion', '')
+        if estado not in ('', *ESTADOS_RESERVA) or tipo not in ('', 'PRESTAMO', 'RESERVA'):
+            raise ValueError('Estado o tipo de reserva inválidos.')
+        return self.repositorio.listar(
+            documento,
+            dict(estado=estado, tipo_gestion=tipo, q=texto(filtros.get('q'), 'Búsqueda', 120)),
         )
-        return self.repositorio.registrar_reserva(reserva, validar_dni(persona_actual))
 
-    def expirar_solicitudes_vencidas(self) -> int:
-        return self.repositorio.expirar_solicitudes_vencidas()
-
-    def consultar_reserva(self, id_reserva, persona_actual, gestionar=False) -> ReservaDetalle:
-        reserva = self.repositorio.consultar_reserva(identificador(id_reserva))
-        if not reserva:
-            raise LookupError("No se encontró la solicitud o reserva.")
-        if not gestionar and reserva["dni_persona"] != validar_dni(persona_actual):
-            raise PermissionError("Solo puedes consultar tus propias solicitudes y reservas.")
+    def consultar(self, identificador, documento, gestionar=False):
+        reserva = self.repositorio.consultar(entero(identificador))
+        if reserva is None:
+            raise NoEncontrado('Reserva inexistente.')
+        if not gestionar and reserva['dni_persona'] != documento:
+            raise PermissionError('Solo puedes consultar tus reservas.')
+        reserva['historial'] = self.repositorio.consultar_historial(
+            'RESERVA', reserva['id_reserva']
+        )
         return reserva
 
-    def consultar_reservas(self, filtros, persona_actual, gestionar=False) -> ResultadoReservas:
-        tipo = filtros.get("tipo", "")
-        estado = filtros.get("estado", "")
-        if tipo and tipo not in {tipo.value for tipo in TipoSolicitud}:
-            raise ValueError("Selecciona un tipo de solicitud válido.")
-        if estado and estado not in {e.value for e in EstadoReserva}:
-            raise ValueError("Selecciona un estado válido.")
-        return self.repositorio.consultar_reservas(
-            {"tipo": tipo, "estado": estado, "q": texto(filtros.get("q", ""), "Búsqueda", 120)},
-            None if gestionar else validar_dni(persona_actual),
-        )
-
-    def preparar_reserva(self, id_reserva, datos, persona_actual, gestionar=False) -> int | None:
-        return self._resolver_reserva(
-            id_reserva, datos, persona_actual, gestionar, AccionReserva.PREPARAR, self.repositorio.preparar_reserva
-        )
-
-    def entregar_reserva(self, id_reserva, datos, persona_actual, gestionar=False) -> int | None:
-        accion = AccionReserva.ENTREGAR
-        accion.validar_permiso(gestionar)
-        id_reserva, responsable = identificador(id_reserva), validar_dni(persona_actual)
-        motivo = texto(datos.get('motivo', ''), 'Motivo', 255)
-        with self.repositorio.transaccion_entrega() as operacion:
-            reserva = operacion.cargar_reserva(id_reserva, responsable, gestionar)
-            anterior = reserva.estado.value
-            ahora = operacion.ahora()
-            if reserva.fecha_limite_vencimiento and ahora >= reserva.fecha_limite_vencimiento:
-                raise ConflictoPrestamoError('El plazo de retiro venció. La solicitud será expirada y el bien liberado por el sistema.')
-            reserva.resolver_reserva(accion, responsable, gestionar, motivo, datos.get('acepta_condiciones') == '1')
-            reserva.validar_fecha_retiro(ahora)
-            solicitud = reserva.preparar_solicitud_prestamo(responsable)
-            prestamo = self.prestamos.registrar_en_operacion(solicitud, operacion.prestamos, reserva.id_bien)
-            operacion.guardar_entrega(reserva, anterior, prestamo.id_prestamo, motivo or accion.observacion, responsable)
-        return prestamo.id_prestamo
-
-    def cancelar_reserva(self, id_reserva, datos, persona_actual, gestionar=False) -> int | None:
-        return self._resolver_reserva(
-            id_reserva, datos, persona_actual, gestionar, AccionReserva.CANCELAR, self.repositorio.cancelar_reserva
-        )
-
-    def rechazar_reserva(self, id_reserva, datos, persona_actual, gestionar=False) -> int | None:
-        return self._resolver_reserva(
-            id_reserva, datos, persona_actual, gestionar, AccionReserva.RECHAZAR, self.repositorio.rechazar_reserva
-        )
-
-    def expirar_reserva(self, id_reserva, datos, persona_actual, gestionar=False) -> int | None:
-        return self._resolver_reserva(
-            id_reserva, datos, persona_actual, gestionar, AccionReserva.EXPIRAR, self.repositorio.expirar_reserva
-        )
-
-    def _resolver_reserva(self, id_reserva, datos, persona_actual, gestionar, accion, operacion):
-        accion.validar_permiso(gestionar)
-        motivo = texto(datos.get("motivo", ""), "Motivo", 255, accion.requiere_motivo)
-        return operacion(
-            identificador(id_reserva), validar_dni(persona_actual),
-            gestionar, motivo, datos.get("acepta_condiciones") == "1",
-        )
+    def registrar(self, datos, actor):
+        with self.repositorio.transaccion() as op:
+            cuenta = exigir_permiso(op.cuenta_actor(entero(actor)), 'RESERVAS_PROPIAS_GESTIONAR')
+            reserva = nueva_reserva(datos, cuenta['dni_persona'], op.ahora())
+            contexto = op.cargar_solicitud(reserva['dni_persona'], reserva['id_recurso'])
+            validar_solicitud(reserva, contexto, comprobar_duplicada=True)
+            configuracion = self._configuracion(op)
+            reserva['fecha_limite_vencimiento'] = configuracion.vencimiento(
+                reserva['fecha_requerida'], 'espera'
+            )
+            identificador = op.guardar(reserva)
+            op.historial(
+                'RESERVA',
+                identificador,
+                None,
+                'EN_ESPERA',
+                cuenta['dni_persona'],
+                'Solicitud registrada.',
+            )
+            return identificador
 
     @staticmethod
-    def _fecha_requerida(tipo, valor, ahora):
-        if tipo == TipoSolicitud.PRESTAMO:
-            return ahora
-        try:
-            fecha_local = datetime.fromisoformat(valor)
-            if fecha_local.tzinfo is not None:
-                raise ValueError
-            fecha_utc = fecha_local.replace(tzinfo=HORA_LIMA).astimezone(
-                timezone.utc
-            ).replace(tzinfo=None)
-        except (TypeError, ValueError):
-            raise ValueError("Indica una fecha y hora válida de retiro en Lima.") from None
-        if fecha_utc <= ahora:
-            raise ValueError("La fecha de retiro de una reserva debe ser futura.")
-        return fecha_utc
+    def _configuracion(op):
+        fila = op.configuracion()
+        if fila is None:
+            raise ValueError('Configura los plazos de reserva en Políticas.')
+        return ConfiguracionReservas(
+            **{k: fila[k] for k in ConfiguracionReservas.__dataclass_fields__}
+        )
+
+    def actuar(self, identificador, accion, datos, actor):
+        if accion not in ('preparar', 'entregar', 'cancelar', 'rechazar', 'expirar'):
+            raise ValueError('Acción de reserva inválida.')
+        with self.repositorio.transaccion() as op:
+            cuenta = op.cuenta_actor(entero(actor))
+            gestionar = bool(cuenta and 'PRESTAMOS_GESTIONAR' in cuenta['permisos'])
+            exigir_permiso(
+                cuenta, 'PRESTAMOS_GESTIONAR' if gestionar else 'RESERVAS_PROPIAS_GESTIONAR'
+            )
+            reserva = op.consultar(entero(identificador))
+            if reserva is None:
+                raise NoEncontrado('Reserva inexistente.')
+            # Un recurso serializa la selección de la cola y de sus ejemplares.
+            op.bloquear_recurso(reserva['id_recurso'])
+            reserva = op.consultar(entero(identificador), bloquear=True)
+            ahora = op.ahora()
+            validar_accion(reserva, accion, cuenta['dni_persona'], gestionar, ahora)
+            cambios, nota = {}, ''
+            if accion == 'preparar':
+                validar_solicitud(
+                    reserva, op.cargar_solicitud(reserva['dni_persona'], reserva['id_recurso'])
+                )
+                primera = op.primera_en_espera(reserva['id_recurso'], ahora)
+                if primera is None or primera['id_reserva'] != reserva['id_reserva']:
+                    raise Conflicto('Atiende primero la reserva anterior de este recurso.')
+                bien = op.bien_disponible(reserva['id_recurso'])
+                if bien is None:
+                    raise Conflicto('No hay un bien disponible para preparar la reserva.')
+                op.cambiar_bien(
+                    bien['id_bien'],
+                    'RESERVADO',
+                    'DISPONIBLE',
+                    cuenta['dni_persona'],
+                    reserva['id_reserva'],
+                )
+                cambios = dict(
+                    estado='LISTA_PARA_RETIRO',
+                    id_bien=bien['id_bien'],
+                    fecha_preparacion=ahora,
+                    fecha_limite_vencimiento=self._configuracion(op).vencimiento(ahora, 'retiro'),
+                )
+                nota = 'Bien preparado para retiro.'
+            elif accion == 'entregar':
+                if datos.get('acepta_condiciones') != '1':
+                    raise ValueError(
+                        'Confirma que comunicaste el plazo y las condiciones de entrega.'
+                    )
+                if not reserva['id_bien'] or reserva['recurso_bien'] != reserva['id_recurso']:
+                    raise Conflicto('El bien asignado no corresponde al recurso reservado.')
+                solicitud = SolicitudPrestamo(
+                    dni_persona=reserva['dni_persona'],
+                    dni_encargado=cuenta['dni_persona'],
+                    bienes=[reserva['id_bien']],
+                    observaciones=reserva['observaciones'],
+                    salida_solicitada=bool(reserva['salida_solicitada']),
+                )
+                prestamo = ServicioAplicacionPrestamo.entregar_en_operacion(
+                    op.prestamos, solicitud, reserva['id_bien']
+                )
+                cambios, nota = (
+                    dict(estado='ATENDIDA', id_prestamo_ref=prestamo),
+                    f'Préstamo #{prestamo} entregado.',
+                )
+            else:
+                nota = texto(datos.get('motivo'), 'Motivo', 255, accion in ('rechazar', 'expirar'))
+                cambios = dict(
+                    estado={
+                        'cancelar': 'CANCELADA',
+                        'rechazar': 'RECHAZADA',
+                        'expirar': 'EXPIRADA',
+                    }[accion]
+                )
+                self._liberar(op, reserva, cuenta['dni_persona'])
+                cambios['id_bien'] = None
+            op.cambiar(reserva['id_reserva'], cambios)
+            op.historial(
+                'RESERVA',
+                reserva['id_reserva'],
+                reserva['estado'],
+                cambios['estado'],
+                cuenta['dni_persona'],
+                nota,
+            )
+            return cambios.get('id_prestamo_ref')
+
+    @staticmethod
+    def _liberar(op, reserva, actor):
+        if reserva['id_bien'] is not None:
+            op.cambiar_bien(
+                reserva['id_bien'], 'DISPONIBLE', 'RESERVADO', actor, reserva['id_reserva']
+            )
+
+    def procesar_vencimientos(self):
+        cantidad = 0
+        for fila in self.repositorio.candidatas_vencidas():
+            with self.repositorio.transaccion() as op:
+                reserva = op.consultar(fila['id_reserva'], bloquear=True)
+                if reserva is None or reserva['estado'] not in ('EN_ESPERA', 'LISTA_PARA_RETIRO'):
+                    continue
+                if (
+                    reserva['fecha_limite_vencimiento'] is None
+                    or reserva['fecha_limite_vencimiento'] > op.ahora()
+                ):
+                    continue
+                self._liberar(op, reserva, None)
+                op.cambiar(reserva['id_reserva'], dict(estado='EXPIRADA', id_bien=None))
+                op.historial(
+                    'RESERVA',
+                    reserva['id_reserva'],
+                    reserva['estado'],
+                    'EXPIRADA',
+                    None,
+                    'Plazo vencido.',
+                )
+                cantidad += 1
+        return cantidad

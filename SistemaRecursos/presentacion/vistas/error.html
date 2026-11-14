@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titulo %}
+  Operación no completada
+{% endblock %}
+{% block contenido %}
+  <section class="panel estrecho">
+    <p class="suave">
+      Error
+      {{ codigo }}
+    </p>
+    <h1>Operación no completada</h1>
+    <p role="alert">{{ mensaje }}</p>
+    <div class="acciones">
+      <button type="button" class="secundario" data-volver>Volver</button>
+      <a class="boton"
+         href="{{ url_for('inicio') if g.usuario else url_for('auth.login') }}">
+        {{ 'Ir al inicio' if g.usuario else 'Iniciar sesión' }}
+      </a>
+    </div>
+  </section>
+{% endblock %}

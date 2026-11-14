@@ -1,80 +1,85 @@
-from dominio.gestion_personas_usuarios.cuentas import (
-    Credenciales,
-    IRepositorioCuenta,
-    IRepositorioRol,
-    IdentidadAcceso,
-    NombreRol,
-    UsuarioSistema,
-)
-from dominio.gestion_personas_usuarios.personas import IRepositorioPersona, validar_dni
-from dominio.compartido.validaciones import entero as identificador
+from dominio.compartido.validacion import NoEncontrado
 from werkzeug.security import generate_password_hash
+from dominio.compartido.validacion import dni, entero
+from dominio.gestion_personas_usuarios.cuenta import (
+    IRepositorioCuenta,
+    proteger_administradores,
+    validar_credenciales_nuevas,
+)
+from dominio.gestion_personas_usuarios.rol import ROLES
+from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 
 
 class ServicioAplicacionCuenta:
-    """Crea y administra cuentas; el inicio de sesión pertenece al servicio de acceso."""
+    def __init__(self, repositorio: IRepositorioCuenta):
+        self.repositorio = repositorio
 
-    def __init__(self, repositorio_cuentas: IRepositorioCuenta,
-                 repositorio_personas: IRepositorioPersona, repositorio_roles: IRepositorioRol):
-        self.repositorio = repositorio_cuentas
-        self.personas = repositorio_personas
-        self.roles = repositorio_roles
-
-    @staticmethod
-    def _nombre_usuario(nombre):
-        if not isinstance(nombre, str) or not nombre.strip() or len(nombre.strip()) > 50:
-            raise ValueError("Nombre de usuario: obligatorio, máximo 50 caracteres.")
-        return nombre.strip()
-
-    @staticmethod
-    def _hash_clave(clave):
-        if not isinstance(clave, str) or not 12 <= len(clave) <= 256:
-            raise ValueError("La contraseña debe tener entre 12 y 256 caracteres.")
-        return generate_password_hash(clave, method="scrypt")
-
-    def consultar_cuenta_persona(self, dni) -> UsuarioSistema | None:
-        return self.repositorio.consultar_cuenta_persona(validar_dni(dni))
-
-    def consultar_resumen_cuentas(self, dnis_persona) -> dict[str, dict[str, bool]]:
-        return self.repositorio.consultar_resumen_cuentas(dnis_persona)
-
-    def consultar_cuenta(self, dni) -> UsuarioSistema:
-        cuenta = self.consultar_cuenta_persona(dni)
-        if not cuenta:
-            raise LookupError("Esta persona todavía no tiene una cuenta de acceso.")
+    def consultar(self, documento):
+        cuenta = self.repositorio.consultar(dni(documento))
+        if cuenta is None:
+            raise NoEncontrado('La persona no tiene una cuenta de acceso.')
         return cuenta
 
-    def registrar_cuenta(self, dni, nombre_usuario, clave) -> UsuarioSistema:
-        nombre_usuario = self._nombre_usuario(nombre_usuario)
-        persona = self.personas.consultar_persona(validar_dni(dni))
-        rol = next((rol for rol in self.roles.consultar_roles() if rol.nombre == NombreRol.USUARIO), None)
-        if not persona or not persona.esta_activa():
-            raise ValueError("La persona debe estar activa para crear su cuenta.")
-        if rol is None:
-            raise ValueError("El rol Usuario debe existir para crear cuentas.")
-        cuenta = UsuarioSistema(
-            persona=IdentidadAcceso(dni=persona.dni, nombres=persona.nombres,
-                                   apellidos=persona.apellidos, estado=persona.estado.value),
-            rol=rol, credenciales=Credenciales(nombre_usuario, self._hash_clave(clave)),
-        )
-        return self.repositorio.registrar_cuenta(cuenta)
+    def crear(self, documento, nombre, clave, actor):
+        documento = dni(documento)
+        nombre = validar_credenciales_nuevas(nombre, clave)
+        hash_clave = generate_password_hash(clave, method='scrypt')
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'USUARIOS_GESTIONAR')
+            if operacion.estado_persona(documento) != 'ACTIVA':
+                raise ValueError('La persona debe estar activa para crear su cuenta.')
+            return operacion.guardar(documento, nombre, hash_clave)
 
-    def actualizar_cuenta(self, dni, datos, id_usuario_actor) -> UsuarioSistema:
-        id_usuario_actor = identificador(id_usuario_actor)
-        cuenta = self.consultar_cuenta(dni)
-        nombre = self._nombre_usuario(datos.get("nombre_usuario"))
-        clave = datos.get("clave", "")
-        hash_clave = self._hash_clave(clave) if clave != "" else None
-        return self.repositorio.actualizar_cuenta(
-            cuenta.id_usuario, nombre_usuario=nombre, contrasena_hash=hash_clave,
-            id_usuario_actor=id_usuario_actor,
-        )
+    def actualizar(self, documento, datos, actor):
+        if 'rol' in datos:
+            raise ValueError('Cambia el rol desde la sección Roles y permisos.')
+        return self._actualizar(documento, datos, actor, 'USUARIOS_GESTIONAR')
 
-    def cambiar_estado_cuenta(self, dni, activar, id_usuario_actor):
-        if not isinstance(activar, bool):
-            raise ValueError("La activación debe ser verdadera o falsa.")
-        id_usuario_actor = identificador(id_usuario_actor)
-        cuenta = self.consultar_cuenta(dni)
-        return self.repositorio.actualizar_cuenta(
-            cuenta.id_usuario, activar=activar, id_usuario_actor=id_usuario_actor,
-        )
+    def asignar_rol(self, documento, rol, actor):
+        return self._actualizar(documento, dict(rol=rol), actor, 'ROLES_GESTIONAR')
+
+    def _actualizar(self, documento, datos, actor, permiso):
+        documento, actor = dni(documento), entero(actor)
+        cambios = {}
+        if 'nombre_usuario' in datos:
+            cambios['nombre_usuario'] = validar_credenciales_nuevas(
+                datos['nombre_usuario'], datos.get('clave', ''), True
+            )
+        if datos.get('clave'):
+            cambios['contrasena_hash'] = generate_password_hash(datos['clave'], method='scrypt')
+        if 'estado_cuenta' in datos:
+            if datos['estado_cuenta'] not in ('ACTIVA', 'INACTIVA', 'BLOQUEADA'):
+                raise ValueError('Estado de cuenta inválido.')
+            cambios['estado_cuenta'] = datos['estado_cuenta']
+        if 'rol' in datos:
+            if datos['rol'] not in ROLES:
+                raise ValueError('Rol inexistente.')
+            cambios['rol'] = datos['rol']
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.cuenta_actor(actor), permiso)
+            cuentas = operacion.cargar_cuentas()
+            actual = next((c for c in cuentas if c['dni_persona'] == documento), None)
+            if actual is None:
+                raise NoEncontrado('Cuenta inexistente.')
+            cuenta_actor = next((c for c in cuentas if c['id_usuario'] == actor), None)
+            administrador = (
+                cuenta_actor
+                and cuenta_actor['rol'] == 'ADMINISTRADOR'
+                and (cuenta_actor['estado_cuenta'] == cuenta_actor['estado_persona'] == 'ACTIVA')
+            )
+            if (
+                actual['rol'] == 'ADMINISTRADOR'
+                and actual['id_usuario'] != actor
+                and not administrador
+            ):
+                raise PermissionError(
+                    'Solo un administrador puede editar otra cuenta administradora.'
+                )
+            nueva = dict(actual, **cambios)
+            if cambios.get('estado_cuenta') == 'ACTIVA' and actual['estado_persona'] != 'ACTIVA':
+                raise ValueError('La persona debe estar activa para habilitar la cuenta.')
+            proteger_administradores(cuentas, actual, nueva, actor)
+            operacion.actualizar(actual['id_usuario'], cambios)
+
+    def buscar(self, termino=''):
+        return self.repositorio.buscar(termino.strip())

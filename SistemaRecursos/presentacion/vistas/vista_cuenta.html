@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from 'formularios.html' import csrf,campo,opciones %}
+{% block contenido %}
+  <h1>
+    {{ 'Crear' if nueva else 'Editar' }}
+    cuenta
+  </h1>
+  <p>
+    Persona:
+    {{ documento }}
+  </p>
+  <form method="post" class="formulario panel estrecho">
+    {{ csrf() }}
+    {{ campo('nombre_usuario','Nombre de usuario',cuenta.nombre_usuario,requerido=true,maximo=50) }}
+    <label>
+      {{ 'Contraseña' if nueva else 'Nueva contraseña (deja vacío para conservar)' }}
+      <input name="clave"
+             type="password"
+             minlength="12"
+             maxlength="256"
+             autocomplete="new-password"
+             {% if nueva %}required{% endif %}>
+    </label>
+    {% if not nueva %}
+      {{ opciones('estado_cuenta','Estado',('ACTIVA','INACTIVA','BLOQUEADA'),cuenta.estado_cuenta) }}
+      <p>
+        Rol:
+        {{ cuenta.rol }}
+        . Se modifica en Roles y permisos.
+      </p>
+    {% endif %}
+    <button>Guardar cuenta</button>
+  </form>
+{% endblock %}

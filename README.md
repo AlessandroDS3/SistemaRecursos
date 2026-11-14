@@ -1,48 +1,15 @@
-# Sistema de recursos: copia simplificada
+# Sistema de recursos: implementación reescrita
 
-Esta carpeta contiene la versión reorganizada en la rama local `sistema-simplificado`.
-La versión de trabajo anterior permanece en `D:\TI_sistema_recursos\SistemaRecursos_local`.
+Proyecto de trabajo: **`D:\TI_sistema_recursos\SistemaRecursos_rehecho`**.
+Aplicación: **[SistemaRecursos/](SistemaRecursos/README.md)**.
+Rama local: **`sistema-simplificado`**.
 
-La copia usa una carpeta y un entorno virtual propios. Ambas ramas pertenecen al mismo repositorio Git; no se publicó nada en GitHub.
+La aplicación tiene una implementación nueva de dominio, casos de uso, persistencia y presentación. Cada función conserva un nombre reconocible entre capas: `acceso`, `persona`, `cuenta`, `bien_material`, `prestamo`, etc. El dominio está separado en cuatro carpetas de negocio.
 
-## Abrir y ejecutar
+Se conservan los dos SQL de 19 tablas y las reglas acordadas: préstamos individuales y grupales, reservas, devoluciones parciales, pérdidas pendientes de recuperación, ampliación presencial por el personal, sanciones por retraso y reportes CSV.
 
-Abre esta carpeta como proyecto en tu editor. La aplicación está en **`SistemaRecursos/`**.
-Las instrucciones de base de datos y arranque están en [SistemaRecursos/README.md](SistemaRecursos/README.md).
+La guía de ejecución y el mapa de archivos están en **[SistemaRecursos/README.md](SistemaRecursos/README.md)**. La copia utiliza el puerto **5001** y propone una base propia **`prestamos_escuela_rehecho`**.
 
-La aplicación nueva utiliza por defecto el puerto **5001** y el nombre de base **`prestamos_escuela_rehecho`**, para distinguirla de la anterior. Configura sus credenciales antes de iniciar. No se copiaron contraseñas ni bases de datos privadas.
+El proyecto anterior permanece en `D:\TI_sistema_recursos\SistemaRecursos_local`, con sus modificaciones pendientes. Ambas carpetas son árboles de trabajo Git con ramas distintas. Esta reescritura se guarda localmente; no se publica en GitHub.
 
-## Qué cambió
-
-- El dominio se organiza en cuatro carpetas de negocio: personas y usuarios, recursos, préstamos y control, más una carpeta compartida. Dentro se agrupan ocho módulos reconocibles.
-- Las clases, estados, contratos y resultados de consulta de cada área se encuentran juntos.
-- Los controladores renderizan directamente las plantillas; se retiraron seis clases intermedias `Vista`.
-- Las conversiones simples de recurso y bien están en su módulo de dominio, sin fábricas separadas.
-- El inicio y recuperación de sesión están en `presentacion/seguridad.py`.
-- Préstamos y reservas comparten la consulta de sanciones activas y mantienen la transacción de sus operaciones.
-- Los servicios reciben diccionarios y listas normales; las particularidades de formularios HTTP se resuelven en presentación.
-- Los errores de validación, ausencia y base de datos tienen códigos distintos. Los de MySQL quedan registrados internamente.
-
-Se conservan las funciones existentes: acceso, cuentas y roles, personas, catálogo e inventario, políticas, préstamos individuales y grupales, reservas, devoluciones, ampliación directa, sanciones de retraso y reportes CSV.
-
-## Comparación y verificación
-
-Comparación con los archivos actuales de `SistemaRecursos_local`, incluida la reorganización de acceso que estaba pendiente de commit allí:
-
-| Medida | Anterior | Copia simplificada |
-| --- | ---: | ---: |
-| Módulos Python de producción, incluidos los inicializadores de paquetes | 104 | 58 |
-| Líneas Python de producción, incluidos comentarios y blancos | 7135 | 7133 |
-| Pruebas | 79 | 83 |
-| Rutas y métodos HTTP | 68 | 68 |
-| Tablas | 19 | 19 |
-
-La reducción principal es de fragmentación y de archivos intermediarios; se conserva prácticamente el mismo volumen de reglas y comportamiento.
-
-La primera reorganización tenía 53 archivos Python; ordenar el dominio en carpetas añadió cinco `__init__.py` vacíos. El total actual de producción es 58. Este ordenamiento físico no es una nueva refactorización de las reglas.
-
-Tras ordenar el dominio en carpetas, la verificación completa terminó con **83 pruebas correctas en 135,451 segundos, sin omisiones**, usando el entorno virtual nuevo y bases MySQL temporales. En la preparación de la copia se comprobaron también las 12 plantillas HTML, la sintaxis de JavaScript, la igualdad de los dos SQL y las dependencias entre capas. No se ejecutaron modificaciones sobre la base habitual del proyecto anterior.
-
-## Documentación de referencia
-
-Los MDJ, el XML/PNG y `AUDITORIA_MANTENIBILIDAD.md` heredados son referencias de la versión anterior: no representan la nueva distribución de archivos. La guía vigente de esta copia es el README de la aplicación. El esquema de 19 tablas conserva sus definiciones y limitaciones anteriores.
+El commit `438ec36` conserva la copia inmediatamente anterior a la reescritura. Los MDJ, XML/PNG y la auditoría heredados de la raíz son documentos de referencia de la versión anterior; el mapa vigente del código está en el README de la aplicación.

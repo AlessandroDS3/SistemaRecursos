@@ -1,117 +1,111 @@
 {% extends "base.html" %}
-{% block titulo %}Políticas de préstamo{% endblock %}
+{% from 'formularios.html' import csrf,campo,opciones %}
 {% block contenido %}
-  <div class="encabezado">
-    <div><h1>Políticas de préstamo</h1></div>
-  </div>
-  {% if error %}<p class="aviso error" role="alert">{{ error }}</p>{% endif %}
-  <section class="panel" id="limites-articulos">
-    <h2>Máximo general de artículos por persona</h2>
-    {% if error_limites %}<p class="aviso error" role="alert">{{ error_limites }}</p>{% endif %}
-    {% set administrador = g.usuario.rol.nombre.value == 'ADMINISTRADOR' %}
-    {% set limites_enviados = request.method == 'POST' and request.form.get('origen') == 'limites' %}
-    <form method="post" action="{{ url_for('politicas.actualizar_limites_articulos') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="origen" value="limites">
-      <div class="campos">
-        {% for tipo in tipos_persona %}
-          {% set maximo = limites_por_tipo.get(tipo.value) %}
-          <label>{{ tipo.value|title }}
-            <input type="number" name="maximo_{{ tipo.value }}" min="1" max="2147483647" step="1" required
-              value="{{ request.form.get('maximo_' ~ tipo.value, '') if limites_enviados else maximo if maximo is not none else '' }}"
-              placeholder="Cantidad máxima" {{ 'disabled' if not administrador else '' }}>
-            {% if maximo is none %}<small>Sin configurar</small>{% endif %}
-          </label>
-        {% endfor %}
-      </div>
-      {% if administrador %}<button class="boton-principal">Guardar máximos</button>
-      {% endif %}
-    </form>
-  </section>
-  <section class="panel" id="horario-atencion">
-    <h2>Horario general de atención</h2>
-    {% if error_horario %}<p class="aviso error" role="alert">{{ error_horario }}</p>{% endif %}
-    <form method="post" action="{{ url_for('politicas.actualizar_horario_atencion') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="origen" value="horario">
-      {% set horario_enviado = request.method == 'POST' and request.form.get('origen') == 'horario' %}
-      <div class="campos">
-        <label>Hora de apertura<input type="time" name="hora_apertura" step="60" value="{{ request.form.get('hora_apertura', '') if horario_enviado else horario.apertura_texto if horario else '' }}" required></label>
-        <label>Hora de cierre<input type="time" name="hora_cierre" step="60" value="{{ request.form.get('hora_cierre', '') if horario_enviado else horario.cierre_texto if horario else '' }}" required></label>
-      </div>
-      <button class="boton-principal">Guardar horario</button>
-    </form>
-  </section>
-  <section class="panel politicas-panel" aria-labelledby="titulo-plazos">
-    <div class="encabezado-seccion">
-      <div><h2 id="titulo-plazos">Plazos de préstamo</h2></div>
+  {% if modo=="lista" %}
+    <div class="cabecera">
+      <h1>Políticas de préstamo</h1>
+      <a class="boton" href="{{ url_for('politicas.nueva') }}">Nueva política</a>
     </div>
-    <div class="politicas-filtros">
-      <label>Buscar categoría<input type="search" id="buscar-categoria-politicas" placeholder="Nombre de la categoría" autocomplete="off"></label>
-      <button type="button" id="limpiar-filtros-politicas">Limpiar</button>
-    </div>
-    <div class="politicas-tabla-contenedor">
-      <table class="politicas-matriz">
-        <thead><tr><th scope="col">Categoría</th>{% for t in tipos_persona %}<th scope="col">{{ t.value|title }}</th>{% endfor %}</tr></thead>
+    <div class="tabla">
+      <table>
+        <thead>
+          <tr>
+            <th>Persona</th>
+            <th>Categoría</th>
+            <th>Plazo máximo</th>
+            <th>Salida</th>
+            <th></th>
+          </tr>
+        </thead>
         <tbody>
-          {% for c in categorias %}
-          <tr data-categoria-politicas data-nombre="{{ c.nombre }}" id="politica-categoria-{{ c.id_categoria }}">
-            <th scope="row"><strong>{{ c.nombre }}</strong></th>
-            {% for t in tipos_persona %}
-              {% set p = politicas_por_categoria.get(c.id_categoria, {}).get(t.value) %}
-              {% set enviado = request.method == 'POST' and request.form.get('origen') == 'matriz' and request.form.get('id_categoria') == c.id_categoria|string and request.form.get('tipo_persona') == t.value %}
-              {% set plazo = request.form.get('plazo_maximo', '') if enviado else (p.plazo_maximo if p else '') %}
-              {% set unidad = request.form.get('unidad_plazo', 'DIAS') if enviado else (p.unidad_plazo if p else 'DIAS') %}
-              {% set salida = request.form.get('permite_salida', '0') if enviado else ('1' if p and p.permite_salida else '0') %}
+          {% for p in politicas %}
+            <tr>
+              <td>{{ p.tipo_persona }}</td>
+              <td>{{ p.categoria }}</td>
               <td>
-                <form method="post" class="politica-celda" action="{{ url_for('politicas.actualizar_politica', id_politica=p.id_politica) if p else url_for('politicas.registrar_politica') }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="origen" value="matriz">
-                  <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
-                  <input type="hidden" name="tipo_persona" value="{{ t.value }}">
-                  <div class="politica-plazo">
-                    <label><span>Plazo</span><input type="number" name="plazo_maximo" min="1" max="{{ 87600 if unidad == 'HORAS' else 3650 }}" step="1" value="{{ plazo }}" placeholder="Cantidad" required aria-label="Plazo para {{ t.value|lower }} · {{ c.nombre }}"></label>
-                    <label><span>Unidad</span><select name="unidad_plazo" aria-label="Unidad para {{ t.value|lower }} · {{ c.nombre }}"><option value="HORAS" {{ 'selected' if unidad == 'HORAS' else '' }}>Horas</option><option value="DIAS" {{ 'selected' if unidad == 'DIAS' else '' }}>Días</option></select></label>
-                  </div>
-                  <label class="opcion-casilla"><input type="checkbox" name="permite_salida" value="1" {{ 'checked' if salida == '1' else '' }}>Permitir salida fuera de la escuela</label>
-                  <div class="politica-pie"><button type="submit">Guardar</button></div>
+                {{ p.plazo_maximo }}
+                {{ p.unidad_plazo|lower }}
+              </td>
+              <td>{{ 'Sí' if p.permite_salida else 'No' }}</td>
+              <td>
+                <a href="{{ url_for('politicas.editar',identificador=p.id_politica) }}">Editar</a>
+                <form method="post"
+                      action="{{ url_for('politicas.eliminar',identificador=p.id_politica) }}">
+                  {{ csrf() }}
+                  <button class="secundario">Eliminar</button>
                 </form>
               </td>
-            {% endfor %}
-          </tr>
-          {% else %}<tr><td colspan="4">Sin categorías. <a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Administrar recursos</a></td></tr>{% endfor %}
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="5">Aún no hay políticas.</td>
+            </tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
-    <p id="politicas-sin-resultados" hidden>No hay coincidencias.</p>
-  </section>
-  <section class="panel politicas-reservas" id="politicas-vencimiento" aria-labelledby="titulo-reservas">
-    <h2 id="titulo-reservas">Vencimiento de solicitudes y reservas</h2>
-    <p class="ayuda">Cada plazo admite hasta 30 días o 720 horas.</p>
-    {% if error_vencimiento %}<p class="aviso error" role="alert">{{ error_vencimiento }}</p>{% endif %}
-    {% set vencimiento_enviado = request.method == 'POST' and request.form.get('origen') == 'vencimientos' %}
-    <form method="post" action="{{ url_for('politicas.actualizar_vencimientos') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="origen" value="vencimientos">
-      <div class="politicas-reservas-rejilla">
-        <div>
-          <h3>Solicitudes pendientes</h3>
-          {% set espera_unidad = request.form.get('unidad_espera','DIAS') if vencimiento_enviado else vencimientos.unidad_espera %}
-          <div class="politica-plazo">
-            <label><span>Plazo</span><input type="number" name="plazo_espera" min="1" max="{{ 720 if espera_unidad == 'HORAS' else 30 }}" step="1" value="{{ request.form.get('plazo_espera','') if vencimiento_enviado else vencimientos.plazo_espera }}" required></label>
-            <label><span>Unidad</span><select name="unidad_espera"><option value="HORAS" {{ 'selected' if espera_unidad == 'HORAS' else '' }}>Horas</option><option value="DIAS" {{ 'selected' if espera_unidad == 'DIAS' else '' }}>Días</option></select></label>
-          </div>
-        </div>
-        <div>
-          <h3>Reservas listas para retiro</h3>
-          {% set retiro_unidad = request.form.get('unidad_retiro','HORAS') if vencimiento_enviado else vencimientos.unidad_retiro %}
-          <div class="politica-plazo">
-            <label><span>Plazo</span><input type="number" name="plazo_retiro" min="1" max="{{ 720 if retiro_unidad == 'HORAS' else 30 }}" step="1" value="{{ request.form.get('plazo_retiro','') if vencimiento_enviado else vencimientos.plazo_retiro }}" required></label>
-            <label><span>Unidad</span><select name="unidad_retiro"><option value="HORAS" {{ 'selected' if retiro_unidad == 'HORAS' else '' }}>Horas</option><option value="DIAS" {{ 'selected' if retiro_unidad == 'DIAS' else '' }}>Días</option></select></label>
-          </div>
-        </div>
+    <h2>Horario de atención y reservas</h2>
+    <form method="post"
+          action="{{ url_for('politicas.configuracion') }}"
+          class="panel formulario">
+      {{ csrf() }}
+      <div class="rejilla">
+        {{ campo('hora_apertura','Apertura',configuracion.hora_apertura|hora,tipo='time',requerido=true) }}
+        {{ campo('hora_cierre','Cierre',configuracion.hora_cierre|hora,tipo='time',requerido=true) }}
+        {{ campo('plazo_espera','Plazo de espera',configuracion.plazo_espera|default(2),tipo='number',requerido=true) }}
+        {{ opciones('unidad_espera','Unidad de espera',('HORAS','DIAS'),configuracion.unidad_espera|default('DIAS')) }}
+        {{ campo('plazo_retiro','Plazo para retirar',configuracion.plazo_retiro|default(24),tipo='number',requerido=true) }}
+        {{ opciones('unidad_retiro','Unidad de retiro',('HORAS','DIAS'),configuracion.unidad_retiro|default('HORAS')) }}
       </div>
-      <button class="boton-principal" type="submit">Guardar vencimientos</button>
+      <p>Los plazos de reserva admiten hasta 720 horas o 30 días.</p>
+      <button>Guardar configuración</button>
     </form>
-  </section>
-  <a href="{{ url_for('prestamos.consultar_prestamos') }}">Ir a préstamos</a>
+    <h2>Máximo total de bienes pendientes</h2>
+    <p>El límite abarca todas las categorías de recursos.</p>
+    {% for tipo in tipos %}
+      {% set actual = limites|selectattr('tipo_persona','equalto',tipo)|first|default({}) %}
+      <form method="post"
+            action="{{ url_for('politicas.limite') }}"
+            class="filtros panel">
+        {{ csrf() }}
+        <input type="hidden" name="tipo_persona" value="{{ tipo }}">
+        <strong>{{ tipo|title }}</strong>
+        {{ campo('maximo_articulos','Máximo de bienes',actual.maximo_articulos|default(''),tipo='number',requerido=true) }}
+        <button>Guardar límite</button>
+      </form>
+    {% endfor %}
+  {% else %}
+    <h1>
+      {{ 'Editar' if politica else 'Nueva' }}
+      política
+    </h1>
+    <form method="post" class="formulario panel">
+      {{ csrf() }}
+      <input type="hidden" name="version" value="{{ version }}">
+      <div class="rejilla">
+        {{ opciones('tipo_persona','Tipo de persona',tipos,politica.tipo_persona) }}
+        <label>
+          Categoría
+          <select name="id_categoria" required>
+            {% for c in categorias %}
+              <option value="{{ c.id_categoria }}"
+                      {% if c.id_categoria==politica.id_categoria %}selected{% endif %}>
+                {{ c.nombre }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        {{ campo('plazo_maximo','Plazo máximo',politica.plazo_maximo,tipo='number',requerido=true) }}
+        {{ opciones('unidad_plazo','Unidad',('HORAS','DIAS'),politica.unidad_plazo) }}
+        <label class="check">
+          <input name="permite_salida"
+                 type="checkbox"
+                 value="1"
+                 {% if politica.permite_salida %}checked{% endif %}>
+          Permite salida de la institución
+        </label>
+      </div>
+      <button>Guardar política</button>
+    </form>
+  {% endif %}
 {% endblock %}
-{% block scripts %}{{ super() }}<script src="{{ url_for('static', filename='politica.js') }}" defer></script>{% endblock %}

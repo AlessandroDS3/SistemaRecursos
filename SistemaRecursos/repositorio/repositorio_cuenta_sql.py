@@ -1,0 +1,61 @@
+"""Persistencia de cuentas; los permisos y estados se deciden en servicios/dominio."""
+
+from repositorio.base_sql import RepositorioSQL
+
+
+def cargar_cuentas_bloqueadas(repo):
+    return repo.consultar_sql('''SELECT u.id_usuario,u.dni_persona,u.rol,u.estado_cuenta,
+        p.estado AS estado_persona FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona
+        ORDER BY u.id_usuario FOR UPDATE''')
+
+
+class RepositorioCuentaSQL(RepositorioSQL):
+    def consultar(self, documento):
+        return self.consultar_sql(
+            '''SELECT id_usuario,dni_persona,nombre_usuario,rol,estado_cuenta,
+            ultimo_acceso FROM usuario_sistema WHERE dni_persona=%s''',
+            (documento,),
+            una=True,
+        )
+
+    def cargar_cuentas(self):
+        return cargar_cuentas_bloqueadas(self)
+
+    def estado_persona(self, documento):
+        fila = self.consultar_sql(
+            'SELECT estado FROM persona WHERE dni=%s FOR UPDATE', (documento,), una=True
+        )
+        return fila['estado'] if fila else None
+
+    def guardar(self, documento, nombre, hash_clave):
+        return self.insertar(
+            'usuario_sistema',
+            dict(
+                dni_persona=documento,
+                nombre_usuario=nombre,
+                contrasena_hash=hash_clave,
+                rol='USUARIO',
+                estado_cuenta='ACTIVA',
+            ),
+        )
+
+    def actualizar(self, identificador, datos):
+        permitidos = {'nombre_usuario', 'contrasena_hash', 'rol', 'estado_cuenta'}
+        if set(datos) - permitidos:
+            raise ValueError('Campo de cuenta desconocido.')
+        if datos:
+            columnas = ','.join(campo + '=%s' for campo in datos)
+            self.ejecutar(
+                'UPDATE usuario_sistema SET ' + columnas + ' WHERE id_usuario=%s',
+                (*datos.values(), identificador),
+            )
+
+    def buscar(self, termino):
+        return self.consultar_sql(
+            '''SELECT u.id_usuario,u.dni_persona,u.nombre_usuario,u.rol,u.estado_cuenta,
+            CONCAT(p.nombres,' ',p.apellidos) AS persona FROM usuario_sistema u
+            JOIN persona p ON p.dni=u.dni_persona
+            WHERE p.dni LIKE %s OR p.apellidos LIKE %s OR u.nombre_usuario LIKE %s
+            ORDER BY p.apellidos,p.nombres LIMIT 50''',
+            (f'%{termino}%',) * 3,
+        )

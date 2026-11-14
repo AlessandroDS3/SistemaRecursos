@@ -1,31 +1,25 @@
-"""Procesador del servidor: independiente de las consultas y desactivado en pruebas."""
+"""Ejecuta casos de uso periódicos; no introduce reglas ni abre conexiones SQL."""
+
 import atexit
+import logging
 from threading import Event, Thread
-from time import monotonic
 
 
-def iniciar_procesador_vencimientos(app, servicio, servicio_reservas=None):
+def iniciar_procesador_vencimientos(sanciones, reservas, intervalo=30):
     detener = Event()
 
     def procesar():
-        espera = 1
-        siguiente_revision_reservas = 0
         while not detener.is_set():
-            if servicio_reservas is not None and monotonic() >= siguiente_revision_reservas:
-                siguiente_revision_reservas = monotonic() + 30
+            for servicio in (sanciones, reservas):
                 try:
-                    servicio_reservas.expirar_solicitudes_vencidas()
+                    servicio.procesar_vencimientos()
                 except Exception:
-                    app.logger.exception('No se pudieron expirar solicitudes y reservas; se reintentará.')
-            try:
-                servicio.aplicar_sanciones_vencidas()
-                espera = 1
-            except Exception:
-                app.logger.exception('No se pudieron registrar las sanciones por vencimiento; se reintentará.')
-                espera = min(espera * 2, 30)
-            detener.wait(espera)
+                    logging.getLogger(__name__).exception(
+                        'Falló una revisión de vencimientos; se reintentará.'
+                    )
+            detener.wait(intervalo)
 
-    hilo = Thread(target=procesar, name='sanciones-vencimientos', daemon=True)
-    app.extensions['procesador_vencimientos'] = {'detener': detener, 'hilo': hilo}
+    hilo = Thread(target=procesar, name='vencimientos', daemon=True)
     atexit.register(detener.set)
     hilo.start()
+    return detener

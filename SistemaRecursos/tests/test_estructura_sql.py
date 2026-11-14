@@ -1,4 +1,5 @@
 """La base de demostracion debe utilizar la estructura definida en schema.sql."""
+
 from pathlib import Path
 import os
 import re
@@ -25,19 +26,23 @@ class EstructuraSQLTest(unittest.TestCase):
         import mysql.connector
 
         conexion = mysql.connector.connect(
-            host='127.0.0.1', port=int(os.environ['TEST_MYSQL_PORT']),
+            host='127.0.0.1',
+            port=int(os.environ['TEST_MYSQL_PORT']),
             user=os.environ.get('TEST_MYSQL_USER', 'root'),
             password=os.environ.get('TEST_MYSQL_PASSWORD', ''),
-            connection_timeout=5, use_pure=True,
+            connection_timeout=5,
+            use_pure=True,
         )
         self.addCleanup(conexion.close)
         cursor = conexion.cursor(buffered=True)
         self.addCleanup(cursor.close)
         carpeta = Path(__file__).resolve().parents[1] / 'sql'
-        tablas_esperadas = set(re.findall(
-            r'CREATE TABLE IF NOT EXISTS (\w+)',
-            (carpeta / 'schema.sql').read_text(encoding='utf-8-sig'),
-        ))
+        tablas_esperadas = set(
+            re.findall(
+                r'CREATE TABLE IF NOT EXISTS (\w+)',
+                (carpeta / 'schema.sql').read_text(encoding='utf-8-sig'),
+            )
+        )
         for archivo, base_original in (
             ('schema.sql', 'prestamos_escuela'),
             ('datos_prueba.sql', 'prestamos_escuela_pruebas'),

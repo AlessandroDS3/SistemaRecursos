@@ -1,0 +1,11 @@
+[tool.black]
+line-length = 100
+target-version = ['py310']
+skip-string-normalization = true
+extend-exclude = 'datos_locales|\.venv'
+
+[tool.djlint]
+profile = 'jinja'
+indent = 2
+max_line_length = 110
+preserve_blank_lines = true

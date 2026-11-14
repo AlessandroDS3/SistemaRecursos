@@ -1,0 +1,59 @@
+{% macro csrf() %}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% endmacro %}
+{% macro campo(nombre, etiqueta, valor='', tipo='text', requerido=false, maximo=255) %}
+  <label>
+    {{ etiqueta }}
+    <input name="{{ nombre }}"
+           type="{{ tipo }}"
+           value="{{ valor if valor is not none else '' }}"
+           {% if requerido %}required{% endif %}
+           {% if tipo in ('text','email','password') %}maxlength="{{ maximo }}"{% endif %}
+           {% if tipo == 'number' %}min="1" step="1"{% endif %}>
+  </label>
+{% endmacro %}
+{% macro opciones(nombre, etiqueta, valores, actual='') %}
+  <label>
+    {{ etiqueta }}
+    <select name="{{ nombre }}" required>
+      {% for valor in valores %}
+        <option value="{{ valor }}" {% if actual == valor %}selected{% endif %}>
+          {{ valor|replace('_', ' ')|title }}
+        </option>
+      {% endfor %}
+    </select>
+  </label>
+{% endmacro %}
+{% macro historial(filas) %}
+  <h2>Historial</h2>
+  <div class="tabla">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Cambio</th>
+          <th>Observación</th>
+          <th>Registrado por</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in filas %}
+          <tr>
+            <td>{{ h.fecha|fecha }}</td>
+            <td>
+              {{ h.estado_anterior or 'Inicio' }}
+              →
+              {{ h.estado_nuevo }}
+            </td>
+            <td>{{ h.observacion or '' }}</td>
+            <td>{{ h.responsable or 'Sistema' }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4">Sin registros.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endmacro %}

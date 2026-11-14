@@ -1,95 +1,72 @@
-from __future__ import annotations
-from dominio.gestion_personas_usuarios.personas import validar_dni
-from dominio.gestion_recursos.recursos import (
+from dominio.compartido.validacion import NoEncontrado
+from dominio.compartido.validacion import Conflicto, entero, texto
+from dominio.gestion_personas_usuarios.acceso import exigir_permiso
+from dominio.gestion_recursos.bien_material import (
     BienMaterial,
-    ConflictoRecursoError,
-    ESTADOS_CAMBIO_MANUAL,
-    ESTADOS_GESTION_PRESTAMOS,
-    EstadoBienMaterial,
+    ESTADOS_BIEN,
     IRepositorioBienMaterial,
-    IRepositorioRecurso,
-    ResultadoBienes,
-    crear_bien_material,
+    validar_cambio_estado,
 )
-from dominio.compartido.validaciones import entero as identificador, texto
 
 
 class ServicioAplicacionBienMaterial:
-    def __init__(self, repositorio_bienes: IRepositorioBienMaterial, repositorio_recursos: IRepositorioRecurso):
-        self.repositorio: IRepositorioBienMaterial = repositorio_bienes
-        self.recursos: IRepositorioRecurso = repositorio_recursos
+    def __init__(self, repositorio: IRepositorioBienMaterial):
+        self.repositorio = repositorio
 
-    def registrar_bien_material(self, datos) -> BienMaterial:
-        datos = dict(datos, estado="DISPONIBLE")
-        datos.pop("id_bien", None)
-        bien = crear_bien_material(datos)
-        if not self.recursos.consultar_recurso(bien.id_recurso):
-            raise LookupError("No se encontró el recurso.")
-        return self.repositorio.registrar_bien_material(bien)
+    def consultar(self, identificador):
+        fila = self.repositorio.consultar(entero(identificador))
+        if fila is None:
+            raise NoEncontrado('Bien inexistente.')
+        return fila
 
-    def consultar_bien_material(self, id_bien) -> BienMaterial:
-        bien = self.repositorio.consultar_bien_material(identificador(id_bien))
-        if not bien:
-            raise LookupError("No se encontró el bien.")
-        return bien
-
-    def consultar_bienes_materiales(self, filtros=None) -> ResultadoBienes:
-        filtros = filtros or {}
-        valores = {"q": texto(filtros.get("q", ""), "Búsqueda", 120)}
-        if filtros.get("estado"):
-            try:
-                valores["estado"] = EstadoBienMaterial(filtros["estado"]).value
-            except (ValueError, TypeError):
-                raise ValueError("Selecciona un estado válido.") from None
-        if filtros.get("id_recurso"):
-            valores["id_recurso"] = identificador(filtros["id_recurso"])
-        return self.repositorio.consultar_bienes_materiales(valores)
-
-    def contar_disponibles(self) -> int:
-        return self.repositorio.contar_disponibles()
-
-    def actualizar_bien_material(self, datos) -> BienMaterial:
-        actual = self.consultar_bien_material(datos.get("id_bien"))
-        datos = dict(
-            datos,
-            id_bien=actual.id_bien,
-            id_recurso=actual.id_recurso,
-            estado=actual.estado.value,
-        )
-        return self.repositorio.actualizar_bien_material(crear_bien_material(datos))
-
-    def eliminar_bien_material(self, id_bien) -> None:
-        self.repositorio.eliminar_bien_material(self.consultar_bien_material(id_bien).id_bien)
-
-
-    def cambiar_estado_bien_material(self, datos, dni_responsable) -> BienMaterial:
-        bien = self.consultar_bien_material(datos.get("id_bien"))
-        estado = datos.get("estado")
-        if estado not in ESTADOS_CAMBIO_MANUAL or bien.estado in ESTADOS_GESTION_PRESTAMOS:
-            raise ConflictoRecursoError(
-                "No se puede alterar manualmente un préstamo o una reserva."
+    def listar(self, filtros):
+        estado = filtros.get('estado', '')
+        if estado and estado not in ESTADOS_BIEN:
+            raise ValueError('Estado de bien inválido.')
+        return self.repositorio.listar(
+            dict(
+                q=texto(filtros.get('q'), 'Búsqueda', 120),
+                estado=estado,
+                id_recurso=entero(filtros['id_recurso']) if filtros.get('id_recurso') else None,
             )
-        esperado = datos.get("estado_esperado")
-        if esperado != bien.estado.value:
-            raise ConflictoRecursoError(
-                "El estado cambió. Recarga el bien antes de intentarlo otra vez."
-            )
-        motivo = texto(datos.get("motivo"), "Motivo", 255, True)
-        # Validación del dominio antes de persistir; el repositorio vuelve a comprobar
-        # la versión del estado bajo bloqueo para evitar cambios concurrentes.
-        bien.cambiar_estado(estado)
-        return self.repositorio.cambiar_estado_bien_material(
-            bien.id_bien,
-            estado,
-            motivo,
-            validar_dni(dni_responsable),
-            esperado,
         )
 
-    def consultar_detalle_bien_material(self, id_bien):
-        bien = self.consultar_bien_material(id_bien)
-        return {
-            "bien": bien,
-            "historial": self.repositorio.consultar_historial_bien_material(bien.id_bien),
-            "prestamo_pendiente": self.repositorio.consultar_prestamo_pendiente(bien.id_bien),
-        }
+    def guardar(self, datos, actor, identificador=None):
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
+            actual = (
+                operacion.consultar(entero(identificador), bloquear=True) if identificador else None
+            )
+            if identificador and actual is None:
+                raise NoEncontrado('Bien inexistente.')
+            valores = {
+                k: datos[k]
+                for k in BienMaterial.__dataclass_fields__
+                if k in datos and k not in ('id_bien', 'id_recurso')
+            }
+            valores['id_recurso'] = actual['id_recurso'] if actual else datos.get('id_recurso')
+            valores.setdefault('codigo_inventario', None)
+            bien = BienMaterial(**valores, id_bien=actual['id_bien'] if actual else None)
+            return operacion.guardar(bien)
+
+    def cambiar_estado(self, identificador, datos, actor):
+        motivo = texto(datos.get('motivo'), 'Motivo', 255, True)
+        with self.repositorio.transaccion() as operacion:
+            cuenta = exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
+            bien = operacion.consultar(entero(identificador), bloquear=True)
+            if bien is None:
+                raise NoEncontrado('Bien inexistente.')
+            validar_cambio_estado(bien['estado'], datos.get('estado'), datos.get('estado_esperado'))
+            if operacion.prestamo_pendiente(bien['id_bien']):
+                raise Conflicto('El bien tiene una entrega pendiente.')
+            operacion.cambiar_estado(
+                bien['id_bien'], bien['estado'], datos['estado'], motivo, cuenta['dni_persona']
+            )
+
+    def historial(self, identificador):
+        return self.repositorio.consultar_historial('BIEN_MATERIAL', entero(identificador))
+
+    def eliminar(self, identificador, actor):
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
+            operacion.eliminar(entero(identificador))

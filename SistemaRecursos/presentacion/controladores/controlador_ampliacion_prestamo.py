@@ -1,27 +1,22 @@
-from dominio.gestion_prestamos.prestamos import ConflictoAmpliacionError
-from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, flash, g, redirect, request, url_for
 from presentacion.seguridad import requiere_permiso
-from servicios.servicio_ampliacion_prestamo import ServicioAplicacionAmpliacionPrestamo
 
 
 class ControladorAmpliacionPrestamo:
-    def __init__(self, servicio: ServicioAplicacionAmpliacionPrestamo):
+    def __init__(self, servicio):
         self.servicio = servicio
-        self.blueprint = Blueprint('ampliaciones', __name__, url_prefix='/prestamos')
-        self.blueprint.add_url_rule('/<int:id_prestamo>/detalles/<int:id_detalle>/ampliar',
-                                    'ampliar_plazo', self.ampliar_plazo, methods=['POST'])
+        self.blueprint = Blueprint('ampliaciones', __name__)
+        self.blueprint.add_url_rule(
+            '/prestamos/<int:identificador>/detalles/<int:detalle_id>/ampliar',
+            'ampliar',
+            self.ampliar,
+            methods=['POST'],
+        )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    def ampliar_plazo(self, id_prestamo, id_detalle):
-        try:
-            self.servicio.ampliar_plazo(
-                id_prestamo, id_detalle, request.form.get('cantidad'), request.form.get('unidad'),
-                request.form.get('fecha_actual'), g.usuario.id_usuario, request.form.get('motivo', ''))
-        except ConflictoAmpliacionError as error:
-            return render_template('base.html', mensaje_error=str(error)), 409
-        except ValueError as error:
-            return render_template('base.html', mensaje_error=str(error)), 400
-        except LookupError as error:
-            return render_template('base.html', mensaje_error=str(error)), 404
-        flash('Plazo ampliado. La nueva fecha de devolución ya está vigente.', 'success')
-        return redirect(url_for('prestamos.consultar_prestamo', id_prestamo=id_prestamo, _anchor='ampliaciones'))
+    def ampliar(self, identificador, detalle_id):
+        self.servicio.ampliar(
+            identificador, detalle_id, request.form.to_dict(), g.usuario.id_usuario
+        )
+        flash('Plazo ampliado.')
+        return redirect(url_for('prestamos.detalle', identificador=identificador))
