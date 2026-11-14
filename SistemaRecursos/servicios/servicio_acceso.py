@@ -8,7 +8,7 @@ from hashlib import sha256
 from dominio.gestion_personas_usuarios.nombre_rol import NombreRol
 from servicios.validacion_identificadores import identificador
 from werkzeug.security import check_password_hash, generate_password_hash
-from dominio.gestion_personas_usuarios.usuario_sistema import UsuarioSistema
+from dominio.gestion_personas_usuarios.usuario_sistema import UsuarioSistema, IdentidadAcceso
 from dominio.gestion_personas_usuarios.credenciales import Credenciales
 
 
@@ -88,7 +88,9 @@ class ServicioAplicacionAcceso:
             raise ValueError("El rol Usuario debe existir para crear cuentas.")
         hash_clave = self._hash_clave(clave)
         cuenta = UsuarioSistema(
-            persona=persona, rol=rol, credenciales=Credenciales(nombre_usuario, hash_clave)
+            persona=IdentidadAcceso(dni=persona.dni, nombres=persona.nombres,
+                                   apellidos=persona.apellidos, estado=persona.estado.value),
+            rol=rol, credenciales=Credenciales(nombre_usuario, hash_clave)
         )
         return self.usuarios.registrar_cuenta(cuenta)
 

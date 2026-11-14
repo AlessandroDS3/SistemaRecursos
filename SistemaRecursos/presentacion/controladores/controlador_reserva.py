@@ -2,16 +2,19 @@ from __future__ import annotations
 from servicios.servicio_reserva import ServicioAplicacionReserva
 from servicios.servicio_recurso import ServicioAplicacionRecurso
 from servicios.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
+from servicios.servicio_persona import ServicioAplicacionPersona
 from flask import Blueprint, request, redirect, url_for, g, abort, flash, render_template
 from presentacion.seguridad import requiere_permiso
 from dominio.gestion_prestamos.reserva import EstadoReserva
 
 
 class ControladorReserva:
-    def __init__(self, servicio: ServicioAplicacionReserva, recursos: ServicioAplicacionRecurso, politicas: ServicioAplicacionPoliticaPrestamo):
+    def __init__(self, servicio: ServicioAplicacionReserva, recursos: ServicioAplicacionRecurso,
+                 politicas: ServicioAplicacionPoliticaPrestamo, personas: ServicioAplicacionPersona):
         self.servicio: ServicioAplicacionReserva = servicio
         self.recursos: ServicioAplicacionRecurso = recursos
         self.politicas: ServicioAplicacionPoliticaPrestamo = politicas
+        self.personas = personas
         self.blueprint = Blueprint("reservas", __name__, url_prefix="/reservas")
         for ruta, nombre, vista, metodos in [
             ("", "consultar_reservas", self.consultar_reservas, ["GET"]),
@@ -46,10 +49,11 @@ class ControladorReserva:
         if not request.args.get("recurso"):
             return redirect(url_for("recursos.consultar_recursos"))
         recurso = self.recursos.consultar_recurso(request.args["recurso"])
+        tipo_persona = self.personas.consultar_persona(g.usuario.persona.dni).tipo
         politicas = [p for p in self.politicas.consultar_politicas() if p.id_categoria == recurso.id_categoria
-                      and p.tipo_persona == g.usuario.persona.tipo]
+                      and p.tipo_persona == tipo_persona]
         return render_template("vista_reserva.html", modo="formulario", gestionar=gestionar,
-                               recurso=recurso, politicas=politicas)
+                               recurso=recurso, politicas=politicas, tipo_persona=tipo_persona)
 
     @requiere_permiso()
     def registrar_reserva(self):

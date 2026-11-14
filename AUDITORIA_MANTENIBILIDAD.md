@@ -260,3 +260,13 @@ La importación de ambos SQL se mantiene exclusivamente en `test_estructura_sql.
 Se añadió `SistemaRecursos/verificar.py` y se documentó el comando en el README. Requiere `TEST_MYSQL_PORT` y devuelve un resultado incompleto si se omite cualquier prueba; no presenta una ejecución sin integración como verificación completa. No se modificaron tablas, datos de demostración, reglas de negocio ni diagramas durante esta corrección.
 
 Resultado final: `python verificar.py`, ejecutado con MySQL 8.0.46 temporal en el puerto 13307, completó **76 pruebas en 117,811 segundos: OK, sin fallos, errores ni pruebas omitidas**. También se comprobó que la ausencia de `TEST_MYSQL_PORT` devuelve código 2 con una explicación. El hallazgo **A08 queda resuelto** para la preparación y ejecución de la suite actual; los otros hallazgos no se consideran resueltos por este resultado.
+
+## Prueba local: desacoplar el login de la ficha de persona
+
+En la rama `modificacion-de-archivos-login`, partiendo del commit local `1b24d49`, se sustituyó la construcción de la ficha completa en el repositorio de acceso por `IdentidadAcceso`, definida en el mismo archivo que `UsuarioSistema`. Guarda DNI, nombres, apellidos y estado. Se conservan los contratos y el recorrido de formulario, controlador, servicio y repositorio; no se añadieron archivos de producción ni se modificó SQL estructural.
+
+La consulta principal pasó de cinco tablas a dos (`usuario_sistema` y `persona`); la carga de permisos sigue siendo una consulta independiente. El repositorio de acceso ya no utiliza `FabricaPersona`. La pantalla de reserva obtiene el tipo desde el servicio de personas al necesitarlo. Los formularios de cuenta y la navegación conservan el acceso a los datos básicos de identidad.
+
+La adaptación afecta a seis archivos de producción y dos de pruebas, además de esta documentación. Se añadieron casos que impiden construir fichas durante login y recuperación de sesión, que separan la validación del correo de la autenticación y que verifican la carga del tipo al abrir una reserva. Se mantienen las comprobaciones de contraseñas, estados, CSRF, permisos y revocación de sesión por cambio de contraseña.
+
+Verificación completa con MySQL temporal: **79 pruebas en 145,434 segundos, OK y sin omisiones**. El cambio queda local y sin commit para revisar la comparación con `1b24d49`. No demuestra una mejora de tiempos bajo carga: se comprobó la reducción de dependencias y la conservación de los comportamientos cubiertos por las pruebas.

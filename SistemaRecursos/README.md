@@ -83,6 +83,10 @@ El sistema comprueba la contraseña, el estado de la cuenta y sus permisos. La s
 
 ## Organización del código
 
+El login conserva el recorrido `vista_acceso.html → controlador_acceso.py → servicio_acceso.py → IRepositorioAcceso → repositorio_acceso_sql.py`. La cuenta contiene credenciales, estado, rol, permisos y una `IdentidadAcceso` (DNI, nombres, apellidos y estado), definida en `usuario_sistema.py`. Esa identidad no es la ficha completa de la persona.
+
+La consulta principal de acceso une únicamente `usuario_sistema` y `persona`; los permisos se consultan aparte. No carga CUI, ciclo, matrícula, correo, teléfono ni datos de docente o administrativo, ni utiliza `FabricaPersona`. Las fichas completas siguen perteneciendo al módulo de personas. El formulario de reserva consulta su tipo de persona mediante `ServicioAplicacionPersona` al abrirse, en lugar de depender de datos académicos cargados durante el login.
+
 - `app.py`: configura e inicia la aplicación.
 - `dominio/`: entidades, validaciones y reglas del negocio.
 - `servicios/`: coordina las operaciones del sistema.

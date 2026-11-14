@@ -9,9 +9,8 @@ from werkzeug.security import generate_password_hash
 
 from app import create_app
 from dominio.gestion_personas_usuarios.credenciales import Credenciales
-from dominio.gestion_personas_usuarios.fabrica_persona import FabricaPersona
 from dominio.gestion_personas_usuarios.rol import Rol
-from dominio.gestion_personas_usuarios.usuario_sistema import EstadoCuenta, UsuarioSistema
+from dominio.gestion_personas_usuarios.usuario_sistema import EstadoCuenta, UsuarioSistema, IdentidadAcceso
 from presentacion.seguridad import requiere_permiso, token_csrf
 
 
@@ -39,10 +38,7 @@ class AccesoFlaskTest(unittest.TestCase):
         cls.hash_clave = generate_password_hash(cls.clave)
 
     def setUp(self):
-        persona = FabricaPersona.construir(dict(
-            tipo="ESTUDIANTE", dni="12345678", cui="87654321", nombres="Ana",
-            apellidos="Prueba", correo="ana@example.com", estado_matricula="VIGENTE",
-        ))
+        persona = IdentidadAcceso(dni='12345678', nombres='Ana', apellidos='Prueba')
         self.cuenta = UsuarioSistema(
             id_usuario=1, persona=persona, rol=Rol(nombre="USUARIO"),
             credenciales=Credenciales("ana", self.hash_clave),

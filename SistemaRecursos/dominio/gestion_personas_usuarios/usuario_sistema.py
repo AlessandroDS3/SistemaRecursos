@@ -2,7 +2,6 @@ from enum import Enum
 from dominio.gestion_personas_usuarios.nombre_rol import NombreRol
 from dataclasses import dataclass
 from datetime import datetime
-from dominio.gestion_personas_usuarios.persona import Persona
 from dominio.gestion_personas_usuarios.rol import Rol
 from dominio.gestion_personas_usuarios.credenciales import Credenciales
 
@@ -14,8 +13,24 @@ class EstadoCuenta(str, Enum):
 
 
 @dataclass(kw_only=True)
+class IdentidadAcceso:
+    """Datos de identidad para acceder; la ficha de persona se consulta aparte."""
+    dni: str
+    nombres: str
+    apellidos: str
+    estado: str = 'ACTIVA'
+
+    @property
+    def nombre_completo(self):
+        return f'{self.nombres} {self.apellidos}'
+
+    def esta_activa(self):
+        return self.estado == 'ACTIVA'
+
+
+@dataclass(kw_only=True)
 class UsuarioSistema:
-    persona: Persona
+    persona: IdentidadAcceso
     rol: Rol
     credenciales: Credenciales
     id_usuario: int | None = None

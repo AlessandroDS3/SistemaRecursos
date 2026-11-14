@@ -7,7 +7,7 @@ from dominio.gestion_personas_usuarios.i_repositorio_acceso import IRepositorioA
 from dominio.gestion_personas_usuarios.usuario_sistema import UsuarioSistema
 from dominio.gestion_personas_usuarios.credenciales import Credenciales
 from dominio.gestion_personas_usuarios.usuario_sistema import EstadoCuenta
-from dominio.gestion_personas_usuarios.fabrica_persona import FabricaPersona
+from dominio.gestion_personas_usuarios.usuario_sistema import IdentidadAcceso
 from dominio.gestion_personas_usuarios.rol import Rol
 from repositorio.conexion_mysql import MySQLConnection
 from dominio.gestion_personas_usuarios.usuario_sistema import es_administrador_activo, validar_conservacion_administrador
@@ -18,20 +18,10 @@ CONSULTA_CUENTAS = """
     SELECT u.id_usuario, u.nombre_usuario, u.contrasena_hash,
            u.ultimo_acceso, u.estado_cuenta,
            p.dni, p.nombres, p.apellidos,
-           p.telefono, p.correo, p.estado,
-           e.cui, e.ciclo,
-           e.estado_matricula,
-           d.codigo_docente, d.departamento_academico, d.facultad, d.escuela_profesional,
-           a.codigo_empleado, a.area,
-           CASE WHEN e.dni IS NOT NULL THEN 'ESTUDIANTE'
-                WHEN d.dni IS NOT NULL THEN 'DOCENTE'
-                WHEN a.dni IS NOT NULL THEN 'ADMINISTRATIVO' END AS tipo,
+           p.estado AS estado_persona,
            u.rol AS nombre_rol
     FROM usuario_sistema u
     JOIN persona p ON p.dni = u.dni_persona
-    LEFT JOIN estudiante e ON e.dni = p.dni
-    LEFT JOIN docente d ON d.dni = p.dni
-    LEFT JOIN administrativo a ON a.dni = p.dni
 """
 COLUMNAS_BUSQUEDA_CUENTA = {
     "nombre_usuario": "u.nombre_usuario",
@@ -61,7 +51,9 @@ class RepositorioAccesoSQL(IRepositorioAcceso):
         rol = Rol(nombre=fila["nombre_rol"])
         cargar_permisos_roles(cursor, [rol])
         return UsuarioSistema(
-            id_usuario=fila["id_usuario"], persona=FabricaPersona.construir(fila),
+            id_usuario=fila["id_usuario"],
+            persona=IdentidadAcceso(dni=fila['dni'], nombres=fila['nombres'],
+                                   apellidos=fila['apellidos'], estado=fila['estado_persona']),
             rol=rol, credenciales=Credenciales(fila["nombre_usuario"], fila["contrasena_hash"]),
             ultimo_acceso=fila["ultimo_acceso"], estado_cuenta=fila["estado_cuenta"],
         )

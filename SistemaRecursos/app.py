@@ -157,7 +157,7 @@ def create_app(config=None, repositorios=None, repositorios_recursos=None):
     app.register_blueprint(ControladorBienMaterial(servicio_bien, servicio_recurso).blueprint)
 
     app.register_blueprint(ControladorReserva(
-        servicio_reserva, servicio_recurso, servicio_politica
+        servicio_reserva, servicio_recurso, servicio_politica, servicio_persona
     ).blueprint)
     app.register_blueprint(ControladorPrestamo(servicio_prestamo, servicio_politica, servicio_sancion).blueprint)
     app.register_blueprint(ControladorAmpliacionPrestamo(servicio_ampliacion).blueprint)

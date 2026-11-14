@@ -41,6 +41,38 @@ class PersonasAccesoTest(unittest.TestCase):
         self.assertEqual(uno.get("/personas").status_code, 302)
         self.assertEqual(dos.get("/personas").status_code, 200)
 
+    def test_login_y_sesion_no_construyen_la_ficha_de_persona(self):
+        with patch.object(FabricaPersona, 'construir', side_effect=AssertionError('El login no carga fichas')):
+            for usuario, clave in (('admin', 'AdminPrueba2026!'),
+                                   ('encargado1', 'EncargadoPrueba2026!'),
+                                   ('usuario1', 'UsuarioPrueba2026!')):
+                with self.subTest(usuario=usuario):
+                    cliente = self.login(usuario, clave)
+                    self.assertEqual(cliente.get('/').status_code, 200)
+            cuenta = self.app.extensions['acceso'].autenticar('usuario1', 'UsuarioPrueba2026!')
+            self.assertEqual(cuenta.persona.dni, '02167885')
+            self.assertFalse(hasattr(cuenta.persona, 'cui'))
+            self.assertFalse(hasattr(cuenta.persona, 'tipo'))
+
+    def test_correo_de_ficha_no_interviene_en_la_autenticacion(self):
+        with self.db.sesion(escritura=True) as c:
+            c.execute("UPDATE persona SET correo='correo-incompleto' WHERE dni='02167885'")
+        cuenta = self.app.extensions['acceso'].autenticar('usuario1', 'UsuarioPrueba2026!')
+        self.assertIsNotNone(cuenta)
+        with self.assertRaises(ValidacionPersonaError):
+            RepositorioPersonaSQL(self.db).consultar_persona('02167885')
+
+    def test_reserva_consulta_el_tipo_de_persona_solo_al_abrir_su_formulario(self):
+        from soporte_mysql import preparar_catalogo
+        preparar_catalogo(self)
+        self.cn.commit()
+        cliente = self.login('usuario1', 'UsuarioPrueba2026!')
+        with patch.object(FabricaPersona, 'construir', wraps=FabricaPersona.construir) as construir:
+            pagina = cliente.get('/reservas/nueva?recurso=1&tipo=RESERVA')
+        self.assertEqual(pagina.status_code, 200)
+        self.assertIn(b'data-tipo-persona="ESTUDIANTE"', pagina.data)
+        self.assertEqual(construir.call_count, 1)
+
     def test_gestor_de_cuentas_sin_consulta_ni_acceso_a_admin(self):
         # Este rol de prueba puede administrar cuentas, pero no consultar fichas.
         with self.db.sesion(escritura=True) as c:

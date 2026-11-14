@@ -18,7 +18,7 @@
     <tbody>
       {% for p in politicas %}
         <tr data-politica-persona="{{ p.tipo_persona.value }}"
-            {% if modo == "formulario" and p.tipo_persona != g.usuario.persona.tipo %}hidden{% endif %}>
+            {% if modo == "formulario" and p.tipo_persona != tipo_persona %}hidden{% endif %}>
           <td>{{ p.tipo_persona.value|title }}</td>
           <td>{{ p.plazo_texto }}</td>
           <td>{{ 'Permitida' if p.permite_salida else 'Dentro de la institución' }}</td>
@@ -149,7 +149,7 @@
 
   <p id="politica-no-disponible" hidden>No hay una política configurada para tu tipo de persona.</p>
 
-  <form method="post" action="{{ url_for('reservas.registrar_reserva') }}" class="panel" id="form-reserva" data-tipo-persona="{{ g.usuario.persona.tipo }}">
+  <form method="post" action="{{ url_for('reservas.registrar_reserva') }}" class="panel" id="form-reserva" data-tipo-persona="{{ tipo_persona }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="id_recurso" value="{{ recurso.id_recurso }}">
 
