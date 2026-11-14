@@ -5,7 +5,9 @@ import logging
 import os
 from pathlib import Path
 from secrets import token_hex
+
 from flask import Flask, g, redirect, render_template, url_for
+from flask_wtf.csrf import CSRFProtect
 from mysql.connector import Error as ErrorMySQL, IntegrityError
 from werkzeug.exceptions import HTTPException
 
@@ -67,40 +69,24 @@ def clave_local():
     return clave
 
 
-def create_app(config=None):
-    app = Flask(
-        __name__, template_folder='presentacion/vistas', static_folder='presentacion/static'
-    )
-    app.config.update(
-        SECRET_KEY=clave_local(),
-        PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
-        SESSION_REFRESH_EACH_REQUEST=False,
-        SESSION_COOKIE_NAME='recursos_rehecho',
-        SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE='Lax',
-        MAX_CONTENT_LENGTH=1024 * 1024,
-        INICIAR_PROCESADOR_VENCIMIENTOS=False,
-    )
-    app.config.update(config or {})
-    conexion = MySQLConnection(app.config.get('MYSQL_CONFIG'))
-    servicios = dict(
-        acceso=ServicioAplicacionAcceso(RepositorioAccesoSQL(conexion)),
-        cuentas=ServicioAplicacionCuenta(RepositorioCuentaSQL(conexion)),
-        personas=ServicioAplicacionPersona(RepositorioPersonaSQL(conexion)),
-        roles=ServicioAplicacionRol(RepositorioRolSQL(conexion)),
-        recursos=ServicioAplicacionRecurso(RepositorioRecursoSQL(conexion)),
-        bienes=ServicioAplicacionBienMaterial(RepositorioBienMaterialSQL(conexion)),
-        politicas=ServicioAplicacionPoliticaPrestamo(RepositorioPoliticaPrestamoSQL(conexion)),
-        prestamos=ServicioAplicacionPrestamo(RepositorioPrestamoSQL(conexion)),
-        reservas=ServicioAplicacionReserva(RepositorioReservaSQL(conexion)),
-        ampliaciones=ServicioAplicacionAmpliacionPrestamo(
-            RepositorioAmpliacionPrestamoSQL(conexion)
-        ),
-        sanciones=ServicioAplicacionSancion(RepositorioSancionSQL(conexion)),
-        reportes=ServicioAplicacionReporte(RepositorioReporteSQL(conexion)),
-    )
-    app.extensions['servicios'] = servicios
-    configurar_seguridad(app, servicios['acceso'])
+def crear_servicios(conexion):
+    return {
+        'acceso': ServicioAplicacionAcceso(RepositorioAccesoSQL(conexion)),
+        'cuentas': ServicioAplicacionCuenta(RepositorioCuentaSQL(conexion)),
+        'personas': ServicioAplicacionPersona(RepositorioPersonaSQL(conexion)),
+        'roles': ServicioAplicacionRol(RepositorioRolSQL(conexion)),
+        'recursos': ServicioAplicacionRecurso(RepositorioRecursoSQL(conexion)),
+        'bienes': ServicioAplicacionBienMaterial(RepositorioBienMaterialSQL(conexion)),
+        'politicas': ServicioAplicacionPoliticaPrestamo(RepositorioPoliticaPrestamoSQL(conexion)),
+        'prestamos': ServicioAplicacionPrestamo(RepositorioPrestamoSQL(conexion)),
+        'reservas': ServicioAplicacionReserva(RepositorioReservaSQL(conexion)),
+        'ampliaciones': ServicioAplicacionAmpliacionPrestamo(RepositorioAmpliacionPrestamoSQL(conexion)),
+        'sanciones': ServicioAplicacionSancion(RepositorioSancionSQL(conexion)),
+        'reportes': ServicioAplicacionReporte(RepositorioReporteSQL(conexion)),
+    }
+
+
+def registrar_controladores(app, servicios):
     controladores = [
         ControladorAcceso(servicios['acceso']),
         ControladorCuenta(servicios['cuentas']),
@@ -118,6 +104,8 @@ def create_app(config=None):
     for controlador in controladores:
         app.register_blueprint(controlador.blueprint)
 
+
+def registrar_inicio(app):
     @app.get('/')
     def inicio():
         for permiso, endpoint in (
@@ -129,6 +117,8 @@ def create_app(config=None):
                 return redirect(url_for(endpoint))
         return render_template('inicio.html')
 
+
+def registrar_filtros(app):
     @app.template_filter('fecha')
     def fecha(valor):
         if not valor:
@@ -146,6 +136,8 @@ def create_app(config=None):
             return f'{segundos // 3600:02d}:{segundos % 3600 // 60:02d}'
         return valor.strftime('%H:%M') if hasattr(valor, 'strftime') else str(valor)[:5]
 
+
+def registrar_errores(app):
     def mostrar_error(error, codigo):
         return render_template('error.html', mensaje=str(error), codigo=codigo), codigo
 
@@ -170,6 +162,35 @@ def create_app(config=None):
             'No se pudo acceder a la base de datos. Revisa la conexión y vuelve a intentar.', 503
         )
 
+
+def create_app(config=None):
+    app = Flask(
+        __name__, template_folder='presentacion/vistas', static_folder='presentacion/static'
+    )
+    app.config.update(
+        SECRET_KEY=clave_local(),
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+        SESSION_REFRESH_EACH_REQUEST=False,
+        SESSION_COOKIE_NAME='recursos_rehecho',
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+        MAX_CONTENT_LENGTH=1024 * 1024,
+        INICIAR_PROCESADOR_VENCIMIENTOS=False,
+        WTF_CSRF_ENABLED=True,
+    )
+    app.config.update(config or {})
+    CSRFProtect(app)
+
+    conexion = MySQLConnection(app.config.get('MYSQL_CONFIG'))
+    servicios = crear_servicios(conexion)
+    app.extensions['servicios'] = servicios
+
+    configurar_seguridad(app, servicios['acceso'])
+    registrar_controladores(app, servicios)
+    registrar_inicio(app)
+    registrar_filtros(app)
+    registrar_errores(app)
+
     if app.config['INICIAR_PROCESADOR_VENCIMIENTOS']:
         app.extensions['detener_vencimientos'] = iniciar_procesador_vencimientos(
             servicios['sanciones'], servicios['reservas']
@@ -182,3 +203,4 @@ if __name__ == '__main__':
     create_app({'INICIAR_PROCESADOR_VENCIMIENTOS': True}).run(
         host='127.0.0.1', port=int(os.getenv('PORT', '5001'))
     )
+

@@ -50,14 +50,14 @@ class ServicioAplicacionPoliticaPrestamo:
         plazos = ConfiguracionReservas(
             **{k: datos[k] for k in ConfiguracionReservas.__dataclass_fields__ if k in datos}
         )
-        valores = dict(
-            hora_apertura=horario.hora_apertura,
-            hora_cierre=horario.hora_cierre,
-            plazo_espera=plazos.plazo_espera,
-            unidad_espera=plazos.unidad_espera,
-            plazo_retiro=plazos.plazo_retiro,
-            unidad_retiro=plazos.unidad_retiro,
-        )
+        valores = {
+            "hora_apertura": horario.hora_apertura,
+            "hora_cierre": horario.hora_cierre,
+            "plazo_espera": plazos.plazo_espera,
+            "unidad_espera": plazos.unidad_espera,
+            "plazo_retiro": plazos.plazo_retiro,
+            "unidad_retiro": plazos.unidad_retiro,
+        }
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'POLITICAS_GESTIONAR')
             operacion.guardar_configuracion_general(valores)
