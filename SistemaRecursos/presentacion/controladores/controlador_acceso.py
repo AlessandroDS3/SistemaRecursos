@@ -1,6 +1,7 @@
 from __future__ import annotations
+from flask import Blueprint, g, redirect, render_template, request, session, url_for
+from presentacion.seguridad import iniciar_sesion
 from servicios.servicio_acceso import ServicioAplicacionAcceso
-from flask import Blueprint, render_template, request, redirect, url_for, session, g
 
 
 class ControladorAcceso:
@@ -21,9 +22,7 @@ class ControladorAcceso:
                 mensaje = "Credenciales incorrectas o cuenta sin acceso."
                 formulario = render_template("vista_acceso.html", error=mensaje)
                 return formulario
-            session.clear()
-            session["id_usuario"] = cuenta.id_usuario
-            session["version_credenciales"] = self.servicio.version_credenciales(cuenta)
+            iniciar_sesion(cuenta)
             return redirect(url_for("inicio"))
         return render_template("vista_acceso.html")
 

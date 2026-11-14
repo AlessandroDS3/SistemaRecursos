@@ -3,9 +3,9 @@ import os
 import unittest
 from unittest.mock import patch
 
-from dominio.gestion_control.horario_atencion import HorarioAtencion
-from dominio.gestion_control.politica_prestamo import PoliticaPrestamo
-from dominio.gestion_prestamos.ampliacion_prestamo import AmpliacionPrestamo, ConflictoAmpliacionError
+from dominio.control import HorarioAtencion
+from dominio.control import PoliticaPrestamo
+from dominio.prestamos import AmpliacionPrestamo, ConflictoAmpliacionError
 
 
 class AmpliacionDominioTest(unittest.TestCase):

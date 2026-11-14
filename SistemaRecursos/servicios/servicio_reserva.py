@@ -1,13 +1,17 @@
 from __future__ import annotations
-from dominio.resultados_consulta import ReservaDetalle, ResultadoReservas
-from dominio.gestion_prestamos.i_repositorio_reserva import IRepositorioReserva
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
-from datetime import datetime, timezone, timedelta
-from dominio.gestion_prestamos.reserva import Reserva, AccionReserva, TipoSolicitud
-from dominio.gestion_prestamos.reserva import EstadoReserva
-from servicios.validacion_identificadores import identificador
-from dominio.gestion_recursos.validacion_recurso import texto
-from dominio.gestion_prestamos.validacion_prestamo import ConflictoPrestamoError
+from datetime import datetime, timedelta, timezone
+from dominio.personas import validar_dni
+from dominio.prestamos import ConflictoPrestamoError
+from dominio.reservas import (
+    AccionReserva,
+    EstadoReserva,
+    IRepositorioReserva,
+    Reserva,
+    ReservaDetalle,
+    ResultadoReservas,
+    TipoSolicitud,
+)
+from dominio.validaciones import entero as identificador, texto
 from servicios.servicio_prestamo import ServicioAplicacionPrestamo
 
 

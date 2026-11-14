@@ -1,7 +1,6 @@
+from dominio.personas import TipoPersona
+from dominio.prestamos import EstadoPrestamo, TipoPrestamo
 from flask import Blueprint, Response, render_template, request, url_for
-from dominio.gestion_control.tipo_persona import TipoPersona
-from dominio.gestion_prestamos.prestamo import EstadoPrestamo
-from dominio.gestion_prestamos.tipo_prestamo import TipoPrestamo
 from presentacion.seguridad import requiere_permiso
 from servicios.servicio_reporte import ServicioAplicacionReporte
 

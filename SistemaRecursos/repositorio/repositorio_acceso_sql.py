@@ -1,16 +1,19 @@
 from __future__ import annotations
-from dominio.gestion_personas_usuarios.nombre_rol import NombreRol
-from dominio.resultados_consulta import CuentaParaRol
-
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
-from dominio.gestion_personas_usuarios.i_repositorio_acceso import IRepositorioAcceso
-from dominio.gestion_personas_usuarios.usuario_sistema import UsuarioSistema
-from dominio.gestion_personas_usuarios.credenciales import Credenciales
-from dominio.gestion_personas_usuarios.usuario_sistema import EstadoCuenta
-from dominio.gestion_personas_usuarios.usuario_sistema import IdentidadAcceso
-from dominio.gestion_personas_usuarios.rol import Rol
+from dominio.cuentas import (
+    Credenciales,
+    CuentaParaRol,
+    EstadoCuenta,
+    IRepositorioAcceso,
+    IRepositorioCuenta,
+    IdentidadAcceso,
+    NombreRol,
+    Rol,
+    UsuarioSistema,
+    es_administrador_activo,
+    validar_conservacion_administrador,
+)
+from dominio.personas import validar_dni
 from repositorio.conexion_mysql import MySQLConnection
-from dominio.gestion_personas_usuarios.usuario_sistema import es_administrador_activo, validar_conservacion_administrador
 from repositorio.repositorio_rol_sql import cargar_permisos_roles
 
 
@@ -33,7 +36,7 @@ ACCESO_EFECTIVO_SQL = """
 """
 
 
-class RepositorioAccesoSQL(IRepositorioAcceso):
+class RepositorioAccesoSQL(IRepositorioAcceso, IRepositorioCuenta):
     def __init__(self, conexion=None):
         self.conexion = conexion or MySQLConnection()
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
-from servicios.servicio_prestamo import ServicioAplicacionPrestamo
-from servicios.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
-from servicios.servicio_sancion import ServicioAplicacionSancion
-from flask import Blueprint, request, redirect, url_for, g, abort, jsonify
+from datetime import datetime, timezone
+from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, url_for
 from presentacion.seguridad import requiere_permiso
-from presentacion.vistas.vista_prestamo import VistaPrestamo
+from servicios.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
+from servicios.servicio_prestamo import ServicioAplicacionPrestamo
+from servicios.servicio_sancion import ServicioAplicacionSancion
 
 
 class ControladorPrestamo:
@@ -12,7 +12,6 @@ class ControladorPrestamo:
         self.servicio: ServicioAplicacionPrestamo = servicio
         self.politicas: ServicioAplicacionPoliticaPrestamo = politicas
         self.sanciones: ServicioAplicacionSancion = sanciones
-        self.vista = VistaPrestamo()
         self.blueprint = Blueprint("prestamos", __name__, url_prefix="/prestamos")
         for ruta, nombre, vista, metodos in [
             ("", "consultar_prestamos", self.consultar_prestamos, ["GET"]),
@@ -43,7 +42,7 @@ class ControladorPrestamo:
             g.usuario.persona.dni,
             gestionar,
         )
-        return self.vista.mostrar_consulta(
+        return self._renderizar_consulta(
             prestamos["prestamos"], gestionar
         )
 
@@ -54,7 +53,7 @@ class ControladorPrestamo:
         if "bien" in request.args:
             bien = self.servicio.seleccionar_bien_para_prestamo(request.args["bien"])
             recurso = bien["id_recurso"]
-        return self.vista.mostrar_formulario(
+        return self._renderizar_formulario(
             self.politicas.consultar_politicas(),
             recurso_seleccionado=recurso,
             bien_seleccionado=bien,
@@ -63,8 +62,11 @@ class ControladorPrestamo:
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     def registrar_prestamo(self):
-        prestamo = self.servicio.registrar_prestamo(request.form, g.usuario.persona.dni)
-        self.vista.mostrar_mensaje(
+        datos = dict(request.form)
+        datos['bienes'] = request.form.getlist('bienes')
+        datos['participantes'] = request.form.getlist('participantes')
+        prestamo = self.servicio.registrar_prestamo(datos, g.usuario.persona.dni)
+        self._renderizar_mensaje(
             "Préstamo registrado. Los bienes quedaron prestados y sus fechas de devolución se calcularon según las políticas."
         )
         return redirect(url_for("prestamos.consultar_prestamo", id_prestamo=prestamo.id_prestamo))
@@ -87,12 +89,14 @@ class ControladorPrestamo:
         prestamo = self.servicio.consultar_prestamo(
             id_prestamo, g.usuario.persona.dni, gestionar
         )
-        return self.vista.mostrar_detalle(prestamo, gestionar)
+        return self._renderizar_detalle(prestamo, gestionar)
 
     @requiere_permiso("PRESTAMOS_GESTIONAR")
     def registrar_devolucion(self, id_prestamo):
-        self.servicio.registrar_devolucion(id_prestamo, request.form, g.usuario.persona.dni)
-        self.vista.mostrar_mensaje(
+        datos = dict(request.form)
+        datos['detalles'] = request.form.getlist('detalles')
+        self.servicio.registrar_devolucion(id_prestamo, datos, g.usuario.persona.dni)
+        self._renderizar_mensaje(
             "Devolución registrada. Los bienes recibidos y el estado del préstamo se actualizaron."
         )
         return redirect(url_for("prestamos.consultar_prestamo", id_prestamo=id_prestamo))
@@ -105,18 +109,45 @@ class ControladorPrestamo:
             request.form.get("motivo"),
             g.usuario.persona.dni,
         )
-        self.vista.mostrar_mensaje("Pérdida registrada. El bien continúa pendiente de devolución.")
+        self._renderizar_mensaje("Pérdida registrada. El bien continúa pendiente de devolución.")
         return redirect(url_for("prestamos.consultar_prestamo", id_prestamo=id_prestamo))
 
     @requiere_permiso("PRESTAMOS_GESTIONAR")
     def actualizar_prestamos_vencidos(self):
         self.servicio.actualizar_prestamos_vencidos(g.usuario.persona.dni)
-        self.vista.mostrar_mensaje("Vencimientos registrados en el historial.")
+        self._renderizar_mensaje("Vencimientos registrados en el historial.")
         return redirect(url_for("prestamos.consultar_prestamos"))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     def levantar_sancion_vencimiento(self, id_prestamo, id_detalle):
         self.sanciones.levantar_sancion_vencimiento(
             id_prestamo, id_detalle, request.form.get('justificacion', ''), g.usuario.persona.dni)
-        self.vista.mostrar_mensaje('Sanción por tardanza retirada. La justificación quedó registrada.')
+        self._renderizar_mensaje('Sanción por tardanza retirada. La justificación quedó registrada.')
         return redirect(url_for('prestamos.consultar_prestamo', id_prestamo=id_prestamo, _anchor='devolucion'))
+
+    def _renderizar_formulario(self, politicas, recurso_seleccionado="", bien_seleccionado=None, horario=None):
+        return render_template(
+            "vista_prestamo.html",
+            modo="formulario",
+            politicas=politicas,
+            horario=horario,
+            recurso_seleccionado=recurso_seleccionado,
+            bien_seleccionado=bien_seleccionado,
+        )
+
+    def _renderizar_consulta(self, prestamos, gestionar):
+        return render_template(
+            "vista_prestamo.html",
+            modo="consulta",
+            prestamos=prestamos,
+            gestionar=gestionar,
+        )
+
+    def _renderizar_detalle(self, prestamo, gestionar):
+        return render_template(
+            "vista_prestamo.html", modo="detalle", prestamo=prestamo, gestionar=gestionar,
+            ahora_utc=datetime.now(timezone.utc).replace(tzinfo=None)
+        )
+
+    def _renderizar_mensaje(self, mensaje):
+        flash(mensaje, "success")

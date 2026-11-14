@@ -1,11 +1,12 @@
 from __future__ import annotations
-
-from dominio.gestion_recursos.recurso import Recurso
-from dominio.resultados_consulta import RecursoListado
-from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
-from dominio.gestion_recursos.fabrica_recurso import FabricaRecurso
-from dominio.gestion_recursos.fabrica_bien_material import FabricaBienMaterial
-from dominio.gestion_recursos.categoria_recurso import CategoriaRecurso
+from dominio.recursos import (
+    CategoriaRecurso,
+    IRepositorioRecurso,
+    Recurso,
+    RecursoListado,
+    crear_bien_material,
+    crear_recurso,
+)
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_bien_material_sql import insertar_bien_material
 
@@ -40,7 +41,7 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
                 f"SELECT {COLUMNAS_RECURSO} FROM recurso WHERE id_recurso = %s", (id_recurso,)
             )
             fila_recurso = cursor.fetchone()
-            return FabricaRecurso.construir(fila_recurso) if fila_recurso else None
+            return crear_recurso(fila_recurso) if fila_recurso else None
 
     # Registrar, actualizar y eliminar recursos.
     def registrar_recurso(self, recurso) -> Recurso:
@@ -53,7 +54,7 @@ class RepositorioRecursoSQL(IRepositorioRecurso):
     def registrar_recurso_con_bien(self, recurso, datos_bien) -> Recurso:
         with self.conexion.sesion(escritura=True) as cursor:
             nuevo_id = self._insertar_recurso(cursor, recurso)
-            bien = FabricaBienMaterial.construir(
+            bien = crear_bien_material(
                 dict(datos_bien, id_recurso=nuevo_id, estado="DISPONIBLE", id_bien=None)
             )
             insertar_bien_material(cursor, bien)

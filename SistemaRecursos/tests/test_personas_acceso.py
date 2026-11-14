@@ -5,13 +5,12 @@ import unittest
 from unittest.mock import patch
 
 import mysql.connector
-from dominio.gestion_personas_usuarios.fabrica_persona import FabricaPersona
-from dominio.gestion_personas_usuarios.version_edicion import version_persona, version_matriz
-from dominio.gestion_personas_usuarios.validacion_persona import ValidacionPersonaError
+from dominio.personas import FabricaPersona
+from dominio.validaciones import version_persona, version_matriz
+from dominio.personas import ValidacionPersonaError
 from repositorio.repositorio_persona_sql import RepositorioPersonaSQL
 from repositorio.repositorio_rol_sql import RepositorioRolSQL
 from servicios.servicio_rol import ServicioAplicacionRol
-from werkzeug.datastructures import MultiDict
 
 
 @unittest.skipUnless(os.environ.get("TEST_MYSQL_PORT"), "Configura la instancia MySQL de pruebas.")
@@ -110,9 +109,9 @@ class PersonasAccesoTest(unittest.TestCase):
         self.assertNotIn("id_rol_ref", columnas)
 
     def test_roles_fijos_asignacion_y_ultimo_administrador(self):
-        acceso = self.app.extensions["acceso"]
+        cuentas = self.app.extensions["cuentas"]
         repo = RepositorioRolSQL(self.db)
-        servicio = ServicioAplicacionRol(repo, acceso.usuarios)
+        servicio = ServicioAplicacionRol(repo, cuentas.repositorio)
         self.assertEqual({rol.nombre.value for rol in servicio.consultar_roles()},
                          {"USUARIO", "ENCARGADO_PRESTAMOS", "ADMINISTRADOR"})
         with self.assertRaises(ValueError):
@@ -131,7 +130,7 @@ class PersonasAccesoTest(unittest.TestCase):
             servicio.actualizar_rol_cuenta("02167885", "USUARIO", 1)
         roles, permisos = servicio.consultar_roles(), servicio.consultar_permisos()
         with self.assertRaises(LookupError):
-            servicio._construir_matriz(MultiDict({"permisos_USUARIO": "PERMISO_INEXISTENTE"}), roles, permisos)
+            servicio._construir_matriz({"permisos_USUARIO": ["PERMISO_INEXISTENTE"]}, roles, permisos)
         with self.assertRaises(ValueError):
             repo.actualizar_matriz_permisos({"USUARIO": [], "ENCARGADO_PRESTAMOS": [], "ADMINISTRADOR": []},
                                            version=version_matriz(roles, permisos))
@@ -189,24 +188,24 @@ class PersonasAccesoTest(unittest.TestCase):
         for _ in range(10):
             self.assertIsNone(acceso.autenticar("usuario1", "incorrecta"))
         client = self.login("usuario1", "UsuarioPrueba2026!")
-        acceso.cambiar_estado_cuenta("02167885", False, 1)
+        self.app.extensions['cuentas'].cambiar_estado_cuenta("02167885", False, 1)
         try:
             self.assertEqual(client.get("/").status_code, 302)
         finally:
-            acceso.cambiar_estado_cuenta("02167885", True, 1)
+            self.app.extensions['cuentas'].cambiar_estado_cuenta("02167885", True, 1)
         self.login("usuario1", "UsuarioPrueba2026!")
 
     def test_cambiar_contrasena_descarta_la_sesion_anterior(self):
-        acceso = self.app.extensions["acceso"]
+        cuentas = self.app.extensions["cuentas"]
         client = self.login("usuario1", "UsuarioPrueba2026!")
         try:
-            acceso.actualizar_cuenta("02167885", {
+            cuentas.actualizar_cuenta("02167885", {
                 "nombre_usuario": "usuario1", "clave": "ClaveNuevaPrueba2026!",
             }, 1)
             self.assertEqual(client.get("/").status_code, 302)
             self.login("usuario1", "ClaveNuevaPrueba2026!")
         finally:
-            acceso.actualizar_cuenta("02167885", {
+            cuentas.actualizar_cuenta("02167885", {
                 "nombre_usuario": "usuario1", "clave": "UsuarioPrueba2026!",
             }, 1)
 
@@ -265,8 +264,8 @@ class PersonasAccesoTest(unittest.TestCase):
             self.assertIsNone(c.fetchone())
 
     def test_alta_revalida_persona_y_exige_rol_usuario(self):
-        acceso = self.app.extensions["acceso"]
-        repo = acceso.usuarios
+        cuentas = self.app.extensions["cuentas"]
+        repo = cuentas.repositorio
         real = repo.registrar_cuenta
         def desactivar_y_guardar(usuario):
             with self.db.sesion(escritura=True) as c:
@@ -274,16 +273,16 @@ class PersonasAccesoTest(unittest.TestCase):
             return real(usuario)
         with patch.object(repo, "registrar_cuenta", desactivar_y_guardar):
             with self.assertRaisesRegex(ValueError, "persona debe estar activa"):
-                acceso.registrar_cuenta("99000011", "alta-prueba", "ClaveTemporal123")
+                cuentas.registrar_cuenta("99000011", "alta-prueba", "ClaveTemporal123")
         self.assertIsNone(repo.consultar_cuenta_persona("99000011"))
         with self.db.sesion(escritura=True) as c:
             c.execute("UPDATE persona SET estado='ACTIVA' WHERE dni='99000011'")
         def cambiar_rol_y_guardar(usuario):
-            from dominio.gestion_personas_usuarios.nombre_rol import NombreRol
+            from dominio.cuentas import NombreRol
             usuario.rol.nombre = NombreRol.ADMINISTRADOR
             return real(usuario)
         with patch.object(repo, "registrar_cuenta", cambiar_rol_y_guardar):
             with self.assertRaisesRegex(ValueError, "rol Usuario"):
-                acceso.registrar_cuenta("99000011", "alta-prueba", "ClaveTemporal123")
-        cuenta = acceso.registrar_cuenta("99000011", "alta-prueba", "ClaveTemporal123")
+                cuentas.registrar_cuenta("99000011", "alta-prueba", "ClaveTemporal123")
+        cuenta = cuentas.registrar_cuenta("99000011", "alta-prueba", "ClaveTemporal123")
         self.assertIsNotNone(cuenta.id_usuario)

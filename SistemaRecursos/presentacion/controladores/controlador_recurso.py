@@ -1,11 +1,9 @@
 from __future__ import annotations
-
-from flask import Blueprint, g, redirect, request, url_for
+from datetime import date
+from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from mysql.connector import IntegrityError
-
 from presentacion.formularios import error_formulario
 from presentacion.seguridad import redirigir_segun_permiso, requiere_permiso
-from presentacion.vistas.vista_recurso import VistaRecurso
 from servicios.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
 from servicios.servicio_recurso import ServicioAplicacionRecurso
 
@@ -26,7 +24,6 @@ class ControladorRecurso:
     ):
         self.servicio: ServicioAplicacionRecurso = servicio
         self.politicas: ServicioAplicacionPoliticaPrestamo = politicas
-        self.vista = VistaRecurso()
         self.blueprint = Blueprint("recursos", __name__, url_prefix="/recursos")
         self._registrar_rutas()
 
@@ -63,7 +60,7 @@ class ControladorRecurso:
         resultado = self.servicio.consultar_recursos(request.args)
         categorias = self.servicio.consultar_categorias()
         opciones_filtro = self.servicio.opciones_catalogo(request.args)
-        return self.vista.mostrar_consulta(
+        return self._renderizar_consulta(
             resultado["recursos"],
             categorias,
             categoria_catalogo=categoria_catalogo,
@@ -77,7 +74,7 @@ class ControladorRecurso:
         recurso = disponibilidad["recurso"]
         categoria = self.servicio.consultar_categoria(recurso.id_categoria)
         politicas = self._consultar_politicas_por_categoria()
-        return self.vista.mostrar_detalle(disponibilidad, categoria, politicas)
+        return self._renderizar_detalle(disponibilidad, categoria, politicas)
 
     # Registrar, editar y eliminar recursos.
     @requiere_permiso("RECURSOS_GESTIONAR")
@@ -92,7 +89,7 @@ class ControladorRecurso:
             recurso = self.servicio.registrar_recurso(request.form)
         except (LookupError, ValueError, IntegrityError) as error:
             return self._mostrar_error_administracion(error, "recurso")
-        self.vista.mostrar_mensaje("Recurso registrado. Puedes agregar sus bienes físicos.")
+        self._renderizar_mensaje("Recurso registrado. Puedes agregar sus bienes físicos.")
         return redirect(
             url_for(
                 "recursos.consultar_administracion_recursos",
@@ -106,7 +103,7 @@ class ControladorRecurso:
         """Carga los datos del recurso en el formulario de edición."""
         recurso = self.servicio.consultar_recurso(id_recurso)
         categorias = self.servicio.consultar_categorias()
-        return self.vista.mostrar_edicion_recurso(categorias, recurso)
+        return self._renderizar_edicion_recurso(categorias, recurso)
 
     @requiere_permiso("RECURSOS_GESTIONAR")
     def actualizar_recurso(self, id_recurso):
@@ -117,11 +114,11 @@ class ControladorRecurso:
             self.servicio.actualizar_recurso(datos_recurso)
         except (ValueError, IntegrityError) as error:
             mensaje = error_formulario(error, "Ya existe un recurso con esos datos únicos.")
-            formulario = self.vista.mostrar_edicion_recurso(
+            formulario = self._renderizar_edicion_recurso(
                 self.servicio.consultar_categorias(), recurso, error=mensaje
             )
             return formulario
-        self.vista.mostrar_mensaje("Recurso actualizado.")
+        self._renderizar_mensaje("Recurso actualizado.")
         return redirigir_segun_permiso(
             "recursos.consultar_recurso", "CATALOGO_CONSULTAR", id_recurso=id_recurso
         )
@@ -130,7 +127,7 @@ class ControladorRecurso:
     def eliminar_recurso(self, id_recurso):
         """Solicita al servicio eliminar el recurso."""
         self.servicio.eliminar_recurso(id_recurso)
-        self.vista.mostrar_mensaje("Recurso eliminado.")
+        self._renderizar_mensaje("Recurso eliminado.")
         return redirigir_segun_permiso("recursos.consultar_recursos", "CATALOGO_CONSULTAR")
 
     # 4. Registrar, editar y eliminar categorías.
@@ -141,7 +138,7 @@ class ControladorRecurso:
             self.servicio.registrar_categoria(request.form)
         except (LookupError, ValueError, IntegrityError) as error:
             return self._mostrar_error_administracion(error, "categoria")
-        self.vista.mostrar_mensaje("Categoría guardada.")
+        self._renderizar_mensaje("Categoría guardada.")
         return redirect(url_for("recursos.consultar_administracion_recursos", _anchor="categorias"))
 
     @requiere_permiso("RECURSOS_GESTIONAR")
@@ -152,7 +149,7 @@ class ControladorRecurso:
             self.servicio.actualizar_categoria(datos_categoria)
         except (LookupError, ValueError, IntegrityError) as error:
             return self._mostrar_error_administracion(error, "categoria", id_categoria=id_categoria)
-        self.vista.mostrar_mensaje("Categoría guardada.")
+        self._renderizar_mensaje("Categoría guardada.")
         return redirect(url_for("recursos.consultar_administracion_recursos", _anchor="categorias"))
 
     @requiere_permiso("RECURSOS_GESTIONAR")
@@ -162,7 +159,7 @@ class ControladorRecurso:
             self.servicio.eliminar_categoria(id_categoria)
         except (LookupError, ValueError, IntegrityError) as error:
             return self._mostrar_error_administracion(error, "categoria")
-        self.vista.mostrar_mensaje("Categoría eliminada.")
+        self._renderizar_mensaje("Categoría eliminada.")
         return redirect(url_for("recursos.consultar_administracion_recursos", _anchor="categorias"))
 
     # Preparar los mensajes y los datos que necesitan las vistas.
@@ -207,7 +204,7 @@ class ControladorRecurso:
         if seccion_error == "categoria":
             formulario_categoria = datos_categoria or dict(request.form)
 
-        return self.vista.mostrar_administracion(
+        return self._renderizar_administracion(
             datos,
             categoria=categoria,
             error=error,
@@ -227,3 +224,49 @@ class ControladorRecurso:
                 resumen[id_categoria] = []
             resumen[id_categoria].append(politica)
         return resumen
+
+    def _renderizar_base(self, modo, **datos):
+        datos.setdefault("politicas_por_categoria", {})
+        return render_template("vista_recurso.html", modo=modo, **datos)
+
+    def _renderizar_administracion(
+        self,
+        datos,
+        categoria=None,
+        error=None,
+        seccion_error=None,
+        datos_recurso=None,
+        datos_categoria=None,
+    ):
+        return self._renderizar_base(
+            "administracion",
+            **datos,
+            categoria=categoria,
+            error=error,
+            seccion_error=seccion_error,
+            datos_recurso=datos_recurso or {},
+            datos_categoria=datos_categoria or {},
+            fecha_hoy=date.today().isoformat()
+        )
+
+    def _renderizar_edicion_recurso(self, categorias, recurso, error=None):
+        return self._renderizar_base(
+            "editar_recurso",
+            categorias=categorias,
+            recurso=recurso,
+            error=error,
+            fecha_hoy=date.today().isoformat(),
+        )
+
+    def _renderizar_consulta(self, recursos, categorias, categoria_catalogo=None, opciones_filtro=None):
+        return self._renderizar_base(
+            "consulta", recursos=recursos, categorias=categorias,
+            categoria_catalogo=categoria_catalogo,
+            opciones_filtro=opciones_filtro or {'recursos': [], 'bienes': []},
+        )
+
+    def _renderizar_detalle(self, disponibilidad, categoria, politicas_por_categoria=None):
+        return self._renderizar_base("detalle", categoria=categoria, politicas_por_categoria=politicas_por_categoria or {}, **disponibilidad)
+
+    def _renderizar_mensaje(self, mensaje):
+        flash(mensaje, "success")

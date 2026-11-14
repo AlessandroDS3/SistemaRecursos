@@ -2,10 +2,9 @@ import os
 import unittest
 
 import mysql.connector
-from werkzeug.datastructures import MultiDict
 from repositorio.repositorio_sancion_sql import RepositorioSancionSQL
 from repositorio.repositorio_reserva_sql import RepositorioReservaSQL
-from dominio.gestion_prestamos.solicitud_prestamo import SolicitudPrestamo
+from dominio.prestamos import SolicitudPrestamo
 
 
 @unittest.skipUnless(os.environ.get("TEST_MYSQL_PORT"), "Configura MySQL de pruebas.")
@@ -22,12 +21,11 @@ class DevolucionIntegradaTest(unittest.TestCase):
             return c.fetchone()
 
     def recibir(self, detalles, condiciones):
-        datos = MultiDict([("detalles", str(d)) for d in detalles])
-        datos.update(condiciones)
+        datos = dict(condiciones, detalles=[str(d) for d in detalles])
         self.servicio.registrar_devolucion(1, datos, "98000002")
 
     def test_paginas_y_busquedas_del_sistema_con_base_actual(self):
-        self.app.extensions['acceso'].registrar_cuenta(
+        self.app.extensions['cuentas'].registrar_cuenta(
             '99000001', 'estudiante1', 'ClavePrueba2026!')
         client = self.app.test_client()
         client.get("/login")

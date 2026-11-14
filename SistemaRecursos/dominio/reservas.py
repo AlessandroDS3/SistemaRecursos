@@ -1,12 +1,17 @@
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
+"""Reservas: estados, preparación, retiro y contrato transaccional."""
+from __future__ import annotations
+from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
+from dominio.personas import validar_dni
+from dominio.prestamos import ConflictoPrestamoError, IOperacionPrestamo, SolicitudPrestamo, validar_persona
+from dominio.validaciones import entero, instante_utc, texto
 from enum import Enum
+from typing import TypedDict
 
-from dominio.gestion_prestamos.solicitud_prestamo import SolicitudPrestamo
-from dominio.gestion_prestamos.validacion_prestamo import validar_persona, ConflictoPrestamoError
-from dominio.gestion_recursos.validacion_recurso import entero, texto, instante_utc
 
+# Reserva
 
 class EstadoReserva(str, Enum):
     EN_ESPERA = "EN_ESPERA"
@@ -60,6 +65,8 @@ ESTADOS_POR_ACCION = {
     AccionReserva.RECHAZAR: EstadoReserva.RECHAZADA,
     AccionReserva.EXPIRAR: EstadoReserva.EXPIRADA,
 }
+
+
 OBSERVACIONES_POR_ACCION = {
     AccionReserva.PREPARAR: "Bien listo para retiro",
     AccionReserva.ENTREGAR: "Entrega física confirmada",
@@ -172,3 +179,99 @@ class Reserva:
             salida_solicitada=self.salida_solicitada,
             ids_bienes=[self.id_bien],
         )
+
+
+# I operacion reserva
+
+class IOperacionEntregaReserva(ABC):
+    @property
+    @abstractmethod
+    def prestamos(self) -> IOperacionPrestamo:
+        raise NotImplementedError
+
+    @abstractmethod
+    def cargar_reserva(self, id_reserva, responsable, gestionar):
+        raise NotImplementedError
+
+    @abstractmethod
+    def guardar_entrega(self, reserva, anterior, id_prestamo, motivo, responsable):
+        raise NotImplementedError
+
+    @abstractmethod
+    def ahora(self):
+        raise NotImplementedError
+
+
+# I repositorio reserva
+
+class IRepositorioReserva(ABC):
+    @abstractmethod
+    def registrar_reserva(self, reserva: Reserva, responsable: str) -> int:
+        """Escritura explícita. Devuelve int y propaga errores de validación o integridad."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def consultar_reserva(self, identificador: int) -> ReservaDetalle | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def consultar_reservas(self, filtros: dict, persona: str | None) -> ResultadoReservas:
+        raise NotImplementedError
+
+    @abstractmethod
+    def preparar_reserva(self, identificador: int, responsable: str, gestionar: bool,
+                       motivo: str = "", acepta: bool = False) -> int | None:
+        """Escritura explícita. Devuelve int | None y propaga errores de validación o integridad."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def transaccion_entrega(self) -> AbstractContextManager[IOperacionEntregaReserva]:
+        """Comparte una sola operación para préstamo, inventario y resolución de reserva."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def cancelar_reserva(self, identificador: int, responsable: str, gestionar: bool,
+                       motivo: str = "", acepta: bool = False) -> int | None:
+        """Escritura explícita. Devuelve int | None y propaga errores de validación o integridad."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def rechazar_reserva(self, identificador: int, responsable: str, gestionar: bool,
+                       motivo: str = "", acepta: bool = False) -> int | None:
+        """Escritura explícita. Devuelve int | None y propaga errores de validación o integridad."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def expirar_reserva(self, identificador: int, responsable: str, gestionar: bool,
+                       motivo: str = "", acepta: bool = False) -> int | None:
+        """Escritura explícita. Devuelve int | None y propaga errores de validación o integridad."""
+        raise NotImplementedError
+
+
+    @abstractmethod
+    def expirar_solicitudes_vencidas(self) -> int:
+        """Expira solicitudes vencidas, libera bienes e inserta historial."""
+        raise NotImplementedError
+
+
+# Resultados de consulta
+
+class ReservaConsulta(TypedDict):
+    id_reserva: int
+    dni_persona: str
+    id_recurso: int
+    estado: str
+    tipo_gestion: str
+    fecha_solicitud: datetime
+    fecha_requerida: datetime
+    solicitante: str
+    recurso: str
+
+
+class ReservaDetalle(ReservaConsulta):
+    historial: list[dict[str, object]]
+
+
+class ResultadoReservas(TypedDict):
+    reservas: list[ReservaConsulta]
+    total: int

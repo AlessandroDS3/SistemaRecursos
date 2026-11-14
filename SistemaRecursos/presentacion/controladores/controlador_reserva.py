@@ -1,11 +1,11 @@
 from __future__ import annotations
-from servicios.servicio_reserva import ServicioAplicacionReserva
-from servicios.servicio_recurso import ServicioAplicacionRecurso
-from servicios.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
-from servicios.servicio_persona import ServicioAplicacionPersona
-from flask import Blueprint, request, redirect, url_for, g, abort, flash, render_template
+from dominio.reservas import EstadoReserva
+from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 from presentacion.seguridad import requiere_permiso
-from dominio.gestion_prestamos.reserva import EstadoReserva
+from servicios.servicio_persona import ServicioAplicacionPersona
+from servicios.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
+from servicios.servicio_recurso import ServicioAplicacionRecurso
+from servicios.servicio_reserva import ServicioAplicacionReserva
 
 
 class ControladorReserva:

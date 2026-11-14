@@ -1,14 +1,17 @@
 from __future__ import annotations
-from dominio.gestion_recursos.bien_material import BienMaterial
-from dominio.resultados_consulta import BienDisponible, BienListado, ResultadoBienes
-from typing import Any
-from dominio.gestion_recursos.i_repositorio_bien_material import IRepositorioBienMaterial
-from dominio.gestion_recursos.fabrica_bien_material import FabricaBienMaterial
-from dominio.gestion_recursos.validacion_recurso import ConflictoRecursoError
-from repositorio.conexion_mysql import MySQLConnection
-from dominio.gestion_recursos.bien_material import (
-    ESTADOS_CAMBIO_MANUAL, ESTADOS_GESTION_PRESTAMOS,
+from dominio.recursos import (
+    BienDisponible,
+    BienListado,
+    BienMaterial,
+    ConflictoRecursoError,
+    ESTADOS_CAMBIO_MANUAL,
+    ESTADOS_GESTION_PRESTAMOS,
+    IRepositorioBienMaterial,
+    ResultadoBienes,
+    crear_bien_material,
 )
+from repositorio.conexion_mysql import MySQLConnection
+from typing import Any
 
 
 CAMPOS_BIEN = (
@@ -45,7 +48,7 @@ class RepositorioBienMaterialSQL(IRepositorioBienMaterial):
         with self.conexion.sesion() as cursor:
             cursor.execute(f"SELECT {COLUMNAS_BIEN} FROM bien_material WHERE id_bien=%s", (id_bien,))
             fila_bien = cursor.fetchone()
-            return FabricaBienMaterial.construir(fila_bien) if fila_bien else None
+            return crear_bien_material(fila_bien) if fila_bien else None
 
     def contar_disponibles(self) -> int:
         with self.conexion.sesion() as cursor:
@@ -83,7 +86,6 @@ class RepositorioBienMaterialSQL(IRepositorioBienMaterial):
             parametros.append(filtros["id_recurso"])
         clausula_where = " WHERE " + " AND ".join(condiciones) if condiciones else ""
         return clausula_where, tuple(parametros)
-
 
 
     def consultar_bienes_materiales(self, filtros) -> ResultadoBienes:
@@ -191,7 +193,7 @@ class RepositorioBienMaterialSQL(IRepositorioBienMaterial):
             fila_bien = cursor.fetchone()
             if not fila_bien:
                 raise LookupError("No se encontró el bien.")
-            bien = FabricaBienMaterial.construir(fila_bien)
+            bien = crear_bien_material(fila_bien)
             cursor.execute(
                 """SELECT id_detalle
                 FROM detalle_prestamo
@@ -248,7 +250,6 @@ class RepositorioBienMaterialSQL(IRepositorioBienMaterial):
                ORDER BY historial.fecha DESC,historial.id_historial_estado DESC""",
             id_bien,
         )
-
 
 
 def insertar_bien_material(cursor, bien):

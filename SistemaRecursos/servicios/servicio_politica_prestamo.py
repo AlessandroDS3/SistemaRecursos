@@ -1,14 +1,15 @@
 from __future__ import annotations
-from dominio.gestion_control.politica_prestamo import PoliticaPrestamo
-from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
-from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
-from dominio.gestion_control.i_repositorio_politica_prestamo import IRepositorioPoliticaPrestamo
-from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
-from servicios.validacion_identificadores import identificador
-from dominio.gestion_control.tipo_persona import TipoPersona
-from dominio.gestion_recursos.validacion_recurso import entero
-from dominio.gestion_control.horario_atencion import HorarioAtencion
-from dominio.gestion_control.politica_vencimiento_reserva import PoliticaVencimientoReserva
+from dominio.control import (
+    FabricaPoliticaPrestamo,
+    HorarioAtencion,
+    IRepositorioPoliticaPrestamo,
+    LimiteArticulosPrestamo,
+    PoliticaPrestamo,
+    PoliticaVencimientoReserva,
+)
+from dominio.personas import TipoPersona
+from dominio.recursos import IRepositorioRecurso
+from dominio.validaciones import entero, entero as identificador
 
 
 class ServicioAplicacionPoliticaPrestamo:

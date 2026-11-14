@@ -1,17 +1,19 @@
 from __future__ import annotations
-from dominio.gestion_prestamos.prestamo import Prestamo
-from dominio.resultados_consulta import PrestamoDetalle, ResultadoPrestamos, ResumenPrestamos
-from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
-from dominio.gestion_recursos.i_repositorio_bien_material import IRepositorioBienMaterial
-from dominio.gestion_personas_usuarios.i_repositorio_persona import IRepositorioPersona
-from dominio.gestion_prestamos.i_repositorio_prestamo import IRepositorioPrestamo
-from dominio.gestion_prestamos.i_operacion_prestamo import IOperacionPrestamo
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
-from dominio.gestion_prestamos.solicitud_prestamo import SolicitudPrestamo
-from dominio.gestion_prestamos.devolucion import Devolucion
-from dominio.gestion_prestamos.validacion_prestamo import lista_ids, lista_dnis
-from dominio.gestion_recursos.validacion_recurso import texto
-from servicios.validacion_identificadores import identificador
+from dominio.personas import IRepositorioPersona, validar_dni
+from dominio.prestamos import (
+    Devolucion,
+    IOperacionPrestamo,
+    IRepositorioPrestamo,
+    Prestamo,
+    PrestamoDetalle,
+    ResultadoPrestamos,
+    ResumenPrestamos,
+    SolicitudPrestamo,
+    lista_dnis,
+    lista_ids,
+)
+from dominio.recursos import IRepositorioBienMaterial, IRepositorioRecurso
+from dominio.validaciones import entero as identificador, texto
 
 
 class ServicioAplicacionPrestamo:
@@ -29,12 +31,6 @@ class ServicioAplicacionPrestamo:
         self.personas: IRepositorioPersona = repositorio_personas
         self.bienes: IRepositorioBienMaterial = repositorio_bienes
         self.recursos: IRepositorioRecurso = repositorio_recursos
-
-    @staticmethod
-    def _lista(datos, campo):
-        if hasattr(datos, "getlist"):
-            return datos.getlist(campo)
-        return datos.get(campo, [])
 
     def consultar_solicitantes(self, termino, limite=20):
         termino = (termino or "").strip()
@@ -84,8 +80,8 @@ class ServicioAplicacionPrestamo:
     def registrar_prestamo(self, datos, dni_encargado) -> Prestamo:
         dni_persona = validar_dni(datos.get("dni_persona"))
         dni_encargado = validar_dni(dni_encargado)
-        ids_bienes = lista_ids(self._lista(datos, "bienes"), "Bienes")
-        dnis_participantes = lista_dnis(self._lista(datos, "participantes"))
+        ids_bienes = lista_ids(datos.get("bienes", []), "Bienes")
+        dnis_participantes = lista_dnis(datos.get("participantes", []))
         if not ids_bienes:
             raise ValueError("Selecciona al menos un bien disponible.")
 
@@ -195,7 +191,7 @@ class ServicioAplicacionPrestamo:
                         'Vencimiento registrado por el encargado', dni_responsable)
 
     def registrar_devolucion(self, id_prestamo, datos, dni_encargado) -> None:
-        ids_detalles = lista_ids(self._lista(datos, "detalles"), "Bienes a devolver")
+        ids_detalles = lista_ids(datos.get("detalles", []), "Bienes a devolver")
         if not ids_detalles:
             raise ValueError("Selecciona al menos un bien que estés recibiendo físicamente.")
 

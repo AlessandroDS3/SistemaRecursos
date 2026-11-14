@@ -1,8 +1,13 @@
-from dominio.gestion_personas_usuarios.i_repositorio_rol import IRepositorioRol
-from dominio.gestion_personas_usuarios.nombre_rol import NombreRol
-from dominio.gestion_personas_usuarios.rol import Rol, validar_permisos_administrador
-from dominio.gestion_personas_usuarios.permiso import CATALOGO_PERMISOS, Permiso, consultar_catalogo_permisos
-from dominio.gestion_personas_usuarios.version_edicion import exigir_version, version_matriz
+from dominio.cuentas import (
+    CATALOGO_PERMISOS,
+    IRepositorioRol,
+    NombreRol,
+    Permiso,
+    Rol,
+    consultar_catalogo_permisos,
+    validar_permisos_administrador,
+)
+from dominio.validaciones import exigir_version, version_matriz
 from repositorio.conexion_mysql import MySQLConnection
 
 

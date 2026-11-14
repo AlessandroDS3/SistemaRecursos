@@ -1,7 +1,27 @@
 import hmac
 import secrets
+from flask import abort, current_app, g, redirect, request, session, url_for
 from functools import wraps
-from flask import session, request, abort, redirect, url_for, g, current_app
+
+
+def iniciar_sesion(cuenta):
+    session.clear()
+    session['id_usuario'] = cuenta.id_usuario
+    session['version_credenciales'] = current_app.extensions['acceso'].version_credenciales(cuenta)
+
+
+def preparar_peticion():
+    """Valida formularios y recupera el acceso vigente antes de cada petición."""
+    validar_csrf()
+    g.usuario = None
+    if 'id_usuario' not in session:
+        return
+    acceso = current_app.extensions['acceso']
+    cuenta = acceso.consultar_usuario_activo(session['id_usuario'])
+    if cuenta is None or session.get('version_credenciales') != acceso.version_credenciales(cuenta):
+        session.clear()
+        return
+    g.usuario = cuenta
 
 
 def token_csrf():

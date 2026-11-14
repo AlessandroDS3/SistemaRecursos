@@ -1,20 +1,23 @@
 """Pruebas del acceso con cuentas en memoria, sin conexión a MySQL."""
 import time
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from flask import g
 from werkzeug.security import generate_password_hash
 
-from app import create_app
-from dominio.gestion_personas_usuarios.credenciales import Credenciales
-from dominio.gestion_personas_usuarios.rol import Rol
-from dominio.gestion_personas_usuarios.usuario_sistema import EstadoCuenta, UsuarioSistema, IdentidadAcceso
+from app import create_app, obtener_clave_sesion
+from mysql.connector import DatabaseError
+from dominio.cuentas import Credenciales, IRepositorioAcceso
+from dominio.cuentas import Rol
+from dominio.cuentas import EstadoCuenta, UsuarioSistema, IdentidadAcceso
 from presentacion.seguridad import requiere_permiso, token_csrf
 
 
-class CuentasEnMemoria:
+class CuentasEnMemoria(IRepositorioAcceso):
     """Solo implementa las consultas y el registro del último acceso."""
 
     def __init__(self, cuenta):
@@ -70,6 +73,39 @@ class AccesoFlaskTest(unittest.TestCase):
         return client.post("/login", data=dict(
             usuario=usuario, clave=self.clave if clave is None else clave, csrf_token=token,
         ))
+
+    def test_fallo_de_mysql_se_registra_y_devuelve_500(self):
+        @self.app.get('/fallo-mysql')
+        def fallo_mysql():
+            raise DatabaseError('Detalle técnico simulado')
+
+        with self.assertLogs(self.app.logger, level='ERROR') as registro:
+            respuesta = self.client.get('/fallo-mysql')
+        self.assertEqual(respuesta.status_code, 500)
+        self.assertNotIn(b'Detalle t', respuesta.data)
+        self.assertTrue(any('MySQL' in linea for linea in registro.output))
+
+    def test_validacion_y_ausencia_no_devuelven_exito(self):
+        @self.app.get('/dato-invalido')
+        def dato_invalido():
+            raise ValueError('Dato inválido')
+
+        @self.app.get('/registro-ausente')
+        def registro_ausente():
+            raise LookupError('Registro inexistente')
+
+        self.assertEqual(self.client.get('/dato-invalido').status_code, 400)
+        self.assertEqual(self.client.get('/registro-ausente').status_code, 404)
+
+    def test_clave_local_se_conserva_y_el_entorno_tiene_prioridad(self):
+        with TemporaryDirectory() as carpeta:
+            with patch('app.__file__', str(Path(carpeta) / 'app.py')):
+                with patch.dict('os.environ', {'FLASK_SECRET_KEY': ''}):
+                    primera = obtener_clave_sesion()
+                    self.assertEqual(primera, obtener_clave_sesion())
+                    self.assertEqual(len(primera), 64)
+                with patch.dict('os.environ', {'FLASK_SECRET_KEY': 'clave-definida-en-entorno'}):
+                    self.assertEqual(obtener_clave_sesion(), 'clave-definida-en-entorno')
 
     def test_login_y_navegacion_sin_repositorio_de_sesiones(self):
         self.assertEqual(self.login().status_code, 302)

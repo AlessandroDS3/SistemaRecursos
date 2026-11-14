@@ -6,11 +6,11 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from dominio.gestion_control.horario_atencion import HorarioAtencion
-from dominio.gestion_control.politica_prestamo import PoliticaPrestamo, LimiteArticulosPrestamo
-from dominio.gestion_prestamos.contexto_entrega import ContextoEntrega
-from dominio.gestion_prestamos.solicitud_prestamo import SolicitudPrestamo
-from dominio.gestion_prestamos.validacion_prestamo import ConflictoPrestamoError
+from dominio.control import HorarioAtencion
+from dominio.control import PoliticaPrestamo, LimiteArticulosPrestamo
+from dominio.prestamos import ContextoEntrega
+from dominio.prestamos import SolicitudPrestamo
+from dominio.prestamos import ConflictoPrestamoError
 from servicios.servicio_prestamo import ServicioAplicacionPrestamo
 
 

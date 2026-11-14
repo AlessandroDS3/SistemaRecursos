@@ -1,13 +1,17 @@
 from __future__ import annotations
-
-from flask import Blueprint, g, redirect, request, url_for
+from datetime import date
+from dominio.recursos import ESTADOS_CAMBIO_MANUAL, ESTADOS_GESTION_PRESTAMOS, EstadoBienMaterial
+from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from mysql.connector import IntegrityError
-
 from presentacion.formularios import error_formulario
 from presentacion.seguridad import redirigir_segun_permiso, requiere_permiso
-from presentacion.vistas.vista_bien_material import VistaBienMaterial
 from servicios.servicio_bien_material import ServicioAplicacionBienMaterial
 from servicios.servicio_recurso import ServicioAplicacionRecurso
+
+
+def opciones_estado(estados):
+    etiquetas = {"DANADO": "Dañado", "MANTENIMIENTO": "En mantenimiento"}
+    return [(estado.value, etiquetas.get(estado.value, estado.value.title())) for estado in estados]
 
 
 class ControladorBienMaterial:
@@ -22,7 +26,6 @@ class ControladorBienMaterial:
     ):
         self.servicio: ServicioAplicacionBienMaterial = servicio
         self.recursos: ServicioAplicacionRecurso = recursos
-        self.vista = VistaBienMaterial()
         self.blueprint = Blueprint("bienes", __name__, url_prefix="/bienes")
         self._registrar_rutas()
 
@@ -54,7 +57,7 @@ class ControladorBienMaterial:
     @requiere_permiso("RECURSOS_GESTIONAR")
     def consultar_bienes_materiales(self):
         resultado = self.servicio.consultar_bienes_materiales(request.args)
-        return self.vista.mostrar_consulta(
+        return self._renderizar_consulta(
             resultado["bienes"],
             resultado["resumen"],
         )
@@ -65,7 +68,7 @@ class ControladorBienMaterial:
         bien = detalle["bien"]
         recurso = self.recursos.consultar_recurso(bien.id_recurso)
 
-        return self.vista.mostrar_detalle(
+        return self._renderizar_detalle(
             bien,
             recurso,
             detalle["historial"],
@@ -77,7 +80,7 @@ class ControladorBienMaterial:
     def mostrar_formulario_bien_material(self):
         id_recurso = request.args.get("recurso")
         recurso = self.recursos.consultar_recurso(id_recurso)
-        return self.vista.mostrar_formulario(recurso)
+        return self._renderizar_formulario(recurso)
 
     @requiere_permiso("RECURSOS_GESTIONAR")
     def registrar_bien_material(self):
@@ -87,9 +90,9 @@ class ControladorBienMaterial:
             self.servicio.registrar_bien_material(request.form)
         except (ValueError, IntegrityError) as error:
             mensaje = error_formulario(error, self.MSG_CODIGO_DUPLICADO)
-            return self.vista.mostrar_formulario(recurso, error=mensaje)
+            return self._renderizar_formulario(recurso, error=mensaje)
 
-        self.vista.mostrar_mensaje("Ejemplar registrado como disponible.")
+        self._renderizar_mensaje("Ejemplar registrado como disponible.")
         return redirect(
             url_for(
                 "recursos.consultar_administracion_recursos",
@@ -103,7 +106,7 @@ class ControladorBienMaterial:
     def mostrar_edicion_bien_material(self, id_bien):
         bien = self.servicio.consultar_bien_material(id_bien)
         recurso = self.recursos.consultar_recurso(bien.id_recurso)
-        return self.vista.mostrar_formulario(recurso, bien)
+        return self._renderizar_formulario(recurso, bien)
 
     @requiere_permiso("RECURSOS_GESTIONAR")
     def actualizar_bien_material(self, id_bien):
@@ -114,9 +117,9 @@ class ControladorBienMaterial:
             self.servicio.actualizar_bien_material(datos_bien)
         except (ValueError, IntegrityError) as error:
             mensaje = error_formulario(error, self.MSG_CODIGO_DUPLICADO)
-            return self.vista.mostrar_formulario(recurso, bien, error=mensaje)
+            return self._renderizar_formulario(recurso, bien, error=mensaje)
 
-        self.vista.mostrar_mensaje("Datos del bien actualizados.")
+        self._renderizar_mensaje("Datos del bien actualizados.")
         return redirect(url_for("bienes.consultar_detalle_bien_material", id_bien=id_bien))
 
     # 5. Eliminar un bien.
@@ -124,7 +127,7 @@ class ControladorBienMaterial:
     def eliminar_bien_material(self, id_bien):
         bien = self.servicio.consultar_bien_material(id_bien)
         self.servicio.eliminar_bien_material(id_bien)
-        self.vista.mostrar_mensaje("Bien sin historial eliminado.")
+        self._renderizar_mensaje("Bien sin historial eliminado.")
 
         return redirigir_segun_permiso(
             "recursos.consultar_recurso",
@@ -138,5 +141,44 @@ class ControladorBienMaterial:
         datos_bien = dict(request.form, id_bien=id_bien)
         dni_responsable = g.usuario.persona.dni
         self.servicio.cambiar_estado_bien_material(datos_bien, dni_responsable)
-        self.vista.mostrar_mensaje("Estado actualizado.")
+        self._renderizar_mensaje("Estado actualizado.")
         return redirect(url_for("bienes.consultar_detalle_bien_material", id_bien=id_bien))
+
+    def _renderizar_consulta(self, bienes, resumen):
+        return render_template(
+            "vista_bien_material.html",
+            modo="consulta",
+            estados=opciones_estado(EstadoBienMaterial),
+            bienes=bienes,
+            resumen=resumen,
+        )
+
+    def _renderizar_formulario(self, recurso, bien=None, error=None):
+        return render_template(
+            "vista_bien_material.html",
+            modo="formulario",
+            recurso=recurso,
+            bien=bien,
+            error=error,
+            fecha_hoy=date.today().isoformat(),
+        )
+
+    def _renderizar_detalle(
+        self, bien, recurso, historial, prestamo_pendiente=None,
+    ):
+        return render_template(
+            "vista_bien_material.html",
+            modo="detalle",
+            estados_manual=opciones_estado(
+                estado for estado in EstadoBienMaterial if estado in ESTADOS_CAMBIO_MANUAL
+            ),
+            permite_cambio_manual=bien.estado not in ESTADOS_GESTION_PRESTAMOS,
+            bien=bien,
+            recurso=recurso,
+            historial=historial,
+            prestamo_pendiente=prestamo_pendiente,
+            tiene_movimientos=bool(historial),
+        )
+
+    def _renderizar_mensaje(self, mensaje):
+        flash(mensaje, "success")

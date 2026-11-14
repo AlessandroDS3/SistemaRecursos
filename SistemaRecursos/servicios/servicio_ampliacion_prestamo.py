@@ -1,8 +1,6 @@
 from datetime import datetime
-
-from dominio.gestion_prestamos.ampliacion_prestamo import AmpliacionPrestamo
-from dominio.gestion_prestamos.i_repositorio_prestamo import IRepositorioPrestamo
-from servicios.validacion_identificadores import identificador
+from dominio.prestamos import AmpliacionPrestamo, IRepositorioPrestamo
+from dominio.validaciones import entero as identificador
 
 
 class ServicioAplicacionAmpliacionPrestamo:

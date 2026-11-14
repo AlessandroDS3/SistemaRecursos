@@ -1,6 +1,6 @@
+import mysql.connector
 import os
 from contextlib import contextmanager
-import mysql.connector
 
 
 class MySQLConnection:
@@ -13,7 +13,7 @@ class MySQLConnection:
                 "port": int(os.environ.get("DB_PORT", "3306")),
                 "user": os.environ.get("DB_USER", "root"),
                 "password": os.environ.get("DB_PASSWORD", ""),
-                "database": os.environ.get("DB_NAME", "prestamos_escuela"),
+                "database": os.environ.get("DB_NAME", "prestamos_escuela_rehecho"),
                 "connection_timeout": 5,
             }
         )

@@ -1,13 +1,15 @@
 from __future__ import annotations
-from dominio.gestion_recursos.recurso import Recurso
-from dominio.resultados_consulta import ResultadoRecursos
-from dominio.gestion_recursos.i_repositorio_bien_material import IRepositorioBienMaterial
-from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
-from dominio.gestion_recursos.fabrica_recurso import FabricaRecurso
-from dominio.gestion_recursos.categoria_recurso import CategoriaRecurso
-from dominio.gestion_recursos.bien_material import EstadoBienMaterial
-from dominio.gestion_recursos.validacion_recurso import texto, ConflictoRecursoError
-from servicios.validacion_identificadores import identificador
+from dominio.recursos import (
+    CategoriaRecurso,
+    ConflictoRecursoError,
+    EstadoBienMaterial,
+    IRepositorioBienMaterial,
+    IRepositorioRecurso,
+    Recurso,
+    ResultadoRecursos,
+    crear_recurso,
+)
+from dominio.validaciones import entero as identificador, texto
 
 
 class ServicioAplicacionRecurso:
@@ -28,7 +30,7 @@ class ServicioAplicacionRecurso:
     def registrar_recurso(self, datos) -> Recurso:
         datos = dict(datos)
         datos.pop("id_recurso", None)
-        recurso = FabricaRecurso.construir(datos)
+        recurso = crear_recurso(datos)
         self.consultar_categoria(recurso.id_categoria)
         datos_bien = {
             campo: datos.get(campo, "")
@@ -49,7 +51,7 @@ class ServicioAplicacionRecurso:
     def actualizar_recurso(self, datos) -> Recurso:
         actual = self.consultar_recurso(datos.get("id_recurso"))
         datos = dict(datos, id_recurso=actual.id_recurso)
-        recurso = FabricaRecurso.construir(datos)
+        recurso = crear_recurso(datos)
         self.consultar_categoria(recurso.id_categoria)
         return self.repositorio.actualizar_recurso(recurso)
 

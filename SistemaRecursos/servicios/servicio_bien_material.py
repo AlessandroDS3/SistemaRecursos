@@ -1,15 +1,17 @@
 from __future__ import annotations
-from dominio.gestion_recursos.bien_material import BienMaterial
-from dominio.resultados_consulta import ResultadoBienes
-from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
-from dominio.gestion_recursos.i_repositorio_bien_material import IRepositorioBienMaterial
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
-from dominio.gestion_recursos.fabrica_bien_material import FabricaBienMaterial
-from dominio.gestion_recursos.bien_material import (
-    EstadoBienMaterial, ESTADOS_CAMBIO_MANUAL, ESTADOS_GESTION_PRESTAMOS,
+from dominio.personas import validar_dni
+from dominio.recursos import (
+    BienMaterial,
+    ConflictoRecursoError,
+    ESTADOS_CAMBIO_MANUAL,
+    ESTADOS_GESTION_PRESTAMOS,
+    EstadoBienMaterial,
+    IRepositorioBienMaterial,
+    IRepositorioRecurso,
+    ResultadoBienes,
+    crear_bien_material,
 )
-from dominio.gestion_recursos.validacion_recurso import texto, ConflictoRecursoError
-from servicios.validacion_identificadores import identificador
+from dominio.validaciones import entero as identificador, texto
 
 
 class ServicioAplicacionBienMaterial:
@@ -20,7 +22,7 @@ class ServicioAplicacionBienMaterial:
     def registrar_bien_material(self, datos) -> BienMaterial:
         datos = dict(datos, estado="DISPONIBLE")
         datos.pop("id_bien", None)
-        bien = FabricaBienMaterial.construir(datos)
+        bien = crear_bien_material(datos)
         if not self.recursos.consultar_recurso(bien.id_recurso):
             raise LookupError("No se encontró el recurso.")
         return self.repositorio.registrar_bien_material(bien)
@@ -54,7 +56,7 @@ class ServicioAplicacionBienMaterial:
             id_recurso=actual.id_recurso,
             estado=actual.estado.value,
         )
-        return self.repositorio.actualizar_bien_material(FabricaBienMaterial.construir(datos))
+        return self.repositorio.actualizar_bien_material(crear_bien_material(datos))
 
     def eliminar_bien_material(self, id_bien) -> None:
         self.repositorio.eliminar_bien_material(self.consultar_bien_material(id_bien).id_bien)

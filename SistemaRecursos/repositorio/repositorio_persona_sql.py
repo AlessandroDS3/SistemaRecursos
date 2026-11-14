@@ -1,15 +1,17 @@
 from __future__ import annotations
-from dominio.gestion_personas_usuarios.persona import Persona
-from dominio.resultados_consulta import ResultadoPersonas
-from typing import Any
-from dominio.gestion_personas_usuarios.version_edicion import version_persona, exigir_version
-from dominio.gestion_personas_usuarios.i_repositorio_persona import IRepositorioPersona
-from dominio.gestion_personas_usuarios.fabrica_persona import FabricaPersona
+from dominio.cuentas import validar_baja_persona
+from dominio.personas import (
+    ESTADOS_MATRICULA_VIGENTE,
+    EstadoPersona,
+    FabricaPersona,
+    IRepositorioPersona,
+    Persona,
+    ResultadoPersonas,
+    ValidacionPersonaError,
+)
+from dominio.validaciones import exigir_version, version_persona
 from repositorio.conexion_mysql import MySQLConnection
-from dominio.gestion_personas_usuarios.usuario_sistema import validar_baja_persona
-from dominio.gestion_personas_usuarios.persona import EstadoPersona
-from dominio.gestion_personas_usuarios.validacion_persona import ValidacionPersonaError
-from dominio.gestion_personas_usuarios.estudiante import ESTADOS_MATRICULA_VIGENTE
+from typing import Any
 
 BASE = ("dni", "nombres", "apellidos", "telefono", "correo", "estado")
 SUBTIPOS = {

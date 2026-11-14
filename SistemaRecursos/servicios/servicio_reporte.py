@@ -1,12 +1,10 @@
 import csv
 from datetime import date, datetime, time, timedelta, timezone
+from dominio.personas import TipoPersona
+from dominio.prestamos import EstadoPrestamo, TipoPrestamo
+from dominio.reportes import IRepositorioReporte
+from dominio.validaciones import entero as identificador, texto
 from io import StringIO
-from dominio.gestion_control.i_repositorio_reporte import IRepositorioReporte
-from dominio.gestion_control.tipo_persona import TipoPersona
-from dominio.gestion_prestamos.prestamo import EstadoPrestamo
-from dominio.gestion_prestamos.tipo_prestamo import TipoPrestamo
-from dominio.gestion_recursos.validacion_recurso import texto
-from servicios.validacion_identificadores import identificador
 
 
 HORA_LIMA = timezone(timedelta(hours=-5))

@@ -1,5 +1,4 @@
-from dominio.gestion_control.i_repositorio_reporte import IRepositorioReporte
-from dominio.resultados_consulta import ResultadoReportePrestamos
+from dominio.reportes import IRepositorioReporte, ResultadoReportePrestamos
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_prestamo_sql import ORIGEN_PRESTAMOS_CON_ESTADO
 

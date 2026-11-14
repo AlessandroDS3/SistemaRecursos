@@ -270,3 +270,13 @@ La consulta principal pasó de cinco tablas a dos (`usuario_sistema` y `persona`
 La adaptación afecta a seis archivos de producción y dos de pruebas, además de esta documentación. Se añadieron casos que impiden construir fichas durante login y recuperación de sesión, que separan la validación del correo de la autenticación y que verifican la carga del tipo al abrir una reserva. Se mantienen las comprobaciones de contraseñas, estados, CSRF, permisos y revocación de sesión por cambio de contraseña.
 
 Verificación completa con MySQL temporal: **79 pruebas en 145,434 segundos, OK y sin omisiones**. El cambio queda local y sin commit para revisar la comparación con `1b24d49`. No demuestra una mejora de tiempos bajo carga: se comprobó la reducción de dependencias y la conservación de los comportamientos cubiertos por las pruebas.
+
+## Seguimiento: organización de acceso y administración de cuentas
+
+La prueba anterior se guardó en el commit local `05cd63e` antes de esta reorganización. `ServicioAplicacionAcceso` conserva únicamente autenticación, versión de credenciales y recuperación de sesión. Las consultas administrativas, creación, edición, contraseña y activación se trasladaron a `ServicioAplicacionCuenta`, en `servicio_cuenta.py`.
+
+`usuario_sistema.py` agrupa los tipos de cuenta, `Credenciales`, los contratos y las reglas de protección del último administrador. Se eliminaron los archivos independientes `credenciales.py` e `i_repositorio_acceso.py`. El contrato de acceso exige tres operaciones; el de cuentas, seis. El adaptador SQL implementa ambos y conserva sus transacciones y consultas. El controlador de personas utiliza el servicio de cuentas; el de acceso y el control de sesión utilizan el servicio de acceso. El servicio de roles depende del contrato de cuentas.
+
+El README contiene el recorrido de cada operación y una tabla de ubicación de cambios para explicar el código. Las pruebas en memoria implementan directamente el contrato de acceso de tres operaciones. No se modificaron las tablas ni las reglas de autenticación o protección de administradores.
+
+Resultado de la reorganización: `python verificar.py` completó **79 pruebas en 145,824 segundos, OK y sin omisiones**, con MySQL temporal. Se comprobaron también la dirección de dependencias, las tres operaciones del contrato de acceso y las seis del contrato de cuentas. Se eliminaron dos archivos Python y se añadió uno: el balance es un archivo de producción menos. Esta reorganización queda sin commit, posterior al punto de comparación `05cd63e`.

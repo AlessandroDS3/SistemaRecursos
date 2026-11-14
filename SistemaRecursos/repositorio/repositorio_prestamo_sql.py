@@ -1,19 +1,22 @@
 from __future__ import annotations
 from contextlib import contextmanager
-from dominio.resultados_consulta import PrestamoDetalle, PrestamoListado, ResumenPrestamos
-from repositorio.repositorio_bien_material_sql import registrar_historial_bien
-from dominio.gestion_prestamos.i_repositorio_prestamo import IRepositorioPrestamo
-from dominio.gestion_prestamos.contexto_entrega import ContextoEntrega
-from dominio.gestion_prestamos.ampliacion_prestamo import ConflictoAmpliacionError
-from dominio.gestion_prestamos.i_operacion_prestamo import IOperacionPrestamo
-from dominio.gestion_prestamos.prestamo import Prestamo
-from dominio.gestion_prestamos.detalle_prestamo import DetallePrestamo
-from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
-from dominio.gestion_control.horario_atencion import HorarioAtencion
+from dominio.control import FabricaPoliticaPrestamo, HorarioAtencion, LimiteArticulosPrestamo
+from dominio.prestamos import (
+    ConflictoAmpliacionError,
+    ContextoEntrega,
+    DetallePrestamo,
+    IOperacionPrestamo,
+    IRepositorioPrestamo,
+    Prestamo,
+    PrestamoDetalle,
+    PrestamoListado,
+    ResumenPrestamos,
+)
 from repositorio.conexion_mysql import MySQLConnection
-from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
-from repositorio.sanciones_vencimiento_sql import aplicar_sancion_vencimiento
+from repositorio.repositorio_bien_material_sql import registrar_historial_bien
 from repositorio.repositorio_persona_sql import CONSULTA as CONSULTA_PERSONAS
+from repositorio.repositorio_sancion_sql import consultar_sanciones_activas
+from repositorio.sanciones_vencimiento_sql import aplicar_sancion_vencimiento
 
 
 # Estado actual para lecturas: no modifica préstamo ni historial.
@@ -302,14 +305,7 @@ class OperacionPrestamoSQL(IOperacionPrestamo):
         c.execute(CONSULTA_PERSONAS+f' WHERE p.dni IN ({marcadores}) ORDER BY p.dni FOR UPDATE', tuple(dnis))
         personas = {p['dni']: p for p in c.fetchall()}
         vencidos = hay_prestamos_vencidos(c, participantes)
-        m = ','.join(['%s'] * len(participantes))
-        c.execute(f'''SELECT s.id_sancion FROM sancion s
-            JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
-            JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
-            WHERE (pr.dni_persona IN ({m}) OR EXISTS(SELECT 1 FROM participante_prestamo pp
-                WHERE pp.id_prestamo=pr.id_prestamo AND pp.dni_persona IN ({m})))
-            AND s.estado='ACTIVA' FOR UPDATE''', tuple(sorted(participantes))*2)
-        sanciones = bool(c.fetchall())
+        sanciones = consultar_sanciones_activas(c, participantes)
         tipo = personas.get(solicitud.dni_persona, {}).get('tipo')
         c.execute('SELECT maximo_articulos FROM limite_articulos_prestamo WHERE tipo_persona=%s FOR UPDATE', (tipo,))
         fila = c.fetchone()

@@ -1,17 +1,16 @@
 from __future__ import annotations
-from servicios.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
+from dominio.cuentas import NombreRol
+from dominio.personas import TipoPersona
+from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from mysql.connector import IntegrityError
 from presentacion.formularios import error_formulario
-from flask import Blueprint, request, redirect, url_for, g
-from dominio.gestion_personas_usuarios.nombre_rol import NombreRol
 from presentacion.seguridad import requiere_permiso
-from presentacion.vistas.vista_politica_prestamo import VistaPoliticaPrestamo
+from servicios.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
 
 
 class ControladorPoliticaPrestamo:
     def __init__(self, servicio: ServicioAplicacionPoliticaPrestamo):
         self.servicio: ServicioAplicacionPoliticaPrestamo = servicio
-        self.vista = VistaPoliticaPrestamo()
         self.blueprint = Blueprint("politicas", __name__, url_prefix="/politicas")
         self.blueprint.add_url_rule("/limites", "actualizar_limites_articulos", self.actualizar_limites_articulos, methods=["POST"])
         self.blueprint.add_url_rule("/horario", "actualizar_horario_atencion", self.actualizar_horario_atencion, methods=["POST"])
@@ -32,7 +31,7 @@ class ControladorPoliticaPrestamo:
             self.servicio.registrar_politica(request.form)
         except (ValueError, IntegrityError) as error:
             return self._mostrar_error_politica(error)
-        self.vista.mostrar_mensaje("Política guardada. Ya puede aplicarse a nuevas entregas.")
+        self._renderizar_mensaje("Política guardada. Ya puede aplicarse a nuevas entregas.")
         return redirect(url_for("politicas.consultar_politicas", _anchor=f"politica-categoria-{request.form.get('id_categoria', '')}"))
 
     @requiere_permiso("POLITICAS_GESTIONAR")
@@ -51,7 +50,7 @@ class ControladorPoliticaPrestamo:
             self.servicio.actualizar_politica(dict(request.form, id_politica=id_politica))
         except (ValueError, IntegrityError) as error:
             return self._mostrar_error_politica(error)
-        self.vista.mostrar_mensaje(
+        self._renderizar_mensaje(
             "Política actualizada. Los plazos de entregas anteriores se conservan."
         )
         return redirect(url_for("politicas.consultar_politicas", _anchor=f"politica-categoria-{request.form.get('id_categoria', '')}"))
@@ -59,7 +58,7 @@ class ControladorPoliticaPrestamo:
     @requiere_permiso("POLITICAS_GESTIONAR")
     def eliminar_politica(self, id_politica):
         self.servicio.eliminar_politica(id_politica)
-        self.vista.mostrar_mensaje("Política sin préstamos asociados eliminada.")
+        self._renderizar_mensaje("Política sin préstamos asociados eliminada.")
         return redirect(url_for("politicas.consultar_politicas"))
 
     def _mostrar_error_politica(self, error):
@@ -72,11 +71,11 @@ class ControladorPoliticaPrestamo:
             self.servicio.actualizar_politica_vencimiento_reserva(request.form)
         except ValueError as error:
             return self._mostrar_consulta(error_vencimiento=str(error))
-        self.vista.mostrar_mensaje("Vencimientos generales actualizados para nuevas solicitudes y preparaciones.")
+        self._renderizar_mensaje("Vencimientos generales actualizados para nuevas solicitudes y preparaciones.")
         return redirect(url_for("politicas.consultar_politicas", _anchor="politicas-vencimiento"))
 
     def _mostrar_consulta(self, error=None, error_horario=None, error_vencimiento=None, error_limites=None):
-        return self.vista.mostrar_consulta(
+        return self._renderizar_consulta(
             self.servicio.consultar_politicas(), self.servicio.consultar_categorias(),
             error=error, horario=self.servicio.consultar_horario_atencion(), error_horario=error_horario,
             vencimientos=self.servicio.consultar_politica_vencimiento_reserva(), error_vencimiento=error_vencimiento,
@@ -88,7 +87,7 @@ class ControladorPoliticaPrestamo:
             self.servicio.actualizar_horario_atencion(request.form)
         except ValueError as error:
             return self._mostrar_consulta(error_horario=str(error))
-        self.vista.mostrar_mensaje('Horario general de atención actualizado.')
+        self._renderizar_mensaje('Horario general de atención actualizado.')
         return redirect(url_for('politicas.consultar_politicas', _anchor='horario-atencion'))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
@@ -99,5 +98,27 @@ class ControladorPoliticaPrestamo:
             self.servicio.actualizar_limites_articulos(request.form)
         except ValueError as error:
             return self._mostrar_consulta(error_limites=str(error))
-        self.vista.mostrar_mensaje('Máximos generales de artículos actualizados.')
+        self._renderizar_mensaje('Máximos generales de artículos actualizados.')
         return redirect(url_for('politicas.consultar_politicas', _anchor='limites-articulos'))
+
+    def _renderizar_consulta(self, politicas, categorias, error=None, horario=None, error_horario=None, vencimientos=None, error_vencimiento=None, limites=None, error_limites=None):
+        politicas_por_categoria = {}
+        for regla in politicas:
+            politicas_por_categoria.setdefault(regla.id_categoria, {})[regla.tipo_persona.value] = regla
+        return render_template(
+            "vista_politica_prestamo.html",
+            politicas=politicas,
+            politicas_por_categoria=politicas_por_categoria,
+            horario=horario,
+            error_horario=error_horario,
+            vencimientos=vencimientos,
+            error_vencimiento=error_vencimiento,
+            limites_por_tipo={limite.tipo_persona.value: limite.maximo_articulos for limite in limites or []},
+            error_limites=error_limites,
+            error=error,
+            tipos_persona=TipoPersona,
+            categorias=categorias,
+        )
+
+    def _renderizar_mensaje(self, mensaje):
+        flash(mensaje, "success")

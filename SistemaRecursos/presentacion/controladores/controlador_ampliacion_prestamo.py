@@ -1,6 +1,5 @@
-from flask import Blueprint, g, redirect, render_template, request, url_for, flash
-
-from dominio.gestion_prestamos.ampliacion_prestamo import ConflictoAmpliacionError
+from dominio.prestamos import ConflictoAmpliacionError
+from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from presentacion.seguridad import requiere_permiso
 from servicios.servicio_ampliacion_prestamo import ServicioAplicacionAmpliacionPrestamo
 

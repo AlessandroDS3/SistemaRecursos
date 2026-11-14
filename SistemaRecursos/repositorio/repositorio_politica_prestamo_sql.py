@@ -1,12 +1,14 @@
 from __future__ import annotations
-from dominio.gestion_control.politica_prestamo import PoliticaPrestamo
-from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
-from dominio.gestion_control.i_repositorio_politica_prestamo import IRepositorioPoliticaPrestamo
-from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
-from dominio.gestion_prestamos.validacion_prestamo import ConflictoPrestamoError
+from dominio.control import (
+    FabricaPoliticaPrestamo,
+    HorarioAtencion,
+    IRepositorioPoliticaPrestamo,
+    LimiteArticulosPrestamo,
+    PoliticaPrestamo,
+    PoliticaVencimientoReserva,
+)
+from dominio.prestamos import ConflictoPrestamoError
 from repositorio.conexion_mysql import MySQLConnection
-from dominio.gestion_control.horario_atencion import HorarioAtencion
-from dominio.gestion_control.politica_vencimiento_reserva import PoliticaVencimientoReserva
 from repositorio.politica_vencimiento_reserva_sql import consultar_politica_vencimiento_reserva
 
 

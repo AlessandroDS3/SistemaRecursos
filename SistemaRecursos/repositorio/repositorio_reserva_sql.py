@@ -1,16 +1,21 @@
 from __future__ import annotations
-from dominio.resultados_consulta import ReservaDetalle, ResultadoReservas
-from dominio.gestion_prestamos.i_repositorio_reserva import IRepositorioReserva
-from dominio.gestion_prestamos.reserva import Reserva, AccionReserva
-from dominio.gestion_prestamos.validacion_prestamo import ConflictoPrestamoError
-from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
+from contextlib import contextmanager
+from dominio.control import FabricaPoliticaPrestamo
+from dominio.prestamos import ConflictoPrestamoError
+from dominio.reservas import (
+    AccionReserva,
+    IOperacionEntregaReserva,
+    IRepositorioReserva,
+    Reserva,
+    ReservaDetalle,
+    ResultadoReservas,
+)
 from repositorio.conexion_mysql import MySQLConnection
+from repositorio.politica_vencimiento_reserva_sql import consultar_politica_vencimiento_reserva
+from repositorio.repositorio_bien_material_sql import registrar_historial_bien
 from repositorio.repositorio_persona_sql import CONSULTA as CONSULTA_PERSONAS
 from repositorio.repositorio_prestamo_sql import OperacionPrestamoSQL, hay_prestamos_vencidos
-from dominio.gestion_prestamos.i_operacion_reserva import IOperacionEntregaReserva
-from contextlib import contextmanager
-from repositorio.repositorio_bien_material_sql import registrar_historial_bien
-from repositorio.politica_vencimiento_reserva_sql import consultar_politica_vencimiento_reserva
+from repositorio.repositorio_sancion_sql import consultar_sanciones_activas
 
 
 CONSULTA_RESERVA = """
@@ -144,18 +149,7 @@ class RepositorioReservaSQL(IRepositorioReserva):
     def _consultar_solicitante(cursor, dni):
         cursor.execute(CONSULTA_PERSONAS + " WHERE p.dni=%s FOR UPDATE", (dni,))
         persona = cursor.fetchone()
-        cursor.execute(
-            """SELECT s.id_sancion FROM sancion s
-               JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
-               JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle
-               JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
-               WHERE (pr.dni_persona=%s OR EXISTS (
-                   SELECT 1 FROM participante_prestamo pp
-                   WHERE pp.id_prestamo=pr.id_prestamo AND pp.dni_persona=%s
-               )) AND s.estado='ACTIVA' FOR UPDATE""",
-            (dni, dni),
-        )
-        return persona, bool(cursor.fetchall())
+        return persona, consultar_sanciones_activas(cursor, {dni})
 
     @staticmethod
     def _consultar_politica(cursor, tipo_persona, id_categoria):

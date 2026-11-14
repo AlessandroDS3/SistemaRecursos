@@ -1,21 +1,20 @@
 from __future__ import annotations
-from servicios.servicio_persona import ServicioAplicacionPersona
-from servicios.servicio_acceso import ServicioAplicacionAcceso
+from dominio.personas import ValidacionPersonaError
+from dominio.validaciones import version_persona
+from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 from mysql.connector import IntegrityError
-from flask import Blueprint, request, redirect, url_for, g, session
 from presentacion.formularios import error_formulario
-from presentacion.seguridad import requiere_permiso, redirigir_segun_permiso
-from presentacion.vistas.vista_persona import VistaPersona
-from dominio.gestion_personas_usuarios.validacion_persona import ValidacionPersonaError
+from presentacion.seguridad import redirigir_segun_permiso, requiere_permiso
+from servicios.servicio_cuenta import ServicioAplicacionCuenta
+from servicios.servicio_persona import ServicioAplicacionPersona
 
 MSG_PERSONA_DUPLICADA = "Ya existe una persona con esos datos únicos."
 
 
 class ControladorPersona:
-    def __init__(self, servicio: ServicioAplicacionPersona, acceso: ServicioAplicacionAcceso):
+    def __init__(self, servicio: ServicioAplicacionPersona, cuentas: ServicioAplicacionCuenta):
         self.servicio: ServicioAplicacionPersona = servicio
-        self.acceso: ServicioAplicacionAcceso = acceso
-        self.vista = VistaPersona()
+        self.cuentas: ServicioAplicacionCuenta = cuentas
         self.blueprint = Blueprint("personas", __name__, url_prefix="/personas")
         agregar = self.blueprint.add_url_rule
         agregar("", "consultar_personas", self.consultar_personas, methods=["GET"])
@@ -67,10 +66,10 @@ class ControladorPersona:
         personas = resultado["personas"]
         cuentas = {}
         if con_cuentas and personas:
-            cuentas = self.acceso.consultar_resumen_cuentas(
+            cuentas = self.cuentas.consultar_resumen_cuentas(
                 {p.dni for p in personas}
             )
-        return self.vista.mostrar_consulta(
+        return self._renderizar_consulta(
             personas,
             cuentas,
             filtros=filtros,
@@ -80,7 +79,7 @@ class ControladorPersona:
 
     @requiere_permiso('PERSONAS_GESTIONAR')
     def mostrar_formulario_persona(self):
-        return self.vista.mostrar_formulario()
+        return self._renderizar_formulario()
 
     @requiere_permiso('PERSONAS_GESTIONAR')
     def registrar_persona(self):
@@ -88,11 +87,11 @@ class ControladorPersona:
             persona = self.servicio.registrar_persona(request.form)
         except (ValueError, IntegrityError) as error:
             mensaje = error_formulario(error, MSG_PERSONA_DUPLICADA)
-            formulario = self.vista.mostrar_formulario(
+            formulario = self._renderizar_formulario(
                 error=mensaje, errores=self._errores_persona(error)
             )
             return formulario
-        self.vista.mostrar_mensaje("Persona registrada.")
+        self._renderizar_mensaje("Persona registrada.")
         return self._ir_al_detalle(persona.dni)
 
     @requiere_permiso("PERSONAS_CONSULTAR")
@@ -101,16 +100,16 @@ class ControladorPersona:
 
     def _mostrar_detalle(self, dni, error=None):
         gestionar = g.usuario.rol.tiene_permiso("USUARIOS_GESTIONAR")
-        return self.vista.mostrar_detalle(
+        return self._renderizar_detalle(
             self.servicio.consultar_persona(dni),
-            self.acceso.consultar_cuenta_persona(dni) if gestionar else None,
+            self.cuentas.consultar_cuenta_persona(dni) if gestionar else None,
             error=error,
         )
 
     @requiere_permiso('PERSONAS_GESTIONAR')
     def mostrar_edicion_persona(self, dni):
         persona = self.servicio.consultar_persona(dni)
-        return self.vista.mostrar_formulario(persona)
+        return self._renderizar_formulario(persona)
 
     @requiere_permiso('PERSONAS_GESTIONAR')
     def actualizar_persona(self, dni):
@@ -120,28 +119,28 @@ class ControladorPersona:
             persona = self.servicio.actualizar_persona(datos, dni_actual=dni, id_usuario_actor=g.usuario.id_usuario)
         except (ValueError, IntegrityError) as error:
             mensaje = error_formulario(error, MSG_PERSONA_DUPLICADA)
-            formulario = self.vista.mostrar_formulario(
+            formulario = self._renderizar_formulario(
                 persona, error=mensaje, errores=self._errores_persona(error)
             )
             return formulario
-        self.vista.mostrar_mensaje("Datos actualizados.")
+        self._renderizar_mensaje("Datos actualizados.")
         return self._ir_al_detalle(persona.dni)
 
     @requiere_permiso('PERSONAS_GESTIONAR')
     def mostrar_confirmacion_desactivacion_persona(self, dni):
         persona = self.servicio.consultar_persona(dni)
-        return self.vista.mostrar_confirmacion_desactivacion(persona)
+        return self._renderizar_confirmacion_desactivacion(persona)
 
     @requiere_permiso('PERSONAS_GESTIONAR')
     def desactivar_persona(self, dni):
         self.servicio.desactivar_persona(dni, id_usuario_actor=g.usuario.id_usuario)
-        self.vista.mostrar_mensaje("Persona desactivada. Sus cuentas ya no podrán ingresar.")
+        self._renderizar_mensaje("Persona desactivada. Sus cuentas ya no podrán ingresar.")
         return redirigir_segun_permiso("personas.consultar_personas", "PERSONAS_CONSULTAR")
 
     @requiere_permiso("USUARIOS_GESTIONAR")
     def registrar_cuenta(self, dni):
         try:
-            self.acceso.registrar_cuenta(
+            self.cuentas.registrar_cuenta(
                 dni,
                 request.form.get("nombre_usuario", ""),
                 request.form.get("clave", ""),
@@ -152,34 +151,34 @@ class ControladorPersona:
             )
             if g.usuario.rol.tiene_permiso("PERSONAS_CONSULTAR"):
                 return self._mostrar_detalle(dni, error=mensaje), 400
-            return self.vista.mostrar_alta_cuenta(dni, error=mensaje), 400
-        self.vista.mostrar_mensaje("Cuenta de acceso creada.")
+            return self._renderizar_alta_cuenta(dni, error=mensaje), 400
+        self._renderizar_mensaje("Cuenta de acceso creada.")
         return self._ir_al_detalle(dni)
 
     @requiere_permiso('USUARIOS_GESTIONAR')
     def mostrar_edicion_cuenta(self, dni):
-        cuenta = self.acceso.consultar_cuenta(dni)
-        return self.vista.mostrar_formulario_cuenta(
+        cuenta = self.cuentas.consultar_cuenta(dni)
+        return self._renderizar_formulario_cuenta(
             cuenta.persona, cuenta
         )
 
     @requiere_permiso('USUARIOS_GESTIONAR')
     def actualizar_cuenta(self, dni):
-        cuenta = self.acceso.consultar_cuenta(dni)
+        cuenta = self.cuentas.consultar_cuenta(dni)
         propia = cuenta.id_usuario == g.usuario.id_usuario
         try:
-            self.acceso.actualizar_cuenta(dni, request.form, g.usuario.id_usuario)
+            self.cuentas.actualizar_cuenta(dni, request.form, g.usuario.id_usuario)
         except (ValueError, IntegrityError) as error:
             mensaje = error_formulario(error, "Ese nombre de usuario ya está en uso.")
-            formulario = self.vista.mostrar_formulario_cuenta(
+            formulario = self._renderizar_formulario_cuenta(
                 cuenta.persona, cuenta, error=mensaje
             )
             return formulario
         if propia and request.form.get("clave", ""):
             session.clear()
-            self.vista.mostrar_mensaje("Contraseña actualizada. Inicia sesión con tus nuevos datos.")
+            self._renderizar_mensaje("Contraseña actualizada. Inicia sesión con tus nuevos datos.")
             return redirect(url_for("auth.login"))
-        self.vista.mostrar_mensaje(
+        self._renderizar_mensaje(
             "Cuenta actualizada."
         )
         if propia:
@@ -188,16 +187,53 @@ class ControladorPersona:
 
     @requiere_permiso("USUARIOS_GESTIONAR")
     def activar_cuenta(self, dni):
-        self.acceso.cambiar_estado_cuenta(dni, True, g.usuario.id_usuario)
-        self.vista.mostrar_mensaje(
+        self.cuentas.cambiar_estado_cuenta(dni, True, g.usuario.id_usuario)
+        self._renderizar_mensaje(
             "Cuenta activada. Ya puede iniciar sesión si su persona y rol están activos."
         )
         return self._ir_al_detalle(dni)
 
     @requiere_permiso("USUARIOS_GESTIONAR")
     def desactivar_cuenta(self, dni):
-        self.acceso.cambiar_estado_cuenta(dni, False, g.usuario.id_usuario)
-        self.vista.mostrar_mensaje(
+        self.cuentas.cambiar_estado_cuenta(dni, False, g.usuario.id_usuario)
+        self._renderizar_mensaje(
             "Cuenta desactivada. No podrá iniciar sesión y perderá acceso en su siguiente petición."
         )
         return self._ir_al_detalle(dni)
+
+    def _renderizar_formulario(self, persona=None, error=None, errores=None):
+        return render_template(
+            "vista_persona.html", modo="formulario", persona=persona, error=error,
+            errores=errores or {}, version=version_persona(persona) if persona else None,
+        )
+
+    def _renderizar_consulta(
+        self, personas, cuentas_por_persona=None, filtros=None, resumen=None, pagina=1, paginas=1, aviso=""
+    ):
+        return render_template(
+            "vista_persona.html",
+            modo="consulta",
+            personas=personas,
+            cuentas_por_persona=cuentas_por_persona or {},
+            filtros=filtros or {}, pagina=pagina, paginas=paginas, aviso=aviso,
+            resumen=resumen or {"total": len(personas), "activas": 0, "inactivas": 0},
+        )
+
+    def _renderizar_detalle(self, persona, cuenta=None, error=None):
+        return render_template(
+            "vista_persona.html", modo="detalle", persona=persona, cuenta=cuenta, error=error
+        )
+
+    def _renderizar_alta_cuenta(self, dni, error):
+        return render_template("vista_persona.html", modo="alta_cuenta", dni=dni, error=error)
+
+    def _renderizar_formulario_cuenta(self, persona, cuenta, error=None):
+        return render_template(
+            "vista_persona.html", modo="cuenta", persona=persona, cuenta=cuenta, error=error
+        )
+
+    def _renderizar_mensaje(self, mensaje):
+        flash(mensaje, "success")
+
+    def _renderizar_confirmacion_desactivacion(self, persona):
+        return render_template("vista_persona.html", modo="desactivar", persona=persona)

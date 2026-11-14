@@ -1,7 +1,23 @@
-from dominio.gestion_control.i_repositorio_sancion import IRepositorioSancion
-from dominio.gestion_control.sancion import Sancion
+from dominio.control import IRepositorioSancion, Sancion
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.sanciones_vencimiento_sql import aplicar_sancion_vencimiento
+
+
+def consultar_sanciones_activas(cursor, dnis):
+    """Consulta común para préstamos y reservas, usando la transacción del llamante."""
+    dnis = tuple(sorted(set(dnis)))
+    if not dnis:
+        return False
+    marcadores = ','.join(['%s'] * len(dnis))
+    cursor.execute(f'''SELECT s.id_sancion FROM sancion s
+        JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
+        JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle
+        JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
+        WHERE (pr.dni_persona IN ({marcadores}) OR EXISTS (
+            SELECT 1 FROM participante_prestamo pp
+            WHERE pp.id_prestamo=pr.id_prestamo AND pp.dni_persona IN ({marcadores})))
+        AND s.estado='ACTIVA' FOR UPDATE''', dnis * 2)
+    return bool(cursor.fetchall())
 
 
 class RepositorioSancionSQL(IRepositorioSancion):

@@ -1,4 +1,4 @@
-from dominio.gestion_control.politica_vencimiento_reserva import PoliticaVencimientoReserva
+from dominio.control import PoliticaVencimientoReserva
 
 
 def consultar_politica_vencimiento_reserva(cursor, bloquear=False):

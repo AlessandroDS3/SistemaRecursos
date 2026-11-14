@@ -1,19 +1,21 @@
 from __future__ import annotations
-from dominio.gestion_personas_usuarios.permiso import Permiso
-from dominio.gestion_personas_usuarios.rol import Rol
-from dominio.gestion_personas_usuarios.i_repositorio_rol import IRepositorioRol
-from servicios.validacion_identificadores import identificador
-from dominio.gestion_personas_usuarios.i_repositorio_acceso import IRepositorioAcceso
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
-from dominio.resultados_consulta import CuentaParaRol
-from dominio.gestion_personas_usuarios.usuario_sistema import UsuarioSistema
-from dominio.gestion_personas_usuarios.rol import validar_permisos_administrador
+from dominio.cuentas import (
+    CuentaParaRol,
+    IRepositorioCuenta,
+    IRepositorioRol,
+    Permiso,
+    Rol,
+    UsuarioSistema,
+    validar_permisos_administrador,
+)
+from dominio.personas import validar_dni
+from dominio.validaciones import entero as identificador
 
 
 class ServicioAplicacionRol:
-    def __init__(self, repositorio_roles: IRepositorioRol, repositorio_cuentas: IRepositorioAcceso):
+    def __init__(self, repositorio_roles: IRepositorioRol, repositorio_cuentas: IRepositorioCuenta):
         self.repositorio: IRepositorioRol = repositorio_roles
-        self.cuentas: IRepositorioAcceso = repositorio_cuentas
+        self.cuentas: IRepositorioCuenta = repositorio_cuentas
 
     def consultar_roles(self) -> list[Rol]:
         return self.repositorio.consultar_roles()
@@ -29,7 +31,7 @@ class ServicioAplicacionRol:
         matriz = {}
         for rol in roles:
             seleccionados = set()
-            for valor in formulario.getlist(f"permisos_{rol.nombre.value}"):
+            for valor in formulario.get(f"permisos_{rol.nombre.value}", []):
                 seleccionados.add(valor)
             for codigo_permiso in seleccionados:
                 if codigo_permiso not in permisos_validos:
