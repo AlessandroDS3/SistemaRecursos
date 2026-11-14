@@ -14,6 +14,7 @@ from dominio.gestion_control.reporte import FiltroReporte, celda_csv
 from dominio.gestion_prestamos.prestamo import SolicitudPrestamo, estado_prestamo
 from dominio.gestion_prestamos.ampliacion_prestamo import AmpliacionPrestamo
 from dominio.gestion_prestamos.devolucion import Devolucion
+from dominio.gestion_prestamos.reserva import validar_accion
 
 
 class ReglasDominio(unittest.TestCase):
@@ -186,6 +187,57 @@ class ReglasDominio(unittest.TestCase):
                 ConfiguracionReservas(**datos)
         with self.assertRaises(ValueError):
             HorarioAtencion(hora_apertura=timedelta(hours=8, seconds=1))
+
+    def test_acciones_reserva_solo_admiten_transiciones_validas(self):
+        pendientes = ('EN_ESPERA', 'LISTA_PARA_RETIRO')
+        permitidos = {
+            'preparar': ('EN_ESPERA',),
+            'entregar': ('LISTA_PARA_RETIRO',),
+            'cancelar': pendientes,
+            'rechazar': pendientes,
+            'expirar': pendientes,
+        }
+        for accion, estados in permitidos.items():
+            for estado in (*pendientes, 'ATENDIDA', 'CANCELADA', 'RECHAZADA', 'EXPIRADA'):
+                reserva = dict(
+                    dni_persona='12345678',
+                    estado=estado,
+                    fecha_requerida=self.consultar_fecha_actual,
+                    fecha_limite_vencimiento=None,
+                )
+                with self.subTest(accion=accion, estado=estado):
+                    if estado in estados:
+                        validar_accion(
+                            reserva, accion, '87654321', True, self.consultar_fecha_actual
+                        )
+                    else:
+                        with self.assertRaises(Conflicto):
+                            validar_accion(
+                                reserva, accion, '87654321', True, self.consultar_fecha_actual
+                            )
+
+    def test_usuario_solo_cancela_su_reserva_y_no_puede_gestionarla(self):
+        reserva = dict(dni_persona='12345678', estado='EN_ESPERA')
+        validar_accion(reserva, 'cancelar', '12345678', False, self.consultar_fecha_actual)
+        for accion, actor in (('cancelar', '87654321'), ('preparar', '12345678')):
+            with self.subTest(accion=accion), self.assertRaises(PermissionError):
+                validar_accion(reserva, accion, actor, False, self.consultar_fecha_actual)
+        with self.assertRaises(ValueError):
+            validar_accion(reserva, 'desconocida', '12345678', True, self.consultar_fecha_actual)
+
+    def test_preparar_y_entregar_respetan_fecha_y_vencimiento(self):
+        for accion, estado in (('preparar', 'EN_ESPERA'), ('entregar', 'LISTA_PARA_RETIRO')):
+            reserva = dict(dni_persona='12345678', estado=estado)
+            for requerida, limite in (
+                (self.consultar_fecha_actual + timedelta(hours=1), None),
+                (self.consultar_fecha_actual, self.consultar_fecha_actual),
+            ):
+                reserva.update(fecha_requerida=requerida, fecha_limite_vencimiento=limite)
+                with self.subTest(accion=accion, requerida=requerida, limite=limite):
+                    with self.assertRaises(Conflicto):
+                        validar_accion(
+                            reserva, accion, '87654321', True, self.consultar_fecha_actual
+                        )
 
     def test_bien_admite_fecha_desconocida_y_evitar_cambios_manual_prestado(self):
         self.assertIsNone(

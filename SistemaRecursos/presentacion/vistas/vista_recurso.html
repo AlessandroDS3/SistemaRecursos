@@ -4,10 +4,6 @@
   {% if modo=="lista" %}
     <div class="cabecera">
       <h1>Catálogo de recursos</h1>
-      {% if g.usuario.permite("RECURSOS_GESTIONAR") %}
-        <a class="boton" href="{{ url_for('recursos.gestionar_formulario_recurso') }}">Registrar recurso</a>
-        <a href="{{ url_for('recursos.gestionar_categorias') }}">Categorías</a>
-      {% endif %}
     </div>
     <form class="filtros">
       {{ campo('q','Nombre, marca o modelo',request.args.get('q',''),maximo=120) }}
@@ -35,6 +31,12 @@
     <div class="rejilla tarjetas">
       {% for r in recursos %}
         <article class="panel">
+          <div class="ilustracion-recurso" aria-hidden="true">
+            <img src="{{ url_for('static', filename='imagenes/recursos/recurso.svg') }}"
+                 alt=""
+                 width="64"
+                 height="51">
+          </div>
           <p class="suave">{{ r.categoria }}</p>
           <h2>
             <a href="{{ url_for('recursos.consultar_recurso',identificador=r.id_recurso) }}">{{ r.nombre }}</a>

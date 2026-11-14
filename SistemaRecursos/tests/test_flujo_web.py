@@ -1,10 +1,32 @@
 import re
 from unittest.mock import patch
 from mysql.connector import DatabaseError
+from dominio.gestion_prestamos.reserva import ESTADOS_RESERVA
 from caso_mysql import CasoMySQL
 
 
 class RecorridosWeb(CasoMySQL):
+    def test_filtro_y_botones_reserva_reflejan_estados_del_dominio(self):
+        identificador = self.reservar()
+        self.login('encargado1', 'EncargadoPrueba2026!')
+        pagina = self.cliente.get('/reservas?estado=EN_ESPERA').get_data(as_text=True)
+        filtro = re.search(r'<select name="estado">(.*?)</select>', pagina, re.DOTALL).group(1)
+        opciones = re.findall(r'<option[^>]*>([^<]*)</option>', filtro)
+        self.assertEqual(opciones, ['Todos', *ESTADOS_RESERVA])
+        url = f'/reservas/{identificador}'
+        pagina = self.cliente.get(url).get_data(as_text=True)
+        self.assertIn(f'action="{url}/preparar"', pagina)
+        self.assertNotIn(f'action="{url}/entregar"', pagina)
+        self.post(url + '/preparar')
+        pagina = self.cliente.get(url).get_data(as_text=True)
+        self.assertNotIn(f'action="{url}/preparar"', pagina)
+        self.assertIn(f'action="{url}/entregar"', pagina)
+        self.assertIn(f'action="{url}/cancelar"', pagina)
+        self.post(url + '/cancelar')
+        pagina = self.cliente.get(url).get_data(as_text=True)
+        for accion in ('preparar', 'entregar', 'cancelar', 'expirar'):
+            self.assertNotIn(f'action="{url}/{accion}"', pagina)
+
     def test_consultar_condiciones_no_escribe_y_respeta_permiso(self):
         self.login('encargado1', 'EncargadoPrueba2026!')
         respuesta = self.cliente.get('/prestamos/condiciones?dni_persona=02167885')

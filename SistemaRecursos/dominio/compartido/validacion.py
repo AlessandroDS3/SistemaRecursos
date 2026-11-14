@@ -41,11 +41,11 @@ def entero(valor, nombre='Identificador', minimo=1, maximo=2147483647):
     except (ValueError, TypeError, OverflowError):
         raise ValueError(f'{nombre}: introduce un entero entre {minimo} y {maximo}.') from None
 
-
 def dni(valor):
-    if not isinstance(valor, str) or not re.fullmatch(r'[0-9]{8}', valor.strip()):
+    if not isinstance(valor, str) or not re.fullmatch(r'\d{8}', valor.strip(), flags=re.ASCII):
         raise ValueError('El DNI debe tener ocho dígitos.')
     return valor.strip()
+
 
 
 def instante(valor):

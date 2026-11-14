@@ -1,4 +1,4 @@
-"""Punto de composición: conecta HTTP, casos de uso y adaptadores de MySQL."""
+
 
 from datetime import datetime, timedelta, timezone
 import logging
@@ -6,8 +6,7 @@ import os
 from pathlib import Path
 from secrets import token_hex
 
-from flask import Flask, g, redirect, render_template, url_for
-from flask_wtf.csrf import CSRFProtect
+from flask import Flask, render_template
 from mysql.connector import Error as ErrorMySQL, IntegrityError
 from werkzeug.exceptions import HTTPException
 
@@ -108,13 +107,6 @@ def registrar_controladores(app, servicios):
 def registrar_inicio(app):
     @app.get('/')
     def inicio():
-        for permiso, endpoint in (
-            ('CATALOGO_CONSULTAR', 'recursos.consultar_recursos'),
-            ('PRESTAMOS_GESTIONAR', 'prestamos.consultar_prestamos'),
-            ('PERSONAS_CONSULTAR', 'personas.consultar_personas'),
-        ):
-            if g.usuario.permite(permiso):
-                return redirect(url_for(endpoint))
         return render_template('inicio.html')
 
 
@@ -169,17 +161,13 @@ def create_app(config=None):
     )
     app.config.update(
         SECRET_KEY=clave_local(),
-        PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
-        SESSION_REFRESH_EACH_REQUEST=False,
         SESSION_COOKIE_NAME='recursos_rehecho',
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
         MAX_CONTENT_LENGTH=1024 * 1024,
         INICIAR_PROCESADOR_VENCIMIENTOS=False,
-        WTF_CSRF_ENABLED=True,
     )
     app.config.update(config or {})
-    CSRFProtect(app)
 
     conexion = MySQLConnection(app.config.get('MYSQL_CONFIG'))
     servicios = crear_servicios(conexion)

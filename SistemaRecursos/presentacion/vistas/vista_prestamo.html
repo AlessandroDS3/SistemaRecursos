@@ -5,7 +5,7 @@
     <div class="cabecera">
       <h1>{{ 'Préstamos' if gestionar else 'Mis préstamos' }}</h1>
       {% if gestionar %}
-        <a class="boton" href="{{ url_for('prestamos.registrar_prestamo') }}">Entregar préstamo</a>
+        <a class="boton" href="{{ url_for('prestamos.registrar_prestamo') }}">Registrar préstamo</a>
       {% endif %}
     </div>
     <form class="filtros">
@@ -62,7 +62,8 @@
         <p>
           El estado actual se consulta según los detalles. Este botón deja constancia de los vencimientos en el historial.
         </p>
-        <form method="post" action="{{ url_for('prestamos.registrar_vencimientos_prestamos') }}">
+        <form method="post"
+              action="{{ url_for('prestamos.registrar_vencimientos_prestamos') }}">
           {{ csrf() }}
           <button class="secundario">Registrar vencimientos</button>
         </form>

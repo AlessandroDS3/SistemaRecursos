@@ -8,7 +8,8 @@ if (Test-Path -LiteralPath $configLocal) {
 if (-not $env:DB_HOST) { $env:DB_HOST = '127.0.0.1' }
 if (-not $env:DB_PORT) { $env:DB_PORT = '3306' }
 if (-not $env:DB_USER) { $env:DB_USER = 'root' }
-if (-not $env:DB_NAME) { $env:DB_NAME = 'prestamos_escuela_rehecho' }
+if (-not $env:DB_NAME) { $env:DB_NAME = 'prestamos_escuela_pruebas' }
+if (-not $env:DB_PASSWORD ) {$env:DB_PASSWORD = Read-Host 'Contraseña de MySQL'}
 if ([string]::IsNullOrWhiteSpace($env:DB_PASSWORD)) {
     throw 'Configura DB_PASSWORD en tu entorno antes de iniciar.'
 }

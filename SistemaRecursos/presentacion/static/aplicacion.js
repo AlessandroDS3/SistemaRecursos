@@ -1,3 +1,25 @@
+const mostrarClave = document.querySelector('[data-mostrar-clave]');
+mostrarClave?.addEventListener('change', () => {
+  const clave = document.getElementById('clave');
+  if (clave) clave.type = mostrarClave.checked ? 'text' : 'password';
+});
+
+const botonMenu = document.getElementById('menu-toggle');
+const sombraMenu = document.getElementById('menu-sombra');
+function cambiarMenu(abierto) {
+  document.body.classList.toggle('menu-abierto', abierto);
+  botonMenu?.setAttribute('aria-expanded', String(abierto));
+  if (sombraMenu) sombraMenu.hidden = !abierto;
+}
+botonMenu?.addEventListener('click', () => cambiarMenu(!document.body.classList.contains('menu-abierto')));
+sombraMenu?.addEventListener('click', () => cambiarMenu(false));
+document.addEventListener('keydown', evento => {
+  if (evento.key === 'Escape' && document.body.classList.contains('menu-abierto')) {
+    cambiarMenu(false);
+    botonMenu?.focus();
+  }
+});
+
 // La selección del tipo solo cambia los campos visibles. El dominio vuelve a validarlos.
 const tipoPersona = document.querySelector('[name="tipo"]');
 function mostrarDatosInstitucionales() {

@@ -40,7 +40,7 @@ class Persona:
         self.apellidos = texto(self.apellidos, 'Apellidos', 100, True)
         self.correo = texto(self.correo, 'Correo', 120, True)
         self.telefono = texto(self.telefono, 'Teléfono', 20)
-        if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', self.correo):
+        if not re.fullmatch(r'[^\s@]+@[^.\s@]+(?:\.[^.\s@]+)+', self.correo):
             raise ValueError('Introduce un correo válido.')
         if self.tipo not in TIPOS_PERSONA or self.estado not in ('ACTIVA', 'INACTIVA'):
             raise ValueError('Tipo o estado de persona inválido.')

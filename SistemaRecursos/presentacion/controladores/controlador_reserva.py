@@ -1,4 +1,5 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from dominio.gestion_prestamos.reserva import ESTADOS_POR_ACCION, ESTADOS_RESERVA
 from presentacion.seguridad import requiere_permiso
 
 
@@ -6,6 +7,7 @@ class ControladorReserva:
     def __init__(self, servicio):
         self.servicio = servicio
         self.blueprint = Blueprint('reservas', __name__, url_prefix='/reservas')
+        self.blueprint.context_processor(self._contexto_estados)
         self.blueprint.add_url_rule('', 'consultar_reservas', self.consultar_reservas)
         self.blueprint.add_url_rule(
             '/nueva', 'registrar_reserva', self.registrar_reserva, methods=['GET', 'POST']
@@ -23,6 +25,10 @@ class ControladorReserva:
             self.blueprint.add_url_rule(
                 '/<int:identificador>/' + accion, accion + '_reserva', funcion, methods=['POST']
             )
+
+    @staticmethod
+    def _contexto_estados():
+        return dict(estados_reserva=ESTADOS_RESERVA, estados_por_accion=ESTADOS_POR_ACCION)
 
     @requiere_permiso('RESERVAS_PROPIAS_GESTIONAR', 'PRESTAMOS_GESTIONAR')
     def consultar_reservas(self):

@@ -1,12 +1,10 @@
-from dominio.compartido.validacion import NoEncontrado
-
 """Reglas puras de entrega y cálculo de estado. Los datos se cargan bajo bloqueo."""
 
 from dataclasses import dataclass, field
 from typing import Protocol
 from dominio.compartido.contratos import IRepositorioTransaccional
 from dominio.gestion_control.sancion import IRepositorioSancion
-from dominio.compartido.validacion import Conflicto, dni, ids, texto
+from dominio.compartido.validacion import Conflicto, NoEncontrado, dni, ids, texto
 from dominio.gestion_personas_usuarios.persona import validar_elegibilidad
 from dominio.gestion_control.politica_prestamo import PoliticaPrestamo
 
@@ -76,27 +74,25 @@ class SolicitudPrestamo:
         if horario is None:
             raise ValueError('Configura el horario de atención.')
         horario.cierre(contexto['ahora'])
-        plan = []
-        for bien in bienes:
-            esperado = 'RESERVADO' if bien['id_bien'] == bien_reservado else 'DISPONIBLE'
-            if bien['estado'] != esperado:
-                raise Conflicto('Uno de los bienes dejó de estar disponible.')
-            fila = contexto['politicas'].get(bien['id_categoria'])
-            if fila is None:
-                raise ValueError('Falta una política para una categoría seleccionada.')
-            politica = PoliticaPrestamo.desde_datos(fila)
-            if self.salida_solicitada and not politica.permite_salida:
-                raise ValueError('La política de un bien no permite la salida externa.')
-            plan.append(
-                dict(
-                    id_bien=bien['id_bien'],
-                    id_politica=politica.id_politica,
-                    fecha_limite_devolucion=politica.vencimiento(contexto['ahora'], horario),
-                    condicion_entrega='BUENO',
-                    estado_anterior=bien['estado'],
-                )
-            )
-        return plan
+        return [self._planificar_bien(bien, contexto, bien_reservado) for bien in bienes]
+
+    def _planificar_bien(self, bien, contexto, bien_reservado):
+        esperado = 'RESERVADO' if bien['id_bien'] == bien_reservado else 'DISPONIBLE'
+        if bien['estado'] != esperado:
+            raise Conflicto('Uno de los bienes dejó de estar disponible.')
+        fila = contexto['politicas'].get(bien['id_categoria'])
+        if fila is None:
+            raise ValueError('Falta una política para una categoría seleccionada.')
+        politica = PoliticaPrestamo.desde_datos(fila)
+        if self.salida_solicitada and not politica.permite_salida:
+            raise ValueError('La política de un bien no permite la salida externa.')
+        return {
+            'id_bien': bien['id_bien'],
+            'id_politica': politica.id_politica,
+            'fecha_limite_devolucion': politica.vencimiento(contexto['ahora'], contexto['horario']),
+            'condicion_entrega': 'BUENO',
+            'estado_anterior': bien['estado'],
+        }
 
 
 def estado_prestamo(detalles, ahora):

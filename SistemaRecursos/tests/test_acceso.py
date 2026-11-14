@@ -1,9 +1,77 @@
 from time import time
+from unittest.mock import patch
+import re
 from werkzeug.security import generate_password_hash
 from caso_mysql import CasoMySQL
 
 
 class AccesoWeb(CasoMySQL):
+    def test_inicio_y_navegacion_respetan_el_rol_y_las_acciones_abren(self):
+        escenarios = (
+            (
+                'admin',
+                'AdminPrueba2026!',
+                [
+                    'Inicio',
+                    'Personas',
+                    'Roles y permisos',
+                    'Catálogo de recursos',
+                    'Administrar recursos',
+                    'Préstamos',
+                    'Solicitudes y reservas',
+                    'Políticas de préstamo',
+                    'Reportes',
+                    'Sanciones',
+                ],
+            ),
+            (
+                'encargado1',
+                'EncargadoPrueba2026!',
+                [
+                    'Inicio',
+                    'Personas',
+                    'Catálogo de recursos',
+                    'Préstamos',
+                    'Solicitudes y reservas',
+                    'Reportes',
+                    'Sanciones',
+                ],
+            ),
+            (
+                'usuario1',
+                'UsuarioPrueba2026!',
+                [
+                    'Inicio',
+                    'Catálogo de recursos',
+                    'Mis préstamos',
+                    'Mis solicitudes y reservas',
+                ],
+            ),
+        )
+        for usuario, clave, esperados in escenarios:
+            with self.subTest(usuario=usuario):
+                login = self.login(usuario, clave)
+                self.assertEqual(login.status_code, 302)
+                self.assertTrue(login.location.endswith('/'))
+                respuesta = self.cliente.get('/')
+                self.assertEqual(respuesta.status_code, 200)
+                pagina = respuesta.get_data(as_text=True)
+                menu = re.search(
+                    r'<nav aria-label="Navegación principal">(.*?)</nav>', pagina, re.S
+                ).group(1)
+                etiquetas = [
+                    texto.strip() for texto in re.findall(r'<a\b[^>]*>(.*?)</a>', menu, re.S)
+                ]
+                self.assertEqual(etiquetas, esperados)
+                self.assertRegex(menu, r'href="/"\s+aria-current="page"')
+                acciones = re.search(r'<div class="acciones">(.*?)</div>', pagina, re.S).group(1)
+                enlaces = re.findall(r'href="([^"]+)"', acciones)
+                self.assertTrue(enlaces)
+                for enlace in enlaces:
+                    with self.subTest(enlace=enlace):
+                        self.assertEqual(self.cliente.get(enlace).status_code, 200)
+                self.post('/logout')
+
     def test_login_correcto_y_cookie_sin_hash_ni_datos_academicos(self):
         respuesta = self.login()
         self.assertEqual(respuesta.status_code, 302)
@@ -65,11 +133,14 @@ class AccesoWeb(CasoMySQL):
         self.assertEqual(self.post('/logout').status_code, 302)
         self.assertEqual(self.cliente.get('/recursos').status_code, 302)
 
-    def test_sesion_vence_a_las_ocho_horas_aunque_se_use(self):
-        self.login()
-        with self.cliente.session_transaction() as sesion:
-            sesion['iniciada'] = time() - 8 * 3600 - 1
-        self.assertEqual(self.cliente.get('/recursos').status_code, 302)
+    def test_sesion_sigue_activa_despues_de_ocho_horas(self):
+        inicio = time()
+        with patch('itsdangerous.timed.time.time', return_value=inicio):
+            respuesta = self.login()
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertNotIn('Expires=', respuesta.headers['Set-Cookie'])
+        with patch('itsdangerous.timed.time.time', return_value=inicio + 9 * 3600):
+            self.assertEqual(self.cliente.get('/recursos').status_code, 200)
 
     def test_pantallas_principales_renderizan_y_no_exponen_hashes(self):
         self.login()

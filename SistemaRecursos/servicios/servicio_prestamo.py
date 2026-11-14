@@ -70,7 +70,17 @@ class ServicioAplicacionPrestamo:
             return self.registrar_prestamo_en_operacion(operacion, solicitud)
 
     @staticmethod
-    def registrar_prestamo_en_operacion(operacion, solicitud, bien_reservado=None):
+    def registrar_prestamo_en_operacion(
+        operacion: IRepositorioPrestamo,
+        solicitud: SolicitudPrestamo,
+        bien_reservado: int | None = None,
+    ) -> int:
+        """Entrega directa o desde reserva; devuelve el identificador del préstamo.
+
+        Recibe una operación dentro de una transacción ya abierta. Quien la llama
+        confirma o revierte todas las escrituras, incluido el cierre de la reserva.
+        Revalida elegibilidad, sanciones, cupo, inventario y política en ambos caminos.
+        """
         contexto = operacion.consultar_contexto_entrega_prestamo(solicitud)
         plan = solicitud.planificar(contexto, bien_reservado)
         return operacion.registrar_entrega_prestamo(solicitud, plan, contexto['ahora'])

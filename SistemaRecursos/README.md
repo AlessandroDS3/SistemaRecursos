@@ -73,6 +73,14 @@ El dominio define los datos, las reglas y los contratos `IRepositorio...` que ne
 
 Los servicios coordinan los casos de uso. El repositorio controla la conexión, las consultas, los bloqueos y la escritura. Presentación recibe HTTP, llama al servicio y muestra su resultado. El dominio no importa Flask, MySQL, servicios ni repositorios concretos; los servicios tampoco importan presentación o persistencia.
 
+La presentación recupera la identidad institucional de la versión anterior: login con logo e ilustración junto al formulario, opción para mostrar contraseña y menú lateral granate en las pantallas internas. `base.html` comparte la estructura del sistema; `estilos.css` adapta tarjetas, tablas y formularios, y `aplicacion.js` controla el menú móvil. La lógica simplificada de servicios y dominio se conserva. En móvil, las dos columnas del login se apilan y el menú se abre desde el encabezado.
+
+Tras iniciar sesión se muestra `inicio.html`, con las acciones disponibles según los permisos. El menú conserva el orden anterior: Inicio, Personas, Roles y permisos, Catálogo de recursos, Administrar recursos, Préstamos, Solicitudes y reservas, Políticas de préstamo y Reportes; Sanciones se mantiene al final para el personal autorizado. Registrar recursos, bienes y categorías se agrupa en Administrar recursos. Los usuarios ven Mis préstamos y Mis solicitudes y reservas.
+
+Los estados de reserva, los estados pendientes y los estados admitidos por cada acción se definen en `dominio/gestion_prestamos/reserva.py`. El controlador los comparte con la plantilla y el repositorio utiliza sus valores como parámetros SQL. Añadir un estado también requiere actualizar el `ENUM` del esquema y migrar las bases existentes.
+
+Los contratos `NuevaReserva`, `Reserva`, `DetalleReserva`, `ContextoReserva` y `CambiosReserva` describen los diccionarios del recorrido de reservas mediante `TypedDict`. No cambian los datos en ejecución; permiten comprobar sus claves y valores opcionales con mypy. El servicio separa preparación, entrega y cierre en métodos privados y conserva la transacción, los permisos y el historial en `_resolver_reserva`.
+
 ## Convención de nombres
 
 Las operaciones públicas usan **verbo + entidad**, con el mismo vocabulario en controladores, servicios y contratos/repositorios:
@@ -127,7 +135,7 @@ Las devoluciones son una operación del préstamo: `ControladorPrestamo.registra
 
 ## Reglas y transacciones
 
-- **Acceso:** consulta una cuenta mínima y sus permisos. Cuenta y persona deben estar activas. La sesión dura como máximo ocho horas; el cambio de contraseña invalida sus cookies. Cada petición vuelve a cargar permisos y estados. Los formularios de escritura usan CSRF.
+- **Acceso:** consulta una cuenta mínima y sus permisos. Cuenta y persona deben estar activas. Usa una cookie de sesión del navegador, sin temporizador propio de ocho horas. El cierre de sesión borra la sesión y el cambio de contraseña invalida las credenciales de las cookies anteriores. Cada petición vuelve a cargar permisos y estados. Los formularios de escritura usan CSRF.
 - **Personas y cuentas:** los datos institucionales pertenecen a persona; contraseña y acceso pertenecen a cuenta. Las ediciones de persona y la matriz de permisos detectan formularios desactualizados. Se protege la propia cuenta y la existencia de un administrador activo.
 - **Entrega:** el formulario consulta cupo, plazos y permiso de salida antes de confirmar. `SolicitudPrestamo.planificar` comprueba a los integrantes, sanciones, vencimientos, cupo total del responsable, inventario, política y horario. El repositorio carga esos hechos bajo bloqueo. Préstamo, detalles, integrantes, inventario e historial se confirman juntos.
 - **Reservas:** la persona solicita un recurso; el personal prepara un ejemplar y confirma la entrega al recogerlo. Se comprueban solicitudes duplicadas, elegibilidad y turno. La posición se calcula al consultar. Entregar una reserva reutiliza `ServicioAplicacionPrestamo.registrar_prestamo_en_operacion` con la misma conexión y transacción.
@@ -178,3 +186,13 @@ Después se corrigió la validación de contraseñas en actualizaciones sin nomb
 Tras unificar los nombres de operaciones y de los identificadores utilizados por las plantillas, la suite completa terminó con **81 pruebas correctas, sin omisiones, en 140,158 segundos**. Incluye la corrección de contraseñas y una comprobación que impide nombres genéricos en las operaciones públicas de negocio. Registro: `datos_locales/nombres_uniformes_final.log`.
 
 El formato opcional de desarrollo utiliza `requirements-dev.txt` y `pyproject.toml`: Black para Python y djLint para las plantillas. No son dependencias de ejecución de la aplicación.
+
+Para comprobar los contratos de reservas, instala `requirements-dev.txt` y ejecuta desde esta carpeta:
+
+```powershell
+..\.venv\Scripts\python.exe -m mypy
+```
+
+La configuración de `pyproject.toml` limita por ahora el análisis al dominio, servicio y repositorio de reservas. Los demás módulos se pueden incorporar gradualmente.
+
+Validación de estas mejoras de mantenibilidad (14/11/2026): **87 pruebas correctas, sin omisiones, en 105,078 segundos**, con MySQL aislado. Mypy terminó sin errores en los tres módulos configurados. Se conservaron las comprobaciones CSRF de `presentacion/seguridad.py` y se retiró la segunda validación de Flask-WTF, incompatible con los tokens propios de los formularios.

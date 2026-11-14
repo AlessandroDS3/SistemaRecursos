@@ -3,7 +3,6 @@
 from functools import wraps
 from hmac import compare_digest
 from secrets import token_urlsafe
-from time import time
 from flask import abort, g, redirect, request, session, url_for
 
 
@@ -15,11 +14,9 @@ def csrf_token():
 
 def iniciar_sesion(cuenta):
     session.clear()
-    session.permanent = True
     session.update(
         id_usuario=cuenta.id_usuario,
         credenciales=cuenta.version_credenciales,
-        iniciada=time(),
         csrf=token_urlsafe(32),
     )
 
@@ -45,12 +42,7 @@ def configurar_seguridad(app, acceso):
         g.usuario = None
         identificador = session.get('id_usuario')
         if identificador is not None:
-            iniciada = session.get('iniciada', 0)
-            cuenta = (
-                acceso.consultar_cuenta_activa(identificador)
-                if 0 <= time() - iniciada < 8 * 3600
-                else None
-            )
+            cuenta = acceso.consultar_cuenta_activa(identificador)
             if (
                 cuenta
                 and cuenta.puede_acceder()

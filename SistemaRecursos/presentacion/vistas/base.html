@@ -5,48 +5,108 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>
       {% block titulo %}
-        Préstamos · Escuela
+        Sistema de préstamos · UNSA
       {% endblock %}
     </title>
     <link rel="stylesheet"
           href="{{ url_for('static', filename='estilos.css') }}">
     <script src="{{ url_for('static', filename='aplicacion.js') }}" defer></script>
   </head>
-  <body>
-    <header>
-      <a class="marca" href="{{ url_for('inicio') }}">Recursos · Escuela</a>
-      {% if g.usuario %}
-        <span>
-          {{ g.usuario.nombre_completo }}
-          ·
-          {{ g.usuario.rol|replace('_', ' ')|title }}
-        </span>
-        <form action="{{ url_for('auth.cerrar_sesion') }}" method="post">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="secundario">Cerrar sesión</button>
-        </form>
-      {% endif %}
-    </header>
+  <body class="{{ 'pagina-sistema' if g.usuario else 'pagina-acceso' }}">
+    <a class="enlace-saltar-contenido" href="#contenido">Ir al contenido</a>
     {% if g.usuario %}
-      <nav aria-label="Navegación principal">
-        {% for permiso, endpoint, etiqueta in [('CATALOGO_CONSULTAR','recursos.consultar_recursos','Catálogo'),('PRESTAMOS_PROPIOS_CONSULTAR','prestamos.consultar_prestamos','Préstamos'),('RESERVAS_PROPIAS_GESTIONAR','reservas.consultar_reservas','Reservas'),('PERSONAS_CONSULTAR','personas.consultar_personas','Personas'),('RECURSOS_GESTIONAR','bienes.consultar_bienes_materiales','Bienes'),('POLITICAS_GESTIONAR','politicas.consultar_politicas_prestamo','Políticas'),('ROLES_CONSULTAR','roles.consultar_roles','Roles'),('PRESTAMOS_GESTIONAR','sanciones.consultar_sanciones','Sanciones'),('REPORTES_CONSULTAR','reportes.consultar_reportes','Reportes')] %}
-          {% if g.usuario.permite(permiso) %}
-            <a href="{{ url_for(endpoint) }}"
-               {% if request.blueprint == endpoint.split('.')[0] %}aria-current="page"{% endif %}>
-              {{ etiqueta }}
-            </a>
-          {% endif %}
-        {% endfor %}
-      </nav>
+      {% set administra_recursos = request.blueprint == 'bienes' or (request.blueprint == 'recursos' and request.endpoint not in ('recursos.consultar_recursos', 'recursos.consultar_recurso')) %}
+      {% set secciones = {
+        "personas": "Personas",
+        "cuentas": "Cuentas de usuario",
+        "roles": "Roles y permisos",
+        "recursos": "Catálogo de recursos",
+        "prestamos": "Préstamos",
+        "reservas": "Solicitudes y reservas",
+        "politicas": "Políticas de préstamo",
+        "reportes": "Reportes",
+        "sanciones": "Sanciones"
+      } %}
+      {% set seccion = 'Administración de recursos' if administra_recursos else secciones.get(request.blueprint, 'Inicio') %}
+      {% set gestiona_prestamos = g.usuario.permite('PRESTAMOS_GESTIONAR') %}
+      {% set navegacion = [
+        ('inicio', 'Inicio', true, 'inicio'),
+        ('personas.consultar_personas', 'Personas', g.usuario.permite('PERSONAS_CONSULTAR'), 'personas'),
+        ('roles.consultar_roles', 'Roles y permisos', g.usuario.permite('ROLES_CONSULTAR'), 'roles'),
+        ('recursos.consultar_recursos', 'Catálogo de recursos', g.usuario.permite('CATALOGO_CONSULTAR'), 'recursos'),
+        ('bienes.consultar_bienes_materiales', 'Administrar recursos', g.usuario.permite('RECURSOS_GESTIONAR'), 'administracion_recursos'),
+        ('prestamos.consultar_prestamos', 'Préstamos' if gestiona_prestamos else 'Mis préstamos', gestiona_prestamos or g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'), 'prestamos'),
+        ('reservas.consultar_reservas', 'Solicitudes y reservas' if gestiona_prestamos else 'Mis solicitudes y reservas', gestiona_prestamos or g.usuario.permite('RESERVAS_PROPIAS_GESTIONAR'), 'reservas'),
+        ('politicas.consultar_politicas_prestamo', 'Políticas de préstamo', g.usuario.permite('POLITICAS_GESTIONAR'), 'politicas'),
+        ('reportes.consultar_reportes', 'Reportes', g.usuario.permite('REPORTES_CONSULTAR'), 'reportes'),
+        ('sanciones.consultar_sanciones', 'Sanciones', gestiona_prestamos, 'sanciones')
+      ] %}
+      <aside class="menu-lateral"
+             id="menu-principal"
+             aria-label="Menú del sistema">
+        <header class="identidad-menu">
+          <a class="logo-institucional"
+             href="{{ url_for('inicio') }}"
+             aria-label="Inicio">
+            <img src="{{ url_for('static', filename='logo-escuela.png') }}"
+                 alt="Ciencia de la Computación · UNSA"
+                 width="1400"
+                 height="800">
+          </a>
+          <p class="nombre-escuela">ESCUELA PROFESIONAL<span>Ciencia de la Computación</span></p>
+        </header>
+        <p class="titulo-menu">SISTEMA DE PRÉSTAMOS</p>
+        <nav aria-label="Navegación principal">
+          {% for endpoint, etiqueta, visible, grupo in navegacion if visible %}
+            {% set activa = (grupo == 'inicio' and request.endpoint == 'inicio') or (grupo == 'administracion_recursos' and administra_recursos) or (request.blueprint == grupo and not administra_recursos) %}
+            <a class="{{ 'enlace-menu-activo' if activa else 'enlace-menu' }}"
+               href="{{ url_for(endpoint) }}"
+               {% if activa %}aria-current="page"{% endif %}>{{ etiqueta }}</a>
+          {% endfor %}
+        </nav>
+        <section class="pie-menu" aria-label="Cuenta de usuario">
+          <div class="usuario-menu">
+            <span class="iniciales-usuario"
+                  aria-hidden="true">{{ g.usuario.nombres[:1] }}{{ g.usuario.apellidos[:1] }}</span>
+            <div><strong>{{ g.usuario.nombre_completo }}</strong><small>{{ g.usuario.rol|replace('_', ' ')|title }}</small></div>
+          </div>
+          <form action="{{ url_for('auth.cerrar_sesion') }}"
+                method="post"
+                class="formulario-cierre-sesion">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit">Cerrar sesión</button>
+          </form>
+        </section>
+      </aside>
+      <button type="button"
+              class="fondo-menu"
+              id="menu-sombra"
+              aria-label="Cerrar menú"
+              hidden></button>
+      <div class="contenedor-sistema">
+        <header class="barra-superior">
+          <button type="button"
+                  class="boton-menu"
+                  id="menu-toggle"
+                  aria-controls="menu-principal"
+                  aria-expanded="false"
+                  aria-label="Abrir menú">☰</button>
+          <strong>{{ seccion }}</strong>
+          <span>UNSA · Ciencia de la Computación</span>
+        </header>
     {% endif %}
-    <main>
+    <main id="contenido"
+          class="{{ 'contenido-principal' if g.usuario else 'contenedor-acceso' }}">
       {% for mensaje in get_flashed_messages() %}
         <p class="aviso" role="status">{{ mensaje }}</p>
       {% endfor %}
       {% block contenido %}{% endblock %}
     </main>
-    <footer>
-      Sistema de préstamos de recursos · Horas de Lima (UTC−5)
-    </footer>
+    {% if g.usuario %}
+      <footer>
+        Sistema de préstamos de recursos · Horas de Lima (UTC−5)
+      </footer>
+      </div>
+    {% endif %}
   </body>
 </html>

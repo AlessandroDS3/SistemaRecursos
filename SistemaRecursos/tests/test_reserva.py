@@ -70,6 +70,48 @@ class OperacionesReserva(CasoMySQL):
             self.fila('SELECT estado FROM bien_material WHERE id_bien=%s', (bien,)), ('DISPONIBLE',)
         )
 
+    def test_rechazar_preparada_exige_motivo_y_libera_bien(self):
+        identificador = self.reservar()
+        reservas = self.servicios['reservas']
+        reservas.preparar_reserva(identificador, {}, 2)
+        bien = reservas.consultar_reserva(identificador, '02167885')['id_bien']
+        with self.assertRaises(ValueError):
+            reservas.rechazar_reserva(identificador, {}, 2)
+        self.assertEqual(
+            self.fila('SELECT estado FROM bien_material WHERE id_bien=%s', (bien,)), ('RESERVADO',)
+        )
+        reservas.rechazar_reserva(identificador, {'motivo': 'Solicitud no autorizada'}, 2)
+        reserva = reservas.consultar_reserva(identificador, '02167885')
+        self.assertEqual(reserva['estado'], 'RECHAZADA')
+        self.assertIsNone(reserva['id_bien'])
+        self.assertEqual(reserva['historial'][0]['observacion'], 'Solicitud no autorizada')
+        self.assertEqual(
+            self.fila('SELECT estado FROM bien_material WHERE id_bien=%s', (bien,)), ('DISPONIBLE',)
+        )
+
+    def test_sancion_posterior_a_preparacion_impide_ambos_caminos_de_entrega(self):
+        prestamo = self.prestar([3])
+        identificador = self.reservar()
+        reservas = self.servicios['reservas']
+        reservas.preparar_reserva(identificador, {}, 2)
+        self.ejecutar(
+            'UPDATE detalle_prestamo SET fecha_limite_devolucion=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 2 DAY)'
+        )
+        self.assertEqual(self.servicios['sanciones'].aplicar_sanciones_por_vencimiento(), 1)
+        # Aísla la sanción: el préstamo deja de estar vencido, la sanción sigue activa.
+        self.ejecutar(
+            'UPDATE detalle_prestamo SET fecha_limite_devolucion=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 2 DAY)'
+        )
+        with self.assertRaisesRegex(Conflicto, 'sanción activa'):
+            reservas.entregar_reserva(identificador, {'acepta_condiciones': '1'}, 2)
+        with self.assertRaisesRegex(Conflicto, 'sanción activa'):
+            self.prestar([2])
+        reserva = reservas.consultar_reserva(identificador, '02167885')
+        self.assertEqual(reserva['estado'], 'LISTA_PARA_RETIRO')
+        self.assertEqual(reserva['estado_bien'], 'RESERVADO')
+        self.assertIsNone(reserva['id_prestamo_ref'])
+        self.assertEqual(self.fila('SELECT id_prestamo FROM prestamo'), (prestamo,))
+
     def test_error_despues_de_entregar_revierte_prestamo_y_conserva_reserva(self):
         identificador = self.reservar()
         reservas = self.servicios['reservas']
