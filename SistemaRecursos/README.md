@@ -13,8 +13,8 @@ La carpeta `sql/` contiene dos archivos independientes:
 
 | Archivo | Contenido | Base que crea |
 | --- | --- | --- |
-| `schema.sql` | Las 20 tablas, sus relaciones y restricciones, sin ningún registro. | `prestamos_escuela` |
-| `datos_prueba.sql` | Las mismas 20 tablas, configuración inicial y datos de prueba, incluidos usuarios. | `prestamos_escuela_pruebas` |
+| `schema.sql` | Las 19 tablas, sus relaciones y restricciones, sin ningún registro. | `prestamos_escuela` |
+| `datos_prueba.sql` | Las mismas 19 tablas, configuración inicial y datos de prueba, incluidos usuarios. | `prestamos_escuela_pruebas` |
 
 Para probar la aplicación, abre `sql/datos_prueba.sql` en MySQL Workbench u otro cliente y ejecútalo sobre una base nueva. No necesitas ejecutar primero `schema.sql`.
 
@@ -92,6 +92,21 @@ El sistema comprueba la contraseña, el estado de la cuenta y sus permisos. La s
 
 Los roles y el catálogo de permisos están definidos en el código. `usuario_sistema.rol` asigna el rol a cada cuenta y `rol_permiso` permite ajustar sus permisos desde la aplicación. El acceso de la cuenta se determina únicamente por `estado_cuenta`.
 
+### Escrituras de préstamos y ampliaciones
+
+El controlador recibe la petición y llama al servicio. El servicio abre una transacción mediante la interfaz del repositorio, carga los datos, consulta las reglas del dominio y solicita las escrituras. El repositorio SQL mantiene la conexión y los bloqueos hasta confirmar todo o revertirlo si ocurre un error. Los servicios y el dominio no reciben conexiones ni cursores de MySQL.
+
+| Operación | Quién coordina | Dónde están las decisiones | Quién carga y guarda |
+| --- | --- | --- | --- |
+| Entregar un préstamo | `servicio_prestamo.py` | `contexto_entrega.py`, `solicitud_prestamo.py` y políticas | `OperacionPrestamoSQL` en `repositorio_prestamo_sql.py` |
+| Recibir una devolución, reportar pérdida y registrar vencimientos | `servicio_prestamo.py` | `prestamo.py`, `devolucion.py` y la condición de retraso en el servicio | La misma operación SQL del préstamo |
+| Ampliar directamente un plazo | `servicio_ampliacion_prestamo.py` | Autorización en el servicio; duración, plazo vigente y horario en `ampliacion_prestamo.py` | `OperacionPrestamoSQL` en `repositorio_prestamo_sql.py` |
+| Entregar una reserva | `servicio_reserva.py`, reutilizando el servicio de préstamos | `reserva.py` y las mismas reglas de entrega | `OperacionEntregaReservaSQL`, que comparte la transacción con la operación del préstamo |
+
+Los contratos `i_operacion_prestamo.py` e `i_operacion_reserva.py` describen lo que cada servicio puede cargar y guardar durante esa transacción. Cada ejecución obtiene su propia operación. La entrega de reserva no abre una segunda conexión para registrar el préstamo.
+
+Para probar estos recorridos: `python -m unittest discover -s tests -p "test_*prestamo*.py" -v`. Las pruebas puras funcionan sin MySQL. Las de integración necesitan las variables `TEST_MYSQL_*` y crean bases temporales propias. Otros recorridos de reservas y el procesador de sanciones conservan su implementación anterior.
+
 Las relaciones con categorías y recursos se identifican como `id_categoria` e `id_recurso`. Las descripciones de recursos y bienes y la fecha de adquisición son opcionales; si se dejan vacías se guardan como `NULL`. Los estados de préstamo y reserva se actualizan junto con sus operaciones en la misma transacción.
 
 Cada fila de `detalle_prestamo` guarda la entrega y su devolución. Una fecha de devolución vacía indica que el bien sigue pendiente; al recibirlo se guardan juntos la fecha, el encargado, la condición (`BUENO` o `DANADO`) y las observaciones. Un bien perdido sigue pendiente. La tabla separada `devolucion` se eliminó.
@@ -104,19 +119,17 @@ La sanción se obtiene a través de `sancion → incidencia → detalle_prestamo
 
 ## Ampliaciones
 
-Desde el detalle del préstamo, su responsable puede solicitar una nueva fecha para cada bien pendiente. Los demás integrantes del grupo pueden consultar las solicitudes. El encargado o administrador con `PRESTAMOS_GESTIONAR` puede aprobarlas o rechazarlas; el rechazo exige un motivo.
+El usuario pide la ampliación presencialmente. El encargado o administrador con `PRESTAMOS_GESTIONAR` abre el préstamo y, en **Ampliar plazo**, selecciona el bien e introduce una cantidad de horas o días. El formulario muestra el nuevo vencimiento en Lima. Al confirmar, el cambio se aplica inmediatamente; el usuario puede consultar su nueva fecha.
 
-La solicitud no cambia la fecha de devolución. Al aprobar, la nueva fecha y la resolución se guardan juntas, con la cuenta del encargado, la fecha y la observación. El historial del préstamo registra la solicitud y su resolución. Solo puede haber una solicitud pendiente por bien; una ampliación resuelta no se vuelve a resolver.
+Se actualiza `detalle_prestamo.fecha_limite_devolucion`. Cada ampliación añade como máximo otro plazo de la política aplicada al bien; los préstamos por horas respetan el cierre de atención. Un bien vencido, perdido o devuelto no puede ampliarse. Si otro encargado ya cambió el plazo, el formulario antiguo se rechaza y exige recargar el préstamo, evitando sumar dos veces al reenviar.
 
-Cada ampliación puede añadir como máximo otro plazo de la política aplicada al bien. En préstamos por horas se respeta también el cierre de atención. Se vuelve a comprobar el plazo al aprobar: un bien devuelto, perdido, vencido o cuya fecha ya cambió no admite la aprobación de una solicitud antigua. Se puede rechazar una solicitud que haya quedado desactualizada.
+La fecha anterior, la nueva, el detalle, el encargado y una observación opcional se guardan en `historial_estado` dentro de la misma transacción. Un fallo al guardar el historial revierte la nueva fecha.
 
-El solicitante se obtiene por `ampliacion_prestamo → detalle_prestamo → prestamo`; ya no existe `dni_solicitante` en la ampliación. La resolución identifica al encargado mediante `id_usuario_resolucion`. Los dos SQL contienen la misma estructura actualizada; esta versión se carga en una base nueva o recreando la base de pruebas.
+Se eliminó la tabla `ampliacion_prestamo`, el permiso `AMPLIACIONES_SOLICITAR` y las rutas de solicitud, aprobación y rechazo. Los dos SQL crean ahora 19 tablas. Se actualizaron los archivos para instalaciones nuevas; no se borró ninguna tabla de una base ya instalada. Una base anterior puede conservar esa tabla sin que la aplicación la consulte. Como el resto de cambios estructurales de esta etapa, una instalación limpia se prepara recreando la base de pruebas.
 
-El permiso `AMPLIACIONES_SOLICITAR` se incluye para los tres roles en los datos de demostración. Si se administra una matriz de permisos distinta, debe habilitarse desde Roles y permisos para que el responsable pueda solicitar ampliaciones.
+Recorrido: `controlador_ampliacion_prestamo.py → servicio_ampliacion_prestamo.py → IRepositorioPrestamo / IOperacionPrestamo → repositorio_prestamo_sql.py`. `dominio/gestion_prestamos/ampliacion_prestamo.py` contiene únicamente la regla de cálculo y validación, sin representar una tabla.
 
-El recorrido de escritura está identificado en `controlador_ampliacion_prestamo.py → servicio_ampliacion_prestamo.py → i_repositorio_ampliacion_prestamo.py → repositorio_ampliacion_prestamo_sql.py`. La regla del plazo y las transiciones están en `dominio/gestion_prestamos/ampliacion_prestamo.py`. El controlador de préstamos consulta ese servicio para mostrar la sección; no ejecuta las decisiones de aprobación.
-
-Las pruebas de este flujo se ejecutan con `python -m unittest discover -s tests -p test_ampliacion_prestamo.py -v`. Las de integración requieren `TEST_MYSQL_PORT`, `TEST_MYSQL_USER` y `TEST_MYSQL_PASSWORD`; crean y eliminan bases temporales propias. Sin MySQL se omiten esos casos y solo se ejecutan las comprobaciones del dominio.
+Pruebas: `python -m unittest discover -s tests -p test_ampliacion_prestamo.py -v`. Las de integración requieren `TEST_MYSQL_PORT`, `TEST_MYSQL_USER` y `TEST_MYSQL_PASSWORD`; crean y eliminan bases temporales propias. Sin MySQL se ejecutan solo las comprobaciones del dominio.
 
 ## Reportes
 
@@ -125,3 +138,20 @@ El módulo **Reportes** permite consultar préstamos y devoluciones por fecha de
 El resumen cuenta préstamos distintos y bienes sin duplicarlos por cada integrante. Presenta devueltos, pendientes y vencidos; los vencidos son parte de los pendientes. Los resultados muestran hasta 50 bienes por página y la descarga CSV incluye todas las coincidencias de los filtros, con fechas en Lima, separador `;` y codificación UTF-8. Al importar el CSV en Excel, selecciona formato texto para los DNI si necesitas conservar los ceros iniciales. Los campos de texto que podrían interpretarse como fórmulas se exportan como texto.
 
 Se requiere el permiso `REPORTES_CONSULTAR`, incluido para Administrador y Encargado de préstamos en los datos de prueba. En una base ya instalada, un administrador puede habilitarlo desde **Roles y permisos** sin recrear las tablas. No se crean tablas de reportes ni se modifican los préstamos al consultarlos o descargarlos.
+
+## Verificar toda la aplicación
+
+Desde esta carpeta y con el entorno virtual activado, configura la conexión a un MySQL local de pruebas y ejecuta:
+
+```powershell
+$env:TEST_MYSQL_PORT = '3306'
+$env:TEST_MYSQL_USER = 'root'
+$env:TEST_MYSQL_PASSWORD = Read-Host 'Contraseña de MySQL de pruebas'
+python verificar.py
+```
+
+Cambia el puerto si usas una instancia independiente. La cuenta necesita permisos para crear y eliminar bases de pruebas. Las pruebas usan nombres aleatorios con prefijo `test_`; no cargan ni modifican `prestamos_escuela` o `prestamos_escuela_pruebas`. El proceso crea los escenarios a partir de `schema.sql` y los limpia al terminar, incluso si una comprobación falla. Los datos de demostración solo se cargan en su prueba de importación independiente.
+
+`verificar.py` devuelve éxito únicamente si se ejecutan todas las pruebas sin errores ni omisiones. Si falta `TEST_MYSQL_PORT`, termina con un mensaje y código 2; si alguna prueba falla o se omite, termina con código distinto de cero. El procesador automático de vencimientos está desactivado durante las pruebas.
+
+También puedes ejecutar `python -m unittest discover -s tests -v` para trabajar en casos concretos, pero sin las variables de MySQL se omiten las pruebas de integración: ese resultado no equivale a verificar toda la aplicación.

@@ -2,18 +2,16 @@ from __future__ import annotations
 from servicios.servicio_prestamo import ServicioAplicacionPrestamo
 from servicios.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
 from servicios.servicio_sancion import ServicioAplicacionSancion
-from servicios.servicio_ampliacion_prestamo import ServicioAplicacionAmpliacionPrestamo
 from flask import Blueprint, request, redirect, url_for, g, abort, jsonify
 from presentacion.seguridad import requiere_permiso
 from presentacion.vistas.vista_prestamo import VistaPrestamo
 
 
 class ControladorPrestamo:
-    def __init__(self, servicio: ServicioAplicacionPrestamo, politicas: ServicioAplicacionPoliticaPrestamo, sanciones: ServicioAplicacionSancion, ampliaciones: ServicioAplicacionAmpliacionPrestamo):
+    def __init__(self, servicio: ServicioAplicacionPrestamo, politicas: ServicioAplicacionPoliticaPrestamo, sanciones: ServicioAplicacionSancion):
         self.servicio: ServicioAplicacionPrestamo = servicio
         self.politicas: ServicioAplicacionPoliticaPrestamo = politicas
         self.sanciones: ServicioAplicacionSancion = sanciones
-        self.ampliaciones: ServicioAplicacionAmpliacionPrestamo = ampliaciones
         self.vista = VistaPrestamo()
         self.blueprint = Blueprint("prestamos", __name__, url_prefix="/prestamos")
         for ruta, nombre, vista, metodos in [
@@ -89,10 +87,7 @@ class ControladorPrestamo:
         prestamo = self.servicio.consultar_prestamo(
             id_prestamo, g.usuario.persona.dni, gestionar
         )
-        ampliaciones = self.ampliaciones.consultar_ampliaciones(id_prestamo)
-        puede_solicitar = (prestamo['dni_persona'] == g.usuario.persona.dni
-                          and g.usuario.rol.tiene_permiso('AMPLIACIONES_SOLICITAR'))
-        return self.vista.mostrar_detalle(prestamo, gestionar, ampliaciones, puede_solicitar)
+        return self.vista.mostrar_detalle(prestamo, gestionar)
 
     @requiere_permiso("PRESTAMOS_GESTIONAR")
     def registrar_devolucion(self, id_prestamo):

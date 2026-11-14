@@ -36,7 +36,6 @@ from servicios.servicio_sancion import ServicioAplicacionSancion
 from servicios.procesador_vencimientos import iniciar_procesador_vencimientos
 from repositorio.repositorio_reporte_sql import RepositorioReporteSQL
 from servicios.servicio_reporte import ServicioAplicacionReporte
-from repositorio.repositorio_ampliacion_prestamo_sql import RepositorioAmpliacionPrestamoSQL
 from servicios.servicio_ampliacion_prestamo import ServicioAplicacionAmpliacionPrestamo
 from presentacion.controladores.controlador_ampliacion_prestamo import ControladorAmpliacionPrestamo
 from presentacion.controladores.controlador_reporte import ControladorReporte
@@ -83,11 +82,11 @@ def create_app(config=None, repositorios=None, repositorios_recursos=None):
     app.extensions["prestamos"] = servicio_prestamo
     servicio_sancion = ServicioAplicacionSancion(RepositorioSancionSQL(conexion))
     app.extensions['sanciones'] = servicio_sancion
-    servicio_reserva = ServicioAplicacionReserva(RepositorioReservaSQL(conexion))
+    servicio_reserva = ServicioAplicacionReserva(RepositorioReservaSQL(conexion), servicio_prestamo)
     app.extensions["reservas"] = servicio_reserva
     servicio_reporte = ServicioAplicacionReporte(RepositorioReporteSQL(conexion))
     app.extensions['reportes'] = servicio_reporte
-    servicio_ampliacion = ServicioAplicacionAmpliacionPrestamo(RepositorioAmpliacionPrestamoSQL(conexion))
+    servicio_ampliacion = ServicioAplicacionAmpliacionPrestamo(servicio_prestamo.repositorio)
     app.extensions['ampliaciones'] = servicio_ampliacion
 
     @app.template_filter("descripcion_permiso")
@@ -160,7 +159,7 @@ def create_app(config=None, repositorios=None, repositorios_recursos=None):
     app.register_blueprint(ControladorReserva(
         servicio_reserva, servicio_recurso, servicio_politica
     ).blueprint)
-    app.register_blueprint(ControladorPrestamo(servicio_prestamo, servicio_politica, servicio_sancion, servicio_ampliacion).blueprint)
+    app.register_blueprint(ControladorPrestamo(servicio_prestamo, servicio_politica, servicio_sancion).blueprint)
     app.register_blueprint(ControladorAmpliacionPrestamo(servicio_ampliacion).blueprint)
     app.register_blueprint(ControladorPoliticaPrestamo(servicio_politica).blueprint)
     app.register_blueprint(ControladorReporte(servicio_reporte).blueprint)

@@ -230,3 +230,33 @@ Se implementó el recorrido de solicitud, aprobación y rechazo de ampliaciones,
 Se eliminó `dni_solicitante` de la clase, de los dos SQL y de los datos de demostración. Se obtiene al responsable desde el préstamo. La resolución registra cuenta del encargado, fecha y observación; aprobar actualiza la fecha del detalle en la misma transacción. Se revalidan propiedad, permisos, plazo actual, política y estado del bien. Una solicitud pendiente bloquea otra para ese mismo detalle.
 
 Las 13 pruebas nuevas de ampliaciones pasan con MySQL temporal, incluidas las de propiedad en préstamos grupales, permisos revocados, CSRF, máximo por política, cierre de atención, solicitudes duplicadas, rechazo, resolución repetida, devolución/pérdida y rollback si falla el historial. La parte de ampliaciones de A03 y A06 queda resuelta; los hallazgos sobre tipos de incidencia, daño y pérdida siguen pendientes. No se modificaron sus reglas de sanción en esta intervención.
+
+## Seguimiento posterior: coordinación de préstamos y ampliaciones
+
+Se separó la coordinación de las escrituras de su persistencia. `ServicioAplicacionPrestamo` coordina entrega, devolución, pérdida y registro de vencimientos. `ContextoEntrega` reúne datos de elegibilidad, cupo, inventario, política y horario y evalúa las reglas sin MySQL. `Prestamo` valida la recepción y la pérdida. `ServicioAplicacionAmpliacionPrestamo` comprueba la autorización y coordina la solicitud y resolución; la entidad conserva las reglas y transiciones.
+
+Los repositorios abren una transacción y crean una operación SQL privada para esa ejecución. Las interfaces `IOperacionPrestamo`, `IOperacionAmpliacionPrestamo` e `IOperacionEntregaReserva` permiten cargar y guardar sin exponer cursores al servicio. Los adaptadores mantienen SQL, bloqueos, mapeo y comprobaciones de concurrencia. La entrega de reserva reutiliza el servicio de préstamos y ambos adaptadores comparten el mismo cursor y confirmación. Se eliminó la dependencia del repositorio de reservas hacia la clase concreta `RepositorioPrestamoSQL`.
+
+Se cubren reglas sin base de datos, confirmación y reversión del conjunto, aprobación desactualizada y dos entregas concurrentes del mismo bien. La devolución tardía conserva el alcance de la sanción para todo el grupo; un fallo al cerrar debe revertir también incidencia, sanción e inventario. Se reutiliza una preparación mínima de pruebas independiente de los datos de demostración.
+
+El alcance es préstamos, ampliaciones y entrega de reservas. El registro, preparación, cancelación y expiración de reservas, así como el procesador y el auxiliar SQL de sanciones, no se reorganizaron. Persisten reglas anteriores en esos recorridos. No se modificaron los dos SQL ni se considera reparada la preparación de las pruebas antiguas descrita en A08. El mapa inicial de esta auditoría documenta la versión revisada originalmente; para el recorrido actualizado se debe consultar la sección de escrituras del README.
+
+Validación de esta intervención: pasan las 26 pruebas enfocadas en préstamos y ampliaciones, ejecutadas con MySQL temporal, y las 15 pruebas de acceso y protección de administradores. La prueba nueva de fallo durante una devolución tardía confirma que también se revierten su incidencia y sanción. Estos 41 resultados no sustituyen la ejecución de la suite histórica completa, que conserva el problema de preparación ya documentado.
+
+## Seguimiento posterior: ampliación presencial y directa
+
+El usuario precisó que pide más tiempo presencialmente y que el encargado o administrador modifica el plazo en ese momento. Esa decisión sustituye el flujo digital anterior de solicitud, aprobación y rechazo. El formulario recibe cantidad y unidad, muestra el vencimiento calculado y modifica directamente el detalle, conservando el máximo de otro plazo de la política y el horario de atención. Los usuarios consultan su nueva fecha y no acceden al formulario de ampliación.
+
+Se eliminan la tabla de ampliaciones de ambos SQL (quedan 19 tablas), sus INSERT de solicitudes y el permiso de solicitud digital. Se retiran los contratos y el adaptador SQL exclusivos de ampliaciones: el servicio reutiliza la transacción y operación del préstamo. La clase de dominio queda como regla pura de ampliación directa. La nueva fecha y su historial se confirman o revierten juntos; una fecha anterior desactualizada impide duplicar el aumento al reenviar un formulario. No se ejecutaron cambios destructivos en bases instaladas ni se modificaron diagramas en esta intervención.
+
+Validación: pasan 26 pruebas de préstamos y ampliaciones (13 de ampliación directa y 13 de coordinación), más las dos pruebas de estructura e importación de los SQL en bases vacías. Se verificaron los 117 archivos Python, las 12 plantillas HTML y la sintaxis del nuevo JavaScript. La suite histórica completa conserva la limitación de preparación descrita en A08.
+
+## Seguimiento posterior: preparación de la suite completa (A08)
+
+Las pruebas funcionales antiguas ya no cargan `datos_prueba.sql`: crean bases con nombres aleatorios a partir de `schema.sql` y preparan sus propios escenarios. `soporte_mysql.py` centraliza creación, consumo de todos los resultados SQL y limpieza; el soporte de préstamos lo reutiliza. Configuración prepara solo sus ajustes y una cola mínima; devoluciones y reportes usan dos préstamos definidos para esos casos. Personas y recursos dejan de compartir una base entre métodos, y la prueba de paginación crea expresamente suficientes personas. El procesador automático queda desactivado en las aplicaciones de prueba.
+
+La importación de ambos SQL se mantiene exclusivamente en `test_estructura_sql.py`, independiente de los escenarios funcionales. Se actualizó el recuento a las 19 tablas actuales. La pantalla de edición de cuenta prepara explícitamente la cuenta necesaria para ese recorrido.
+
+Se añadió `SistemaRecursos/verificar.py` y se documentó el comando en el README. Requiere `TEST_MYSQL_PORT` y devuelve un resultado incompleto si se omite cualquier prueba; no presenta una ejecución sin integración como verificación completa. No se modificaron tablas, datos de demostración, reglas de negocio ni diagramas durante esta corrección.
+
+Resultado final: `python verificar.py`, ejecutado con MySQL 8.0.46 temporal en el puerto 13307, completó **76 pruebas en 117,811 segundos: OK, sin fallos, errores ni pruebas omitidas**. También se comprobó que la ausencia de `TEST_MYSQL_PORT` devuelve código 2 con una explicación. El hallazgo **A08 queda resuelto** para la preparación y ejecución de la suite actual; los otros hallazgos no se consideran resueltos por este resultado.

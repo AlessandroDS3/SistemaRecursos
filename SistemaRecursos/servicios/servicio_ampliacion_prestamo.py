@@ -1,42 +1,40 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
-from dominio.gestion_control.horario_atencion import ZONA_INSTITUCION
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
 from dominio.gestion_prestamos.ampliacion_prestamo import AmpliacionPrestamo
-from dominio.gestion_prestamos.i_repositorio_ampliacion_prestamo import IRepositorioAmpliacionPrestamo
-from dominio.gestion_recursos.validacion_recurso import texto
+from dominio.gestion_prestamos.i_repositorio_prestamo import IRepositorioPrestamo
 from servicios.validacion_identificadores import identificador
 
 
 class ServicioAplicacionAmpliacionPrestamo:
-    def __init__(self, repositorio: IRepositorioAmpliacionPrestamo):
+    def __init__(self, repositorio: IRepositorioPrestamo):
         self.repositorio = repositorio
 
-    def solicitar_ampliacion(self, id_prestamo, id_detalle, fecha_nueva, motivo, dni_responsable):
+    def ampliar_plazo(self, id_prestamo, id_detalle, cantidad, unidad, fecha_actual, id_usuario, motivo=''):
+        id_prestamo, id_detalle = identificador(id_prestamo), identificador(id_detalle)
+        id_usuario = identificador(id_usuario)
         try:
-            fecha_local = datetime.fromisoformat(fecha_nueva)
-            if fecha_local.tzinfo is not None or fecha_local.second or fecha_local.microsecond:
-                raise ValueError
-            fecha_utc = fecha_local.replace(tzinfo=ZONA_INSTITUCION).astimezone(timezone.utc).replace(tzinfo=None)
-            if fecha_utc.year < 1000:
-                raise ValueError
-        except (ValueError, TypeError, OverflowError):
-            raise ValueError('Indica una nueva fecha y hora válida de devolución en Lima.') from None
-        ampliacion = AmpliacionPrestamo(
-            id_detalle=identificador(id_detalle), fecha_limite_nueva=fecha_utc, motivo=motivo,
-        )
-        return self.repositorio.solicitar_ampliacion(
-            identificador(id_prestamo), ampliacion, validar_dni(dni_responsable))
-
-    def aprobar_ampliacion(self, id_prestamo, id_ampliacion, id_usuario, observacion=''):
-        return self.repositorio.aprobar_ampliacion(
-            identificador(id_prestamo), identificador(id_ampliacion), identificador(id_usuario),
-            texto(observacion, 'Observación', 255))
-
-    def rechazar_ampliacion(self, id_prestamo, id_ampliacion, id_usuario, observacion):
-        return self.repositorio.rechazar_ampliacion(
-            identificador(id_prestamo), identificador(id_ampliacion), identificador(id_usuario),
-            texto(observacion, 'Motivo del rechazo', 255, True))
-
-    def consultar_ampliaciones(self, id_prestamo):
-        return self.repositorio.consultar_ampliaciones(identificador(id_prestamo))
+            fecha_actual = datetime.fromisoformat(fecha_actual)
+        except (ValueError, TypeError):
+            raise ValueError('Recarga el préstamo para obtener su fecha de devolución actual.') from None
+        ampliacion = AmpliacionPrestamo(cantidad=cantidad, unidad=unidad,
+                                       fecha_limite_anterior=fecha_actual, motivo=motivo)
+        with self.repositorio.transaccion() as operacion:
+            cuenta = operacion.cargar_cuenta_ampliacion(id_usuario)
+            if (cuenta is None or cuenta['estado_cuenta'] != 'ACTIVA'
+                    or cuenta['estado_persona'] != 'ACTIVA'
+                    or 'PRESTAMOS_GESTIONAR' not in cuenta['permisos']):
+                raise PermissionError('La cuenta no tiene permiso para ampliar préstamos.')
+            _, prestamo, detalles, ahora = operacion.cargar_recepcion(id_prestamo, cuenta['dni_persona'])
+            detalle = next((d for d in detalles if d['id_detalle'] == id_detalle), None)
+            if detalle is None:
+                raise LookupError('El bien no pertenece a este préstamo.')
+            politica, horario = operacion.cargar_politica_ampliacion(detalle['id_politica'])
+            if politica is None:
+                raise ValueError('No se encontró la política aplicada al bien.')
+            nueva = ampliacion.calcular_fecha(detalle, ahora, politica, horario)
+            operacion.guardar_fecha_limite(id_detalle, ampliacion.fecha_limite_anterior, nueva)
+            observacion = (f'Ampliación del detalle #{id_detalle}: '
+                           f'{ampliacion.fecha_limite_anterior.isoformat(sep=" ")} UTC → '
+                           f'{nueva.isoformat(sep=" ")} UTC. {ampliacion.motivo}').strip()
+            operacion.guardar_estado(prestamo, prestamo.estado.value, observacion, cuenta['dni_persona'])
+        return nueva

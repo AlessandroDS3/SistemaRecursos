@@ -2,16 +2,12 @@
 import os
 import re
 import unittest
-from pathlib import Path
 from unittest.mock import patch
-from uuid import uuid4
 
 import mysql.connector
-from app import create_app
 from dominio.gestion_personas_usuarios.fabrica_persona import FabricaPersona
 from dominio.gestion_personas_usuarios.version_edicion import version_persona, version_matriz
 from dominio.gestion_personas_usuarios.validacion_persona import ValidacionPersonaError
-from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_persona_sql import RepositorioPersonaSQL
 from repositorio.repositorio_rol_sql import RepositorioRolSQL
 from servicios.servicio_rol import ServicioAplicacionRol
@@ -20,26 +16,9 @@ from werkzeug.datastructures import MultiDict
 
 @unittest.skipUnless(os.environ.get("TEST_MYSQL_PORT"), "Configura la instancia MySQL de pruebas.")
 class PersonasAccesoTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.database = "test_personas_" + uuid4().hex
-        cfg = dict(host="127.0.0.1", port=int(os.environ["TEST_MYSQL_PORT"]),
-                   user=os.environ.get("TEST_MYSQL_USER", "root"),
-                   password=os.environ.get("TEST_MYSQL_PASSWORD", ""), use_pure=True, connection_timeout=5)
-        cn = mysql.connector.connect(**cfg)
-        cls.addClassCleanup(cn.close)
-        cursor = cn.cursor()
-        cls.addClassCleanup(cursor.close)
-        cursor.execute(f"CREATE DATABASE {cls.database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-        cls.addClassCleanup(cursor.execute, f"DROP DATABASE {cls.database}")
-        seed = Path(__file__).resolve().parents[1] / "sql" / "datos_prueba.sql"
-        cursor.execute(seed.read_text(encoding="utf-8").replace("prestamos_escuela_pruebas", cls.database))
-        while cursor.nextset():
-            pass
-        cn.commit()
-        cfg["database"] = cls.database
-        cls.db = MySQLConnection(cfg)
-        cls.app = create_app({"TESTING": True, "MYSQL_CONFIG": cfg})
+    def setUp(self):
+        from soporte_mysql import preparar_base_integracion
+        preparar_base_integracion(self, catalogo=False)
 
     def login(self, user="admin", password="AdminPrueba2026!"):
         client = self.app.test_client()
@@ -201,7 +180,7 @@ class PersonasAccesoTest(unittest.TestCase):
 
     def test_directorio_y_campos_opcionales(self):
         repo = RepositorioPersonaSQL(self.db)
-        for i in range(10):
+        for i in range(30):
             repo.registrar_persona(FabricaPersona.construir(dict(
                 tipo="ESTUDIANTE", dni=str(70000000+i), cui=str(71000000+i),
                 nombres="Prueba", apellidos="Directorio", correo=f"prueba{i}@example.com",

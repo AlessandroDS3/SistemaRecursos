@@ -1,6 +1,8 @@
 from __future__ import annotations
 from dominio.resultados_consulta import ReservaDetalle, ResultadoReservas
 from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager
+from dominio.gestion_prestamos.i_operacion_reserva import IOperacionEntregaReserva
 
 from dominio.gestion_prestamos.reserva import Reserva, AccionReserva
 
@@ -28,9 +30,8 @@ class IRepositorioReserva(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def entregar_reserva(self, identificador: int, responsable: str, gestionar: bool,
-                       motivo: str = "", acepta: bool = False) -> int | None:
-        """Escritura explícita. Devuelve int | None y propaga errores de validación o integridad."""
+    def transaccion_entrega(self) -> AbstractContextManager[IOperacionEntregaReserva]:
+        """Comparte una sola operación para préstamo, inventario y resolución de reserva."""
         raise NotImplementedError
 
     @abstractmethod

@@ -208,23 +208,6 @@ CREATE TABLE IF NOT EXISTS reserva (
   CONSTRAINT fk_reserva_prestamo FOREIGN KEY (id_prestamo_ref) REFERENCES prestamo(id_prestamo)
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS ampliacion_prestamo (
-  id_ampliacion          INT AUTO_INCREMENT PRIMARY KEY,
-  id_detalle         INT NOT NULL,
-  fecha_solicitud        DATETIME NOT NULL,
-  fecha_limite_anterior  DATETIME NOT NULL,
-  fecha_limite_nueva     DATETIME NOT NULL,
-  motivo                 VARCHAR(255),
-  estado                 ENUM('PENDIENTE','APROBADA','RECHAZADA') NOT NULL DEFAULT 'PENDIENTE',
-  fecha_resolucion       DATETIME NULL,
-  id_usuario_resolucion   INT NULL,
-  observacion_resolucion  VARCHAR(255) NULL,
-  INDEX idx_ampliacion_detalle_estado (id_detalle, estado),
-  CHECK (fecha_limite_nueva > fecha_limite_anterior),
-  FOREIGN KEY (id_usuario_resolucion) REFERENCES usuario_sistema(id_usuario),
-  FOREIGN KEY (id_detalle)     REFERENCES detalle_prestamo(id_detalle) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
 -- 5. CONTROL: INCIDENCIAS Y SANCIONES
 
 CREATE TABLE IF NOT EXISTS incidencia (

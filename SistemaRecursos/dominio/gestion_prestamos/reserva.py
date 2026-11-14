@@ -133,12 +133,14 @@ class Reserva:
             raise ValueError("Indica el motivo de la resolución.")
         return self.cambiar_estado(accion.estado_destino)
 
-    def validar_solicitante(self, persona, tiene_sancion):
+    def validar_solicitante(self, persona, tiene_sancion, tiene_vencidos=False):
         if not persona:
             raise LookupError("No se encontró al solicitante.")
         validar_persona(persona)
         if tiene_sancion:
             raise ConflictoPrestamoError("El solicitante tiene una sanción activa.")
+        if tiene_vencidos:
+            raise ConflictoPrestamoError('La persona tiene un préstamo vencido pendiente de devolución.')
 
     def validar_politica(self, politica):
         if politica is None:

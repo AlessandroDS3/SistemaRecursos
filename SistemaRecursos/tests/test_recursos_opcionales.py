@@ -1,32 +1,13 @@
 import os
-from pathlib import Path
 import unittest
-from uuid import uuid4
 
-import mysql.connector
-from app import create_app
 
 
 @unittest.skipUnless(os.environ.get("TEST_MYSQL_PORT"), "Configura MySQL de pruebas.")
 class RecursosOpcionalesTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cfg = dict(host="127.0.0.1", port=int(os.environ["TEST_MYSQL_PORT"]),
-                   user=os.environ.get("TEST_MYSQL_USER", "root"),
-                   password=os.environ.get("TEST_MYSQL_PASSWORD", ""), connection_timeout=5, use_pure=True)
-        cls.nombre = "test_recursos_" + uuid4().hex
-        cn = mysql.connector.connect(**cfg)
-        cls.addClassCleanup(cn.close)
-        cursor = cn.cursor()
-        cls.addClassCleanup(cursor.close)
-        cursor.execute(f"CREATE DATABASE {cls.nombre} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-        cls.addClassCleanup(cursor.execute, f"DROP DATABASE {cls.nombre}")
-        sql = Path(__file__).resolve().parents[1] / "sql/datos_prueba.sql"
-        cursor.execute(sql.read_text(encoding="utf-8").replace("prestamos_escuela_pruebas", cls.nombre))
-        while cursor.nextset():
-            pass
-        cn.commit()
-        cls.app = create_app({"TESTING": True, "MYSQL_CONFIG": dict(cfg, database=cls.nombre)})
+    def setUp(self):
+        from soporte_mysql import preparar_base_integracion
+        preparar_base_integracion(self)
 
     def test_registro_edicion_y_vistas_sin_fecha_ni_descripciones(self):
         recursos, bienes = self.app.extensions["recursos"], self.app.extensions["bienes"]

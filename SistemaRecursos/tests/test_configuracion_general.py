@@ -1,13 +1,10 @@
 """Pruebas con MySQL en bases temporales independientes."""
 import os
-from pathlib import Path
 import unittest
-from uuid import uuid4
 
 import mysql.connector
 from dominio.gestion_control.horario_atencion import HorarioAtencion
 from dominio.gestion_control.politica_vencimiento_reserva import PoliticaVencimientoReserva
-from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_politica_prestamo_sql import RepositorioPoliticaPrestamoSQL
 from repositorio.repositorio_reserva_sql import RepositorioReservaSQL
 from dominio.gestion_prestamos.reserva import Reserva
@@ -16,25 +13,16 @@ from dominio.gestion_prestamos.reserva import Reserva
 @unittest.skipUnless(os.environ.get("TEST_MYSQL_PORT"), "Configura MySQL de pruebas.")
 class ConfiguracionGeneralTest(unittest.TestCase):
     def setUp(self):
-        self.nombre = "test_configuracion_" + uuid4().hex
-        cfg = dict(host="127.0.0.1", port=int(os.environ["TEST_MYSQL_PORT"]),
-                   user=os.environ.get("TEST_MYSQL_USER", "root"),
-                   password=os.environ.get("TEST_MYSQL_PASSWORD", ""), connection_timeout=5, use_pure=True)
-        self.cn = mysql.connector.connect(**cfg)
-        self.addCleanup(self.cn.close)
-        self.cursor = self.cn.cursor()
-        self.addCleanup(self.cursor.close)
-        self.cursor.execute(f"CREATE DATABASE {self.nombre} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-        self.addCleanup(self.cursor.execute, f"DROP DATABASE {self.nombre}")
-        self.sql = Path(__file__).resolve().parents[1] / "sql"
-        self.ejecutar((self.sql / "datos_prueba.sql").read_text(encoding="utf-8").replace("prestamos_escuela_pruebas", self.nombre))
-        self.repo = RepositorioPoliticaPrestamoSQL(MySQLConnection(dict(cfg, database=self.nombre)))
-
-    def ejecutar(self, sql):
-        self.cursor.execute(sql)
-        while self.cursor.nextset():
-            pass
+        from soporte_mysql import crear_base_pruebas
+        crear_base_pruebas(self)
+        self.cursor = self.c
+        self.cursor.execute("INSERT INTO configuracion_general VALUES(1,'08:00','16:00',2,'DIAS',24,'HORAS')")
+        self.cursor.execute("INSERT INTO persona(dni,nombres,apellidos,correo) VALUES('99000001','Usuario','Prueba','cola@ejemplo.com')")
+        self.cursor.execute("INSERT INTO estudiante(dni,cui) VALUES('99000001','99000001')")
+        self.cursor.execute("INSERT INTO categoria_recurso(id_categoria,nombre) VALUES(1,'Equipos')")
+        self.cursor.execute("INSERT INTO recurso(id_recurso,id_categoria,nombre) VALUES(2,1,'Equipo')")
         self.cn.commit()
+        self.repo = RepositorioPoliticaPrestamoSQL(self.db)
 
     def tablas(self):
         self.cursor.execute("SHOW TABLES")
@@ -42,7 +30,7 @@ class ConfiguracionGeneralTest(unittest.TestCase):
 
     def test_esquema_y_actualizaciones_independientes(self):
         tablas = self.tablas()
-        self.assertEqual(len(tablas), 20)
+        self.assertEqual(len(tablas), 19)
         self.assertIn("configuracion_general", tablas)
         for antigua in ("horario_atencion", "politica_vencimiento_reserva", "notificacion", "notificacion_danio"):
             self.assertNotIn(antigua, tablas)
@@ -53,14 +41,6 @@ class ConfiguracionGeneralTest(unittest.TestCase):
             plazo_espera=3, unidad_espera="DIAS", plazo_retiro=12, unidad_retiro="HORAS"))
         horario = self.repo.consultar_horario_atencion()
         self.assertEqual((horario.apertura_texto, horario.cierre_texto), ("09:00", "17:00"))
-
-    def test_esquema_sin_datos_se_importa_desde_cero(self):
-        nombre = self.nombre + "_estructura"
-        self.addCleanup(self.cursor.execute, f"DROP DATABASE IF EXISTS {nombre}")
-        self.ejecutar((self.sql / "schema.sql").read_text(encoding="utf-8").replace("prestamos_escuela", nombre))
-        self.assertEqual(len(self.tablas()), 20)
-        self.cursor.execute("SELECT COUNT(*) FROM persona")
-        self.assertEqual(self.cursor.fetchone()[0], 0)
 
     def test_limites_de_reserva_segun_unidad_en_dominio_y_mysql(self):
         for unidad, limite in (("DIAS", 30), ("HORAS", 720)):

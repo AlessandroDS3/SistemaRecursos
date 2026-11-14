@@ -5,6 +5,7 @@ from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
 from dominio.gestion_recursos.i_repositorio_bien_material import IRepositorioBienMaterial
 from dominio.gestion_personas_usuarios.i_repositorio_persona import IRepositorioPersona
 from dominio.gestion_prestamos.i_repositorio_prestamo import IRepositorioPrestamo
+from dominio.gestion_prestamos.i_operacion_prestamo import IOperacionPrestamo
 from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
 from dominio.gestion_prestamos.solicitud_prestamo import SolicitudPrestamo
 from dominio.gestion_prestamos.devolucion import Devolucion
@@ -107,7 +108,18 @@ class ServicioAplicacionPrestamo:
             tipo_prestamo=tipo_prestamo, observaciones=observaciones,
             participantes=participantes, salida_solicitada=salida_solicitada,
         )
-        return self.repositorio.registrar_prestamo(solicitud)
+        return self.registrar_solicitud(solicitud)
+
+    def registrar_solicitud(self, solicitud: SolicitudPrestamo) -> Prestamo:
+        with self.repositorio.transaccion() as operacion:
+            return self.registrar_en_operacion(solicitud, operacion)
+
+    def registrar_en_operacion(self, solicitud: SolicitudPrestamo, operacion: IOperacionPrestamo,
+                              id_bien_reservado: int | None = None) -> Prestamo:
+        """Reutiliza la operación del llamante para confirmar una entrega desde reserva."""
+        contexto = operacion.cargar_entrega(solicitud)
+        prestamo = contexto.construir_prestamo(solicitud, id_bien_reservado)
+        return operacion.guardar_entrega(prestamo, contexto.bienes, contexto.ahora)
 
     def _preparar_participantes(self, dni_persona, dnis_participantes, tipo_prestamo):
         if dni_persona in dnis_participantes:
@@ -171,7 +183,16 @@ class ServicioAplicacionPrestamo:
 
     def actualizar_prestamos_vencidos(self, dni_responsable) -> None:
         """Comando del encargado: persiste vencimientos e historial; no forma parte de una consulta."""
-        self.repositorio.actualizar_prestamos_vencidos(validar_dni(dni_responsable))
+        dni_responsable = validar_dni(dni_responsable)
+        with self.repositorio.transaccion() as operacion:
+            prestamos = operacion.cargar_vencidos()
+            ahora = operacion.ahora()
+            for prestamo in prestamos:
+                anterior = prestamo.estado.value
+                prestamo.marcar_vencido(ahora)
+                if prestamo.estado.value != anterior:
+                    operacion.guardar_estado(prestamo, anterior,
+                        'Vencimiento registrado por el encargado', dni_responsable)
 
     def registrar_devolucion(self, id_prestamo, datos, dni_encargado) -> None:
         ids_detalles = lista_ids(self._lista(datos, "detalles"), "Bienes a devolver")
@@ -188,14 +209,32 @@ class ServicioAplicacionPrestamo:
                 observaciones=datos.get(f"observacion_{id_detalle}", ""),
             )
             devoluciones.append(devolucion)
-        self.repositorio.registrar_devolucion(
-            identificador(id_prestamo), devoluciones, dni_encargado
-        )
+        with self.repositorio.transaccion() as operacion:
+            encargado, prestamo, detalles, ahora = operacion.cargar_recepcion(identificador(id_prestamo), dni_encargado)
+            self._validar_encargado(encargado)
+            estados = {d['id_bien']: d['estado_actual'] for d in detalles}
+            prestamo.validar_recepcion(devoluciones, estados)
+            anterior = prestamo.estado.value
+            por_id = {d['id_detalle']: d for d in detalles}
+            for devolucion in devoluciones:
+                detalle = por_id[devolucion.id_detalle]
+                if detalle['fecha_limite_devolucion'] < ahora:
+                    operacion.registrar_sancion_vencimiento(detalle, ahora)
+                prestamo.registrar_devolucion(devolucion.id_detalle, devolucion.condicion_devolucion,
+                    ahora, dni_encargado=dni_encargado, observaciones=devolucion.observaciones)
+            operacion.guardar_devoluciones(prestamo, anterior, devoluciones, detalles, dni_encargado, ahora)
 
     def reportar_perdida(self, id_prestamo, id_detalle, motivo, dni_encargado) -> None:
-        self.repositorio.reportar_perdida(
-            identificador(id_prestamo),
-            identificador(id_detalle),
-            texto(motivo, "Descripción de la pérdida", 255, True),
-            validar_dni(dni_encargado),
-        )
+        id_prestamo, id_detalle = identificador(id_prestamo), identificador(id_detalle)
+        motivo = texto(motivo, 'Descripción de la pérdida', 255, True)
+        dni_encargado = validar_dni(dni_encargado)
+        with self.repositorio.transaccion() as operacion:
+            encargado, prestamo, detalles, _ = operacion.cargar_recepcion(id_prestamo, dni_encargado)
+            self._validar_encargado(encargado)
+            detalle = prestamo.validar_perdida(id_detalle, {d['id_bien']: d['estado_actual'] for d in detalles})
+            operacion.guardar_perdida(prestamo, detalle, motivo, dni_encargado)
+
+    @staticmethod
+    def _validar_encargado(persona):
+        if not persona or persona['estado'] != 'ACTIVA':
+            raise ValueError('El encargado debe ser una persona activa.')

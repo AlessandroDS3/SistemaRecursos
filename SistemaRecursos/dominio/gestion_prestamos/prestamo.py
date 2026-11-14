@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from dominio.gestion_prestamos.tipo_prestamo import TipoPrestamo
 from dominio.gestion_recursos.bien_material import CondicionBien
 from dominio.gestion_recursos.validacion_recurso import entero, texto
+from dominio.gestion_prestamos.validacion_prestamo import ConflictoPrestamoError
 
 
 class EstadoPrestamo(str, Enum):
@@ -102,3 +103,20 @@ class Prestamo:
         detalle.fecha_devolucion = ahora or datetime.now(timezone.utc).replace(tzinfo=None)
         detalle.observaciones_devolucion = texto(observaciones, "Observaciones de devolución", 255) or None
         self.estado = self.estado_actual(ahora)
+
+    def validar_recepcion(self, devoluciones, estados_bienes):
+        if not devoluciones or len({d.id_detalle for d in devoluciones}) != len(devoluciones):
+            raise ValueError('Selecciona bienes distintos para registrar la devolución.')
+        detalles = {d.id_detalle: d for d in self.detalles}
+        for devolucion in devoluciones:
+            detalle = detalles.get(devolucion.id_detalle)
+            if detalle is None or not detalle.pendiente():
+                raise ConflictoPrestamoError('Uno de los bienes no pertenece a este préstamo o ya fue devuelto. No se registró ninguna devolución.')
+            if estados_bienes[detalle.id_bien] not in {'PRESTADO', 'PERDIDO'}:
+                raise ConflictoPrestamoError('El estado actual de un bien no corresponde a un préstamo pendiente.')
+
+    def validar_perdida(self, id_detalle, estados_bienes):
+        detalle = next((d for d in self.detalles if d.id_detalle == id_detalle), None)
+        if detalle is None or not detalle.pendiente() or estados_bienes[detalle.id_bien] != 'PRESTADO':
+            raise ConflictoPrestamoError('Solo se puede reportar la pérdida de un bien prestado y pendiente de devolución.')
+        return detalle

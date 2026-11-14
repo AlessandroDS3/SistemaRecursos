@@ -1,37 +1,17 @@
 import csv
 import io
 import os
-from pathlib import Path
 import unittest
 from unittest.mock import patch
-from uuid import uuid4
 
-import mysql.connector
-from app import create_app
-from repositorio.conexion_mysql import MySQLConnection
 
 
 @unittest.skipUnless(os.environ.get('TEST_MYSQL_PORT'), 'Configura MySQL de pruebas.')
 class ReportesTest(unittest.TestCase):
     def setUp(self):
-        cfg = dict(host='127.0.0.1', port=int(os.environ['TEST_MYSQL_PORT']),
-                   user=os.environ.get('TEST_MYSQL_USER', 'root'),
-                   password=os.environ.get('TEST_MYSQL_PASSWORD', ''), use_pure=True, connection_timeout=5)
-        nombre = 'test_reportes_' + uuid4().hex
-        cn = mysql.connector.connect(**cfg)
-        self.addCleanup(cn.close)
-        cursor = cn.cursor()
-        self.addCleanup(cursor.close)
-        cursor.execute(f'CREATE DATABASE {nombre} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci')
-        self.addCleanup(cursor.execute, f'DROP DATABASE {nombre}')
-        sql = Path(__file__).resolve().parents[1] / 'sql/datos_prueba.sql'
-        cursor.execute(sql.read_text(encoding='utf-8').replace('prestamos_escuela_pruebas', nombre))
-        while cursor.nextset():
-            pass
-        cn.commit()
-        self.db = MySQLConnection(dict(cfg, database=nombre))
-        self.app = create_app({'TESTING': True, 'MYSQL_CONFIG': self.db.config})
-        self.servicio = self.app.extensions['reportes']
+        from soporte_mysql import preparar_base_integracion
+        preparar_base_integracion(self, prestamos=True)
+        self.servicio = self.app.extensions["reportes"]
 
     def login(self, usuario='admin', clave='AdminPrueba2026!'):
         client = self.app.test_client()

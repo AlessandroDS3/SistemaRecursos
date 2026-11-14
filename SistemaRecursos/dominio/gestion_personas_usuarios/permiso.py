@@ -15,7 +15,6 @@ CATALOGO_PERMISOS = {'PERSONAS_CONSULTAR': 'Consultar el directorio de personas'
  'ROLES_GESTIONAR': 'Asignar y revocar permisos de los roles',
  'CATALOGO_CONSULTAR': 'Consultar el catálogo de recursos',
  'PRESTAMOS_PROPIOS_CONSULTAR': 'Consultar préstamos propios',
- 'AMPLIACIONES_SOLICITAR': 'Solicitar ampliaciones de préstamos propios',
  'RESERVAS_PROPIAS_GESTIONAR': 'Solicitar préstamos y gestionar reservas propias',
  'PRESTAMOS_GESTIONAR': 'Registrar entregas y devoluciones',
  'RECURSOS_GESTIONAR': 'Gestionar recursos y bienes',

@@ -1,9 +1,11 @@
 from __future__ import annotations
-from dominio.gestion_prestamos.solicitud_prestamo import SolicitudPrestamo
+from contextlib import contextmanager
 from dominio.resultados_consulta import PrestamoDetalle, PrestamoListado, ResumenPrestamos
 from repositorio.repositorio_bien_material_sql import registrar_historial_bien
 from dominio.gestion_prestamos.i_repositorio_prestamo import IRepositorioPrestamo
-from dominio.gestion_prestamos.validacion_prestamo import validar_persona, ConflictoPrestamoError
+from dominio.gestion_prestamos.contexto_entrega import ContextoEntrega
+from dominio.gestion_prestamos.ampliacion_prestamo import ConflictoAmpliacionError
+from dominio.gestion_prestamos.i_operacion_prestamo import IOperacionPrestamo
 from dominio.gestion_prestamos.prestamo import Prestamo
 from dominio.gestion_prestamos.detalle_prestamo import DetallePrestamo
 from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
@@ -11,7 +13,6 @@ from dominio.gestion_control.horario_atencion import HorarioAtencion
 from repositorio.conexion_mysql import MySQLConnection
 from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
 from repositorio.sanciones_vencimiento_sql import aplicar_sancion_vencimiento
-from dominio.gestion_recursos.bien_material import EstadoBienMaterial
 from repositorio.repositorio_persona_sql import CONSULTA as CONSULTA_PERSONAS
 
 
@@ -37,294 +38,15 @@ ORIGEN_PRESTAMOS_CON_ESTADO = """
 
 
 class RepositorioPrestamoSQL(IRepositorioPrestamo):
-    """Coordina las operaciones de préstamos y su historial en MySQL."""
+    """Lecturas de prestamos y apertura de una operacion SQL por transaccion."""
 
     def __init__(self, conexion=None):
         self.conexion = conexion or MySQLConnection()
 
-    @staticmethod
-    def _consultar_horario_atencion(cursor, bloquear=False):
-        cursor.execute('SELECT hora_apertura,hora_cierre FROM configuracion_general WHERE id_configuracion=1' +
-                       (' FOR UPDATE' if bloquear else ''))
-        fila = cursor.fetchone()
-        if fila is None:
-            raise ValueError('Configura el horario general de atención en Políticas antes de registrar entregas.')
-        return HorarioAtencion(**fila)
-
-    @staticmethod
-    def _validar_encargado(cursor, dni):
-        cursor.execute(
-            "SELECT estado FROM persona WHERE dni = %s FOR UPDATE",
-            (dni,),
-        )
-        persona = cursor.fetchone()
-        if not persona or persona["estado"] != "ACTIVA":
-            raise ValueError("El encargado debe ser una persona activa.")
-
-    @staticmethod
-    def _guardar_historial(cursor, id_prestamo, anterior, nuevo_estado, observacion, responsable):
-        cursor.execute(
-            """
-            INSERT INTO historial_estado (
-                entidad, id_entidad, estado_anterior, estado_nuevo, fecha,
-                observacion, dni_responsable
-            )
-            VALUES ('PRESTAMO', %s, %s, %s, UTC_TIMESTAMP(), %s, %s)
-            """,
-            (id_prestamo, anterior, nuevo_estado, observacion, responsable),
-        )
-
-    @staticmethod
-    def _construir_prestamo(fila, filas_detalles):
-        prestamo = Prestamo(
-            id_prestamo=fila["id_prestamo"],
-            dni_persona=fila["dni_persona"],
-            dni_encargado=fila["dni_encargado"],
-            tipo_prestamo=fila["tipo_prestamo"],
-            fecha_solicitud=fila["fecha_solicitud"],
-            fecha_entrega=fila["fecha_entrega"],
-            estado=fila["estado"],
-            observaciones=fila["observaciones"],
-        )
-        for fila_detalle in filas_detalles:
-            detalle = DetallePrestamo(
-                id_detalle=fila_detalle["id_detalle"],
-                id_bien=fila_detalle["id_bien"],
-                id_politica=fila_detalle["id_politica"],
-                fecha_limite_devolucion=fila_detalle["fecha_limite_devolucion"],
-                condicion_entrega=fila_detalle["condicion_entrega"],
-                condicion_devolucion=fila_detalle["condicion_devolucion"],
-                observaciones_entrega=fila_detalle["observaciones_entrega"],
-                fecha_devolucion=fila_detalle["fecha_devolucion"],
-                dni_encargado_devolucion=fila_detalle["dni_encargado_devolucion"],
-                observaciones_devolucion=fila_detalle["observaciones_devolucion"],
-            )
-            prestamo.detalles.append(detalle)
-        return prestamo
-
-    def registrar_prestamo(self, solicitud: SolicitudPrestamo, *, cursor=None, id_bien_reservado=None) -> Prestamo:
-        """Entrada común de entrega directa y reserva; comparte la transacción del llamante."""
-        if cursor is not None:
-            return self._registrar_prestamo_con_cursor(cursor, solicitud, id_bien_reservado)
+    @contextmanager
+    def transaccion(self):
         with self.conexion.sesion(escritura=True) as cursor:
-            return self._registrar_prestamo_con_cursor(cursor, solicitud, id_bien_reservado)
-
-    def _registrar_prestamo_con_cursor(self, cursor, solicitud, id_bien_reservado):
-        personas = self._validar_personas(cursor, solicitud)
-        self._validar_limite_articulos(cursor, solicitud, personas[solicitud.dni_persona]["tipo"])
-        bienes = self._consultar_bienes_disponibles(cursor, solicitud, id_bien_reservado)
-        tipo_persona = personas[solicitud.dni_persona]["tipo"]
-        politicas = self._consultar_politicas(cursor, bienes, tipo_persona, solicitud.salida_solicitada)
-
-        cursor.execute("SELECT UTC_TIMESTAMP() AS ahora")
-        ahora = cursor.fetchone()["ahora"]
-        horario = self._consultar_horario_atencion(cursor, bloquear=True)
-        horario.cierre_para_entrega(ahora)
-        prestamo = solicitud.construir_prestamo(bienes, politicas, ahora, horario)
-        cursor.execute(
-            """
-            INSERT INTO prestamo (
-                dni_persona, dni_encargado, tipo_prestamo,
-                fecha_solicitud, fecha_entrega, estado, observaciones
-            )
-            VALUES (%s, %s, %s, %s, %s, 'ACTIVO', %s)
-            """,
-            (
-                prestamo.dni_persona, prestamo.dni_encargado,
-                prestamo.tipo_prestamo.value, ahora, ahora, prestamo.observaciones,
-            ),
-        )
-        nuevo_id = cursor.lastrowid
-        detalles = self._guardar_detalles(
-            cursor, nuevo_id, bienes, prestamo.detalles, prestamo.dni_encargado
-        )
-        for participante in prestamo.participantes:
-            cursor.execute(
-                """
-                INSERT INTO participante_prestamo (
-                    id_prestamo, dni_persona, rol_participacion, responsable
-                )
-                VALUES (%s, %s, %s, %s)
-                """,
-                (
-                    nuevo_id, participante.dni_persona,
-                    participante.rol_participacion, participante.responsable,
-                ),
-            )
-        self._guardar_historial(
-            cursor, nuevo_id, None, "ACTIVO", "Entrega registrada", prestamo.dni_encargado
-        )
-        prestamo.id_prestamo = nuevo_id
-        prestamo.fecha_solicitud = ahora
-        prestamo.fecha_entrega = ahora
-        prestamo.detalles = detalles
-        return prestamo
-
-    @staticmethod
-    def validar_sin_prestamos_vencidos(cursor, dnis):
-        marcadores = ",".join(["%s"] * len(dnis))
-        cursor.execute(
-            f"""SELECT pr.id_prestamo FROM prestamo pr
-                JOIN detalle_prestamo d ON d.id_prestamo = pr.id_prestamo
-                WHERE d.fecha_devolucion IS NULL
-                  AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
-                  AND (pr.dni_persona IN ({marcadores}) OR EXISTS (
-                      SELECT 1 FROM participante_prestamo pp
-                      WHERE pp.id_prestamo = pr.id_prestamo
-                        AND pp.dni_persona IN ({marcadores})
-                  )) LIMIT 1""",
-            tuple(sorted(dnis)) * 2,
-        )
-        if cursor.fetchone():
-            raise ConflictoPrestamoError(
-                "La persona tiene un préstamo vencido pendiente de devolución."
-            )
-
-    @staticmethod
-    def _validar_personas(cursor, solicitud):
-        dnis_participantes = {solicitud.dni_persona}
-        for participante in solicitud.participantes:
-            dnis_participantes.add(participante.dni_persona)
-        dnis_personas = set(dnis_participantes)
-        dnis_personas.add(solicitud.dni_encargado)
-        # Los bloqueos se toman siempre en el mismo orden.
-        dnis_personas = sorted(dnis_personas)
-        marcadores = ",".join(["%s"] * len(dnis_personas))
-        cursor.execute(
-            CONSULTA_PERSONAS
-            + f" WHERE p.dni IN ({marcadores}) ORDER BY p.dni FOR UPDATE",
-            tuple(dnis_personas),
-        )
-        personas = {}
-        for fila_persona in cursor.fetchall():
-            personas[fila_persona["dni"]] = fila_persona
-        if len(personas) != len(dnis_personas):
-            raise ValueError("Una de las personas seleccionadas ya no existe.")
-        if personas[solicitud.dni_encargado]["estado"] != "ACTIVA":
-            raise ValueError("El encargado está inactivo.")
-        for dni in dnis_participantes:
-            validar_persona(personas[dni])
-
-        RepositorioPrestamoSQL.validar_sin_prestamos_vencidos(cursor, dnis_participantes)
-
-        marcadores = ",".join(["%s"] * len(dnis_participantes))
-        cursor.execute(
-            f"""
-            SELECT s.id_sancion
-            FROM sancion s
-            JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
-            JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle
-            JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
-            WHERE (pr.dni_persona IN ({marcadores}) OR EXISTS (
-                SELECT 1 FROM participante_prestamo pp
-                WHERE pp.id_prestamo=pr.id_prestamo AND pp.dni_persona IN ({marcadores})
-            ))
-              AND s.estado = 'ACTIVA'
-            FOR UPDATE
-            """,
-            tuple(sorted(dnis_participantes)) * 2,
-        )
-        if cursor.fetchall():
-            raise ConflictoPrestamoError(
-                "El solicitante o un participante tiene una sanción activa."
-            )
-        return personas
-
-    @staticmethod
-    def _consultar_bienes_disponibles(cursor, solicitud, id_bien_reservado):
-        ids_bienes = sorted(solicitud.ids_bienes)
-        marcadores = ",".join(["%s"] * len(ids_bienes))
-        cursor.execute(
-            f"""
-            SELECT b.*, r.id_recurso AS recurso_id, r.id_categoria
-            FROM bien_material b
-            JOIN recurso r ON r.id_recurso = b.id_recurso
-            WHERE b.id_bien IN ({marcadores})
-            ORDER BY b.id_bien
-            FOR UPDATE
-            """,
-            tuple(ids_bienes),
-        )
-        bienes = cursor.fetchall()
-        if len(bienes) != len(ids_bienes):
-            raise ValueError("Uno de los bienes seleccionados ya no existe.")
-        for bien in bienes:
-            estado_esperado = "DISPONIBLE"
-            if bien["id_bien"] == id_bien_reservado:
-                estado_esperado = "RESERVADO"
-            if bien["estado"] != estado_esperado:
-                raise ConflictoPrestamoError(
-                    "Uno de los bienes dejó de estar disponible. No se registró la entrega."
-                )
-        cursor.execute(
-            f"""
-            SELECT id_detalle
-            FROM detalle_prestamo
-            WHERE id_bien IN ({marcadores})
-              AND fecha_devolucion IS NULL
-            FOR UPDATE
-            """,
-            tuple(ids_bienes),
-        )
-        if cursor.fetchall():
-            raise ConflictoPrestamoError(
-                "Uno de los bienes tiene una entrega pendiente, aunque su inventario indique disponible. Revisa su préstamo antes de una nueva entrega."
-            )
-        return bienes
-
-    @staticmethod
-    def _consultar_politicas(cursor, bienes, tipo_persona, salida_solicitada):
-        ids_categorias = set()
-        for bien in bienes:
-            ids_categorias.add(bien["id_categoria"])
-        ids_categorias = sorted(ids_categorias)
-        marcadores = ",".join(["%s"] * len(ids_categorias))
-        cursor.execute(
-            "SELECT * FROM politica_prestamo WHERE vigente=TRUE AND tipo_persona=%s AND id_categoria IN ("
-            + marcadores + ") ORDER BY id_politica FOR UPDATE",
-            (tipo_persona, *ids_categorias),
-        )
-        politicas = {}
-        for fila_politica in cursor.fetchall():
-            politica = FabricaPoliticaPrestamo.construir(fila_politica)
-            politicas[fila_politica["id_categoria"]] = politica
-        if set(ids_categorias) != set(politicas):
-            raise ValueError(
-                "Falta una política para el tipo de persona y una de las categorías seleccionadas."
-            )
-        if salida_solicitada:
-            for politica in politicas.values():
-                if not politica.permite_salida:
-                    raise ValueError("Una de las políticas no permite sacar el bien de la institución.")
-        return politicas
-
-    @staticmethod
-    def _guardar_detalles(cursor, id_prestamo, bienes, detalles, dni_encargado):
-        for bien, detalle in zip(bienes, detalles):
-            cursor.execute(
-                """
-                INSERT INTO detalle_prestamo (
-                    id_prestamo, id_bien, id_politica,
-                    fecha_limite_devolucion, condicion_entrega, observaciones_entrega
-                )
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    id_prestamo, detalle.id_bien, detalle.id_politica,
-                    detalle.fecha_limite_devolucion, detalle.condicion_entrega.value,
-                    detalle.observaciones_entrega or None,
-                ),
-            )
-            detalle.id_detalle = cursor.lastrowid
-            cursor.execute(
-                "UPDATE bien_material SET estado='PRESTADO' WHERE id_bien=%s",
-                (bien["id_bien"],),
-            )
-            registrar_historial_bien(
-                cursor, bien["id_bien"], bien["estado"], "PRESTADO",
-                f"Entrega del préstamo #{id_prestamo}", dni_encargado,
-            )
-        return detalles
+            yield OperacionPrestamoSQL(cursor)
 
     def consultar_prestamo(self, id_prestamo) -> PrestamoDetalle | None:
         with self.conexion.sesion() as cursor:
@@ -523,56 +245,232 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             sql += " HAVING perdidos > 0"
         return sql, tuple(valores)
 
-    def actualizar_prestamos_vencidos(self, dni_responsable, dni=None) -> None:
-        with self.conexion.sesion(escritura=True) as cursor:
-            sql = """
-                SELECT pr.*
-                FROM prestamo pr
-                WHERE pr.estado IN ('ACTIVO', 'PARCIALMENTE_DEVUELTO')
-                  AND EXISTS (
-                      SELECT 1
-                      FROM detalle_prestamo d
-                      WHERE d.id_prestamo = pr.id_prestamo
-                        AND d.fecha_devolucion IS NULL
-                        AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
-                  )
+def hay_prestamos_vencidos(cursor, dnis):
+    marcadores = ','.join(['%s'] * len(dnis))
+    cursor.execute(f'''SELECT pr.id_prestamo FROM prestamo pr
+        JOIN detalle_prestamo d ON d.id_prestamo=pr.id_prestamo
+        WHERE d.fecha_devolucion IS NULL AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
+        AND (pr.dni_persona IN ({marcadores}) OR EXISTS (
+            SELECT 1 FROM participante_prestamo pp WHERE pp.id_prestamo=pr.id_prestamo
+            AND pp.dni_persona IN ({marcadores}))) LIMIT 1''', tuple(sorted(dnis))*2)
+    return cursor.fetchone() is not None
+
+
+class OperacionPrestamoSQL(IOperacionPrestamo):
+    'Carga, bloquea y persiste con el cursor privado de una sola operacion.'
+
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def ahora(self):
+        self._cursor.execute('SELECT UTC_TIMESTAMP() AS ahora')
+        return self._cursor.fetchone()['ahora']
+
+    def cargar_cuenta_ampliacion(self, id_usuario):
+        self._cursor.execute('''SELECT u.dni_persona,u.rol,u.estado_cuenta,p.estado AS estado_persona
+            FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona
+            WHERE u.id_usuario=%s''', (id_usuario,))
+        cuenta = self._cursor.fetchone()
+        if cuenta is not None:
+            self._cursor.execute('SELECT permiso FROM rol_permiso WHERE rol=%s', (cuenta['rol'],))
+            cuenta['permisos'] = {fila['permiso'] for fila in self._cursor.fetchall()}
+        return cuenta
+
+    def cargar_politica_ampliacion(self, id_politica):
+        self._cursor.execute('''SELECT p.*,c.hora_apertura,c.hora_cierre FROM politica_prestamo p
+            LEFT JOIN configuracion_general c ON c.id_configuracion=1
+            WHERE p.id_politica=%s FOR UPDATE''', (id_politica,))
+        fila = self._cursor.fetchone()
+        if fila is None:
+            return None, None
+        horario = (HorarioAtencion(hora_apertura=fila['hora_apertura'], hora_cierre=fila['hora_cierre'])
+                   if fila['hora_apertura'] is not None else None)
+        return FabricaPoliticaPrestamo.construir(fila), horario
+
+    def guardar_fecha_limite(self, id_detalle, anterior, nueva):
+        self._cursor.execute('''UPDATE detalle_prestamo SET fecha_limite_devolucion=%s
+            WHERE id_detalle=%s AND fecha_devolucion IS NULL AND fecha_limite_devolucion=%s''',
+            (nueva, id_detalle, anterior))
+        if self._cursor.rowcount != 1:
+            raise ConflictoAmpliacionError('El plazo cambió. Recarga el préstamo.')
+
+    def cargar_entrega(self, solicitud):
+        c = self._cursor
+        participantes = {solicitud.dni_persona, *(p.dni_persona for p in solicitud.participantes)}
+        dnis = sorted(participantes | {solicitud.dni_encargado})
+        marcadores = ','.join(['%s'] * len(dnis))
+        c.execute(CONSULTA_PERSONAS+f' WHERE p.dni IN ({marcadores}) ORDER BY p.dni FOR UPDATE', tuple(dnis))
+        personas = {p['dni']: p for p in c.fetchall()}
+        vencidos = hay_prestamos_vencidos(c, participantes)
+        m = ','.join(['%s'] * len(participantes))
+        c.execute(f'''SELECT s.id_sancion FROM sancion s
+            JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
+            JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
+            WHERE (pr.dni_persona IN ({m}) OR EXISTS(SELECT 1 FROM participante_prestamo pp
+                WHERE pp.id_prestamo=pr.id_prestamo AND pp.dni_persona IN ({m})))
+            AND s.estado='ACTIVA' FOR UPDATE''', tuple(sorted(participantes))*2)
+        sanciones = bool(c.fetchall())
+        tipo = personas.get(solicitud.dni_persona, {}).get('tipo')
+        c.execute('SELECT maximo_articulos FROM limite_articulos_prestamo WHERE tipo_persona=%s FOR UPDATE', (tipo,))
+        fila = c.fetchone()
+        limite = LimiteArticulosPrestamo(tipo_persona=tipo or 'ESTUDIANTE',
+            maximo_articulos=fila['maximo_articulos'] if fila else None)
+        c.execute('''SELECT COUNT(*) AS pendientes FROM detalle_prestamo d
+            JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
+            WHERE pr.dni_persona=%s AND d.fecha_devolucion IS NULL''', (solicitud.dni_persona,))
+        pendientes = int(c.fetchone()['pendientes'])
+        ids = tuple(sorted(solicitud.ids_bienes))
+        m = ','.join(['%s']*len(ids))
+        c.execute(f'''SELECT b.*,r.id_categoria FROM bien_material b JOIN recurso r ON r.id_recurso=b.id_recurso
+            WHERE b.id_bien IN ({m}) ORDER BY b.id_bien FOR UPDATE''', ids)
+        bienes = c.fetchall()
+        c.execute(f'SELECT id_detalle FROM detalle_prestamo WHERE id_bien IN ({m}) AND fecha_devolucion IS NULL FOR UPDATE', ids)
+        entregas = bool(c.fetchall())
+        categorias = sorted({b['id_categoria'] for b in bienes})
+        politicas = {}
+        if categorias:
+            m = ','.join(['%s']*len(categorias))
+            c.execute('SELECT * FROM politica_prestamo WHERE vigente=TRUE AND tipo_persona=%s '
+                +f'AND id_categoria IN ({m}) ORDER BY id_politica FOR UPDATE', (tipo, *categorias))
+            politicas = {p['id_categoria']: FabricaPoliticaPrestamo.construir(p) for p in c.fetchall()}
+        c.execute('SELECT hora_apertura,hora_cierre FROM configuracion_general WHERE id_configuracion=1 FOR UPDATE')
+        fila = c.fetchone()
+        horario = HorarioAtencion(**fila) if fila else None
+        return ContextoEntrega(personas, vencidos, sanciones, limite, pendientes, bienes, entregas, politicas, horario, self.ahora())
+
+    def guardar_entrega(self, prestamo, bienes, ahora):
+        c = self._cursor
+        c.execute('''INSERT INTO prestamo(dni_persona,dni_encargado,tipo_prestamo,fecha_solicitud,fecha_entrega,estado,observaciones)
+            VALUES(%s,%s,%s,%s,%s,%s,%s)''', (prestamo.dni_persona, prestamo.dni_encargado,
+            prestamo.tipo_prestamo.value, ahora, ahora, prestamo.estado.value, prestamo.observaciones))
+        prestamo.id_prestamo = c.lastrowid
+        self._guardar_detalles(c, prestamo.id_prestamo, bienes, prestamo.detalles, prestamo.dni_encargado)
+        for participante in prestamo.participantes:
+            c.execute('''INSERT INTO participante_prestamo(id_prestamo,dni_persona,rol_participacion,responsable)
+                VALUES(%s,%s,%s,%s)''', (prestamo.id_prestamo, participante.dni_persona,
+                participante.rol_participacion, participante.responsable))
+        self._guardar_historial(c, prestamo.id_prestamo, None, prestamo.estado.value, 'Entrega registrada', prestamo.dni_encargado)
+        prestamo.fecha_entrega = prestamo.fecha_solicitud = ahora
+        return prestamo
+
+    def cargar_recepcion(self, id_prestamo, dni_encargado):
+        c = self._cursor
+        c.execute('SELECT estado FROM persona WHERE dni=%s FOR UPDATE', (dni_encargado,))
+        encargado = c.fetchone()
+        c.execute('SELECT * FROM prestamo WHERE id_prestamo=%s FOR UPDATE', (id_prestamo,))
+        fila = c.fetchone()
+        if fila is None:
+            raise LookupError('No se encontró el préstamo.')
+        c.execute('''SELECT d.*,b.estado AS estado_actual FROM detalle_prestamo d
+            JOIN bien_material b ON b.id_bien=d.id_bien WHERE d.id_prestamo=%s ORDER BY b.id_bien FOR UPDATE''', (id_prestamo,))
+        detalles = c.fetchall()
+        return encargado, self._construir_prestamo(fila, detalles), detalles, self.ahora()
+
+    def registrar_sancion_vencimiento(self, detalle, ahora):
+        return aplicar_sancion_vencimiento(self._cursor, detalle, ahora)
+
+    def guardar_devoluciones(self, prestamo, anterior, devoluciones, detalles, dni_encargado, ahora):
+        filas = {d['id_detalle']:d for d in detalles}
+        for devolucion in devoluciones:
+            self._registrar_devolucion_detalle(self._cursor, prestamo.id_prestamo, devolucion,
+                filas[devolucion.id_detalle], ahora, dni_encargado)
+        self.guardar_estado(prestamo, anterior, f'Recepción de {len(devoluciones)} bien(es)', dni_encargado)
+
+    def guardar_perdida(self, prestamo, detalle, motivo, dni_encargado):
+        self._cursor.execute("UPDATE bien_material SET estado='PERDIDO' WHERE id_bien=%s", (detalle.id_bien,))
+        registrar_historial_bien(self._cursor, detalle.id_bien, 'PRESTADO', 'PERDIDO', motivo, dni_encargado)
+        self._guardar_historial(self._cursor, prestamo.id_prestamo, prestamo.estado.value, prestamo.estado.value,
+            'Pérdida reportada; el bien sigue pendiente de devolución', dni_encargado)
+
+    def cargar_vencidos(self, dni=None):
+        sql = '''SELECT pr.* FROM prestamo pr WHERE pr.estado IN ('ACTIVO','PARCIALMENTE_DEVUELTO')
+            AND EXISTS(SELECT 1 FROM detalle_prestamo d WHERE d.id_prestamo=pr.id_prestamo
+                AND d.fecha_devolucion IS NULL AND d.fecha_limite_devolucion<UTC_TIMESTAMP())'''
+        valores = ()
+        if dni is not None:
+            sql+=''' AND (pr.dni_persona=%s OR EXISTS(SELECT 1 FROM participante_prestamo pp
+                WHERE pp.id_prestamo=pr.id_prestamo AND pp.dni_persona=%s))'''
+            valores = (dni, dni)
+        self._cursor.execute(sql+' ORDER BY pr.id_prestamo FOR UPDATE', valores)
+        filas = self._cursor.fetchall()
+        prestamos = []
+        for fila in filas:
+            self._cursor.execute('SELECT * FROM detalle_prestamo WHERE id_prestamo=%s ORDER BY id_detalle FOR UPDATE', (fila['id_prestamo'],))
+            prestamos.append(self._construir_prestamo(fila, self._cursor.fetchall()))
+        return prestamos
+
+    def guardar_estado(self, prestamo, anterior, observacion, dni_encargado):
+        self._cursor.execute('UPDATE prestamo SET estado=%s WHERE id_prestamo=%s', (prestamo.estado.value, prestamo.id_prestamo))
+        self._guardar_historial(self._cursor, prestamo.id_prestamo, anterior, prestamo.estado.value, observacion, dni_encargado)
+
+    @staticmethod
+    def _guardar_historial(cursor, id_prestamo, anterior, nuevo_estado, observacion, responsable):
+        cursor.execute(
             """
-            valores = []
-            if dni is not None:
-                sql += """
-                    AND (
-                        pr.dni_persona = %s
-                        OR EXISTS (
-                            SELECT 1
-                            FROM participante_prestamo pp
-                            WHERE pp.id_prestamo = pr.id_prestamo
-                              AND pp.dni_persona = %s
-                        )
-                    )
+            INSERT INTO historial_estado (
+                entidad, id_entidad, estado_anterior, estado_nuevo, fecha,
+                observacion, dni_responsable
+            )
+            VALUES ('PRESTAMO', %s, %s, %s, UTC_TIMESTAMP(), %s, %s)
+            """,
+            (id_prestamo, anterior, nuevo_estado, observacion, responsable),
+        )
+
+    @staticmethod
+    def _construir_prestamo(fila, filas_detalles):
+        prestamo = Prestamo(
+            id_prestamo=fila["id_prestamo"],
+            dni_persona=fila["dni_persona"],
+            dni_encargado=fila["dni_encargado"],
+            tipo_prestamo=fila["tipo_prestamo"],
+            fecha_solicitud=fila["fecha_solicitud"],
+            fecha_entrega=fila["fecha_entrega"],
+            estado=fila["estado"],
+            observaciones=fila["observaciones"],
+        )
+        for fila_detalle in filas_detalles:
+            detalle = DetallePrestamo(
+                id_detalle=fila_detalle["id_detalle"],
+                id_bien=fila_detalle["id_bien"],
+                id_politica=fila_detalle["id_politica"],
+                fecha_limite_devolucion=fila_detalle["fecha_limite_devolucion"],
+                condicion_entrega=fila_detalle["condicion_entrega"],
+                condicion_devolucion=fila_detalle["condicion_devolucion"],
+                observaciones_entrega=fila_detalle["observaciones_entrega"],
+                fecha_devolucion=fila_detalle["fecha_devolucion"],
+                dni_encargado_devolucion=fila_detalle["dni_encargado_devolucion"],
+                observaciones_devolucion=fila_detalle["observaciones_devolucion"],
+            )
+            prestamo.detalles.append(detalle)
+        return prestamo
+
+    @staticmethod
+    def _guardar_detalles(cursor, id_prestamo, bienes, detalles, dni_encargado):
+        for bien, detalle in zip(bienes, detalles):
+            cursor.execute(
                 """
-                valores.extend((dni, dni))
-            cursor.execute(sql + " ORDER BY pr.id_prestamo FOR UPDATE", tuple(valores))
-            filas = cursor.fetchall()
-            for fila in filas:
-                cursor.execute(
-                    "SELECT * FROM detalle_prestamo WHERE id_prestamo=%s ORDER BY id_detalle FOR UPDATE",
-                    (fila["id_prestamo"],),
+                INSERT INTO detalle_prestamo (
+                    id_prestamo, id_bien, id_politica,
+                    fecha_limite_devolucion, condicion_entrega, observaciones_entrega
                 )
-                prestamo = self._construir_prestamo(fila, cursor.fetchall())
-                nuevo_estado = prestamo.estado_actual().value
-                if nuevo_estado != fila["estado"]:
-                    cursor.execute(
-                        "UPDATE prestamo SET estado=%s WHERE id_prestamo=%s",
-                        (nuevo_estado, fila["id_prestamo"]),
-                    )
-                    self._guardar_historial(
-                        cursor,
-                        fila["id_prestamo"],
-                        fila["estado"],
-                        nuevo_estado,
-                        "Vencimiento registrado por el encargado",
-                        dni_responsable,
-                    )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    id_prestamo, detalle.id_bien, detalle.id_politica,
+                    detalle.fecha_limite_devolucion, detalle.condicion_entrega.value,
+                    detalle.observaciones_entrega or None,
+                ),
+            )
+            detalle.id_detalle = cursor.lastrowid
+            cursor.execute(
+                "UPDATE bien_material SET estado='PRESTADO' WHERE id_bien=%s",
+                (bien["id_bien"],),
+            )
+            registrar_historial_bien(
+                cursor, bien["id_bien"], bien["estado"], "PRESTADO",
+                f"Entrega del préstamo #{id_prestamo}", dni_encargado,
+            )
+        return detalles
 
     @staticmethod
     def _registrar_devolucion_detalle(
@@ -582,8 +480,8 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
         cursor.execute(
             "UPDATE detalle_prestamo SET fecha_devolucion=%s,dni_encargado_devolucion=%s,"
             "condicion_devolucion=%s,observaciones_devolucion=%s WHERE id_detalle=%s",
-            (ahora,dni_encargado,devolucion.condicion_devolucion.value,
-             devolucion.observaciones or None,detalle["id_detalle"]),
+            (ahora, dni_encargado, devolucion.condicion_devolucion.value,
+             devolucion.observaciones or None, detalle["id_detalle"]),
         )
         cursor.execute(
             "UPDATE bien_material SET estado=%s WHERE id_bien=%s",
@@ -597,114 +495,3 @@ class RepositorioPrestamoSQL(IRepositorioPrestamo):
             f"Recepción del préstamo #{id_prestamo}",
             dni_encargado,
         )
-
-    def registrar_devolucion(self, id_prestamo, devoluciones, dni_encargado) -> None:
-        if not devoluciones or len({detalle.id_detalle for detalle in devoluciones}) != len(devoluciones):
-            raise ValueError("Selecciona bienes distintos para registrar la devolución.")
-        with self.conexion.sesion(escritura=True) as cursor:
-            self._validar_encargado(cursor, dni_encargado)
-            cursor.execute("SELECT * FROM prestamo WHERE id_prestamo=%s FOR UPDATE", (id_prestamo,))
-            fila = cursor.fetchone()
-            if not fila:
-                raise LookupError("No se encontró el préstamo.")
-            cursor.execute(
-                """
-                SELECT d.*, b.estado AS estado_actual
-                FROM detalle_prestamo d
-                JOIN bien_material b ON b.id_bien = d.id_bien
-                WHERE d.id_prestamo = %s
-                ORDER BY b.id_bien
-                FOR UPDATE
-                """,
-                (id_prestamo,),
-            )
-            detalles = cursor.fetchall()
-            detalles_por_id = {}
-            for detalle in detalles:
-                detalles_por_id[detalle["id_detalle"]] = detalle
-            for devolucion in devoluciones:
-                detalle = detalles_por_id.get(devolucion.id_detalle)
-                if not detalle or detalle["fecha_devolucion"] is not None:
-                    raise ConflictoPrestamoError(
-                        "Uno de los bienes no pertenece a este préstamo o ya fue devuelto. No se registró ninguna devolución."
-                    )
-                if detalle["estado_actual"] not in {"PRESTADO", "PERDIDO"}:
-                    raise ConflictoPrestamoError(
-                        "El estado actual de un bien no corresponde a un préstamo pendiente."
-                    )
-            cursor.execute("SELECT UTC_TIMESTAMP() AS ahora")
-            ahora = cursor.fetchone()["ahora"]
-            prestamo = self._construir_prestamo(fila, detalles)
-            for devolucion in devoluciones:
-                detalle = detalles_por_id[devolucion.id_detalle]
-                aplicar_sancion_vencimiento(cursor, detalle, ahora)
-                prestamo.registrar_devolucion(
-                    detalle["id_detalle"], devolucion.condicion_devolucion, ahora,
-                    dni_encargado=dni_encargado, observaciones=devolucion.observaciones,
-                )
-                self._registrar_devolucion_detalle(
-                    cursor, id_prestamo, devolucion, detalle, ahora, dni_encargado
-                )
-            nuevo_estado = prestamo.estado_actual(ahora).value
-            cursor.execute("UPDATE prestamo SET estado=%s WHERE id_prestamo=%s", (nuevo_estado, id_prestamo))
-            self._guardar_historial(
-                cursor,
-                id_prestamo,
-                fila["estado"],
-                nuevo_estado,
-                f"Recepción de {len(devoluciones)} bien(es)",
-                dni_encargado,
-            )
-
-    def reportar_perdida(self, id_prestamo, id_detalle, motivo, dni_encargado) -> None:
-        with self.conexion.sesion(escritura=True) as cursor:
-            self._validar_encargado(cursor, dni_encargado)
-            cursor.execute("SELECT * FROM prestamo WHERE id_prestamo=%s FOR UPDATE", (id_prestamo,))
-            prestamo = cursor.fetchone()
-            if not prestamo:
-                raise LookupError("No se encontró el préstamo.")
-            cursor.execute(
-                """
-                SELECT d.*, b.estado AS estado_actual
-                FROM detalle_prestamo d
-                JOIN bien_material b ON b.id_bien = d.id_bien
-                WHERE d.id_detalle = %s AND d.id_prestamo = %s
-                FOR UPDATE
-                """,
-                (id_detalle, id_prestamo),
-            )
-            detalle = cursor.fetchone()
-            if (
-                not detalle
-                or detalle["fecha_devolucion"] is not None
-                or detalle["estado_actual"] != "PRESTADO"
-            ):
-                raise ConflictoPrestamoError(
-                    "Solo se puede reportar la pérdida de un bien prestado y pendiente de devolución."
-                )
-            cursor.execute(
-                "UPDATE bien_material SET estado='PERDIDO' WHERE id_bien=%s",
-                (detalle["id_bien"],),
-            )
-            registrar_historial_bien(
-                cursor, detalle["id_bien"], "PRESTADO", "PERDIDO", motivo, dni_encargado
-            )
-            self._guardar_historial(
-                cursor,
-                id_prestamo,
-                prestamo["estado"],
-                prestamo["estado"],
-                "Pérdida reportada; el bien sigue pendiente de devolución",
-                dni_encargado,
-            )
-
-    @staticmethod
-    def _validar_limite_articulos(cursor, solicitud, tipo_persona):
-        # El solicitante ya está bloqueado en esta transacción para evitar entregas simultáneas sobre su máximo.
-        cursor.execute('SELECT maximo_articulos FROM limite_articulos_prestamo WHERE tipo_persona=%s FOR UPDATE', (tipo_persona,))
-        fila = cursor.fetchone()
-        limite = LimiteArticulosPrestamo(tipo_persona=tipo_persona, maximo_articulos=fila['maximo_articulos'] if fila else None)
-        cursor.execute("""SELECT COUNT(*) AS pendientes FROM detalle_prestamo d
-            JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
-            WHERE pr.dni_persona=%s AND d.fecha_devolucion IS NULL""", (solicitud.dni_persona,))
-        limite.validar_entrega(int(cursor.fetchone()['pendientes']), len(solicitud.ids_bienes))

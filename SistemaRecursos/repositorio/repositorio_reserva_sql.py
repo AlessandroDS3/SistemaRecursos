@@ -1,12 +1,14 @@
 from __future__ import annotations
 from dominio.resultados_consulta import ReservaDetalle, ResultadoReservas
 from dominio.gestion_prestamos.i_repositorio_reserva import IRepositorioReserva
-from dominio.gestion_prestamos.reserva import Reserva, autorizar_resolucion, AccionReserva
+from dominio.gestion_prestamos.reserva import Reserva, AccionReserva
 from dominio.gestion_prestamos.validacion_prestamo import ConflictoPrestamoError
 from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_persona_sql import CONSULTA as CONSULTA_PERSONAS
-from repositorio.repositorio_prestamo_sql import RepositorioPrestamoSQL
+from repositorio.repositorio_prestamo_sql import OperacionPrestamoSQL, hay_prestamos_vencidos
+from dominio.gestion_prestamos.i_operacion_reserva import IOperacionEntregaReserva
+from contextlib import contextmanager
 from repositorio.repositorio_bien_material_sql import registrar_historial_bien
 from repositorio.politica_vencimiento_reserva_sql import consultar_politica_vencimiento_reserva
 
@@ -33,9 +35,8 @@ CONSULTA_RESERVA = """
 """
 
 class RepositorioReservaSQL(IRepositorioReserva):
-    def __init__(self, conexion=None, prestamos=None):
+    def __init__(self, conexion=None):
         self.conexion = conexion or MySQLConnection()
-        self.prestamos = prestamos if prestamos is not None else RepositorioPrestamoSQL(self.conexion)
 
     def registrar_reserva(self, reserva, responsable) -> int:
         with self.conexion.sesion(escritura=True) as cursor:
@@ -52,8 +53,10 @@ class RepositorioReservaSQL(IRepositorioReserva):
     def preparar_reserva(self, id_reserva, responsable, gestionar, motivo="", acepta=False) -> int | None:
         return self._resolver_reserva(id_reserva, AccionReserva.PREPARAR, responsable, gestionar, motivo, acepta)
 
-    def entregar_reserva(self, id_reserva, responsable, gestionar, motivo="", acepta=False) -> int | None:
-        return self._resolver_reserva(id_reserva, AccionReserva.ENTREGAR, responsable, gestionar, motivo, acepta)
+    @contextmanager
+    def transaccion_entrega(self):
+        with self.conexion.sesion(escritura=True) as cursor:
+            yield OperacionEntregaReservaSQL(cursor, self)
 
     def cancelar_reserva(self, id_reserva, responsable, gestionar, motivo="", acepta=False) -> int | None:
         return self._resolver_reserva(id_reserva, AccionReserva.CANCELAR, responsable, gestionar, motivo, acepta)
@@ -66,6 +69,8 @@ class RepositorioReservaSQL(IRepositorioReserva):
 
     def _resolver_reserva(self, id_reserva, accion, responsable, gestionar, motivo="", acepta=False):
         accion = AccionReserva.desde_valor(accion)
+        if accion == AccionReserva.ENTREGAR:
+            raise ValueError('La entrega se coordina desde el servicio mediante transaccion_entrega.')
         with self.conexion.sesion(escritura=True) as cursor:
             reserva = self._bloquear_reserva(cursor, id_reserva, accion, responsable, gestionar)
             estado_anterior = reserva.estado.value
@@ -78,8 +83,6 @@ class RepositorioReservaSQL(IRepositorioReserva):
             id_prestamo = None
             if accion == AccionReserva.PREPARAR:
                 self._preparar_bien(cursor, reserva, responsable)
-            elif accion == AccionReserva.ENTREGAR:
-                id_prestamo = self._entregar_bien(cursor, reserva, responsable)
             else:
                 self._liberar_bien(cursor, reserva, responsable)
             self._guardar_resolucion(
@@ -110,7 +113,6 @@ class RepositorioReservaSQL(IRepositorioReserva):
         referencia = cursor.fetchone()
         if not referencia:
             raise LookupError("No se encontró la solicitud o reserva.")
-        autorizar_resolucion(referencia["dni_persona"], accion, dni_responsable, gestionar)
         # Mantener este orden evita invertir bloqueos con las entregas simultáneas.
         self._bloquear_personas(cursor, referencia["dni_persona"], dni_responsable)
         self._consultar_recurso_bloqueado(cursor, referencia["id_recurso"])
@@ -166,8 +168,8 @@ class RepositorioReservaSQL(IRepositorioReserva):
 
     def _validar_elegibilidad(self, cursor, reserva):
         persona, tiene_sancion = self._consultar_solicitante(cursor, reserva.dni_persona)
-        reserva.validar_solicitante(persona, tiene_sancion)
-        self.prestamos.validar_sin_prestamos_vencidos(cursor, {reserva.dni_persona})
+        reserva.validar_solicitante(persona, tiene_sancion,
+            hay_prestamos_vencidos(cursor, {reserva.dni_persona}))
         recurso = self._consultar_recurso_bloqueado(cursor, reserva.id_recurso)
         politica = self._consultar_politica(cursor, persona["tipo"], recurso["id_categoria"])
         reserva.validar_politica(politica)
@@ -249,17 +251,6 @@ class RepositorioReservaSQL(IRepositorioReserva):
             cursor, id_bien, "DISPONIBLE", "RESERVADO",
             f"Preparado para solicitud #{reserva.id_reserva}", dni_responsable,
         )
-
-    def _entregar_bien(self, cursor, reserva, dni_responsable):
-        cursor.execute("SELECT UTC_TIMESTAMP() AS ahora")
-        reserva.validar_fecha_retiro(cursor.fetchone()["ahora"])
-        solicitud = reserva.preparar_solicitud_prestamo(dni_responsable)
-        prestamo = self.prestamos.registrar_prestamo(solicitud, cursor=cursor, id_bien_reservado=reserva.id_bien)
-        cursor.execute(
-            "UPDATE reserva SET id_prestamo_ref=%s WHERE id_reserva=%s",
-            (prestamo.id_prestamo, reserva.id_reserva),
-        )
-        return prestamo.id_prestamo
 
     @staticmethod
     def _liberar_bien(cursor, reserva, dni_responsable):
@@ -376,3 +367,24 @@ class RepositorioReservaSQL(IRepositorioReserva):
             self._liberar_bien(cursor, reserva, None)
             self._guardar_resolucion(cursor, reserva, anterior, motivo, None)
             return True
+
+
+class OperacionEntregaReservaSQL(IOperacionEntregaReserva):
+    def __init__(self, cursor, repositorio):
+        self._cursor = cursor
+        self._repositorio = repositorio
+        self._prestamos = OperacionPrestamoSQL(cursor)
+
+    @property
+    def prestamos(self):
+        return self._prestamos
+
+    def ahora(self):
+        return self._prestamos.ahora()
+
+    def cargar_reserva(self, id_reserva, responsable, gestionar):
+        return self._repositorio._bloquear_reserva(self._cursor,id_reserva,AccionReserva.ENTREGAR,responsable,gestionar)
+
+    def guardar_entrega(self, reserva, anterior, id_prestamo, motivo, responsable):
+        self._cursor.execute('UPDATE reserva SET id_prestamo_ref=%s WHERE id_reserva=%s',(id_prestamo,reserva.id_reserva))
+        self._repositorio._guardar_resolucion(self._cursor,reserva,anterior,motivo,responsable)

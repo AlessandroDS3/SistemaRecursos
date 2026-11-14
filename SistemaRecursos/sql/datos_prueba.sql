@@ -190,22 +190,6 @@ CREATE TABLE IF NOT EXISTS reserva (
   CONSTRAINT fk_reserva_bien FOREIGN KEY (id_bien) REFERENCES bien_material(id_bien),
   CONSTRAINT fk_reserva_prestamo FOREIGN KEY (id_prestamo_ref) REFERENCES prestamo(id_prestamo)
 ) ENGINE=InnoDB;
-CREATE TABLE IF NOT EXISTS ampliacion_prestamo (
-  id_ampliacion          INT AUTO_INCREMENT PRIMARY KEY,
-  id_detalle         INT NOT NULL,
-  fecha_solicitud        DATETIME NOT NULL,
-  fecha_limite_anterior  DATETIME NOT NULL,
-  fecha_limite_nueva     DATETIME NOT NULL,
-  motivo                 VARCHAR(255),
-  estado                 ENUM('PENDIENTE','APROBADA','RECHAZADA') NOT NULL DEFAULT 'PENDIENTE',
-  fecha_resolucion       DATETIME NULL,
-  id_usuario_resolucion   INT NULL,
-  observacion_resolucion  VARCHAR(255) NULL,
-  INDEX idx_ampliacion_detalle_estado (id_detalle, estado),
-  CHECK (fecha_limite_nueva > fecha_limite_anterior),
-  FOREIGN KEY (id_usuario_resolucion) REFERENCES usuario_sistema(id_usuario),
-  FOREIGN KEY (id_detalle)     REFERENCES detalle_prestamo(id_detalle) ON DELETE CASCADE
-) ENGINE=InnoDB;
 -- 5. CONTROL: INCIDENCIAS Y SANCIONES
 CREATE TABLE IF NOT EXISTS incidencia (
   id_incidencia   INT AUTO_INCREMENT PRIMARY KEY,
@@ -311,9 +295,6 @@ INSERT INTO rol_permiso (rol, permiso) VALUES
 ('USUARIO', 'PRESTAMOS_PROPIOS_CONSULTAR'),
 ('ENCARGADO_PRESTAMOS', 'PRESTAMOS_PROPIOS_CONSULTAR'),
 ('ADMINISTRADOR', 'PRESTAMOS_PROPIOS_CONSULTAR'),
-('USUARIO', 'AMPLIACIONES_SOLICITAR'),
-('ENCARGADO_PRESTAMOS', 'AMPLIACIONES_SOLICITAR'),
-('ADMINISTRADOR', 'AMPLIACIONES_SOLICITAR'),
 ('USUARIO', 'RESERVAS_PROPIAS_GESTIONAR'),
 ('ENCARGADO_PRESTAMOS', 'RESERVAS_PROPIAS_GESTIONAR'),
 ('ADMINISTRADOR', 'RESERVAS_PROPIAS_GESTIONAR'),
@@ -625,11 +606,6 @@ INSERT INTO `reserva` (`id_reserva`, `id_recurso`, `fecha_solicitud`, `fecha_req
 (11, 32, '2026-11-11 10:00:00', '2026-11-13 10:00:00', NULL, '2026-11-13 10:00:00', 'PRESTAMO', 'Rechazada: matrícula no vigente', 0, NULL, NULL, 'RECHAZADA', '99000012'),
 (12, 33, '2026-11-12 09:00:00', '2026-11-12 09:00:00', NULL, '2026-11-14 09:00:00', 'PRESTAMO', 'Solicitud de dron pendiente de entrega', 0, NULL, NULL, 'EN_ESPERA', '99000005');
 
--- AMPLIACIONES: PENDIENTE, APROBADA Y RECHAZADA.
-INSERT INTO `ampliacion_prestamo` (`id_ampliacion`, `id_detalle`, `fecha_solicitud`, `fecha_limite_anterior`, `fecha_limite_nueva`, `motivo`, `estado`, `fecha_resolucion`, `id_usuario_resolucion`, `observacion_resolucion`) VALUES
-(1, 6, '2026-11-12 09:45:00', '2026-11-14 09:00:00', '2026-11-16 09:00:00', 'Necesita más tiempo para completar práctica', 'PENDIENTE', NULL, NULL, NULL),
-(2, 19, '2026-10-31 09:00:00', '2026-11-05 09:00:00', '2026-11-07 09:00:00', 'Ampliación autorizada antes del vencimiento', 'APROBADA', '2026-10-31 09:15:00', (SELECT id_usuario FROM usuario_sistema WHERE dni_persona='98000002'), 'Autorizada por el encargado.'),
-(3, 8, '2026-11-12 11:00:00', '2026-11-13 08:00:00', '2026-11-16 08:00:00', 'Rechazada por alta demanda del dron', 'RECHAZADA', '2026-11-12 11:15:00', (SELECT id_usuario FROM usuario_sistema WHERE dni_persona='98000002'), 'Alta demanda del recurso.');
 
 -- INCIDENCIAS Y SANCIONES CON ESTADOS REALISTAS.
 INSERT INTO `incidencia` (`id_incidencia`, `id_detalle`, `tipo`, `dni_registrador`, `descripcion`, `fecha`, `estado`) VALUES

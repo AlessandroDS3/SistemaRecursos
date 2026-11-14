@@ -7,14 +7,17 @@ from dominio.gestion_prestamos.reserva import Reserva, AccionReserva, TipoSolici
 from dominio.gestion_prestamos.reserva import EstadoReserva
 from servicios.validacion_identificadores import identificador
 from dominio.gestion_recursos.validacion_recurso import texto
+from dominio.gestion_prestamos.validacion_prestamo import ConflictoPrestamoError
+from servicios.servicio_prestamo import ServicioAplicacionPrestamo
 
 
 HORA_LIMA = timezone(timedelta(hours=-5))
 
 
 class ServicioAplicacionReserva:
-    def __init__(self, repositorio_reservas: IRepositorioReserva):
+    def __init__(self, repositorio_reservas: IRepositorioReserva, prestamos: ServicioAplicacionPrestamo):
         self.repositorio: IRepositorioReserva = repositorio_reservas
+        self.prestamos = prestamos
 
     def registrar_reserva(self, datos, persona_actual) -> int:
         ahora = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
@@ -63,9 +66,22 @@ class ServicioAplicacionReserva:
         )
 
     def entregar_reserva(self, id_reserva, datos, persona_actual, gestionar=False) -> int | None:
-        return self._resolver_reserva(
-            id_reserva, datos, persona_actual, gestionar, AccionReserva.ENTREGAR, self.repositorio.entregar_reserva
-        )
+        accion = AccionReserva.ENTREGAR
+        accion.validar_permiso(gestionar)
+        id_reserva, responsable = identificador(id_reserva), validar_dni(persona_actual)
+        motivo = texto(datos.get('motivo', ''), 'Motivo', 255)
+        with self.repositorio.transaccion_entrega() as operacion:
+            reserva = operacion.cargar_reserva(id_reserva, responsable, gestionar)
+            anterior = reserva.estado.value
+            ahora = operacion.ahora()
+            if reserva.fecha_limite_vencimiento and ahora >= reserva.fecha_limite_vencimiento:
+                raise ConflictoPrestamoError('El plazo de retiro venció. La solicitud será expirada y el bien liberado por el sistema.')
+            reserva.resolver_reserva(accion, responsable, gestionar, motivo, datos.get('acepta_condiciones') == '1')
+            reserva.validar_fecha_retiro(ahora)
+            solicitud = reserva.preparar_solicitud_prestamo(responsable)
+            prestamo = self.prestamos.registrar_en_operacion(solicitud, operacion.prestamos, reserva.id_bien)
+            operacion.guardar_entrega(reserva, anterior, prestamo.id_prestamo, motivo or accion.observacion, responsable)
+        return prestamo.id_prestamo
 
     def cancelar_reserva(self, id_reserva, datos, persona_actual, gestionar=False) -> int | None:
         return self._resolver_reserva(

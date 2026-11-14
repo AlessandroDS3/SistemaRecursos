@@ -1,12 +1,8 @@
 import os
-from pathlib import Path
 import unittest
-from uuid import uuid4
 
 import mysql.connector
 from werkzeug.datastructures import MultiDict
-from app import create_app
-from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_sancion_sql import RepositorioSancionSQL
 from repositorio.repositorio_reserva_sql import RepositorioReservaSQL
 from dominio.gestion_prestamos.solicitud_prestamo import SolicitudPrestamo
@@ -15,23 +11,8 @@ from dominio.gestion_prestamos.solicitud_prestamo import SolicitudPrestamo
 @unittest.skipUnless(os.environ.get("TEST_MYSQL_PORT"), "Configura MySQL de pruebas.")
 class DevolucionIntegradaTest(unittest.TestCase):
     def setUp(self):
-        cfg = dict(host="127.0.0.1", port=int(os.environ["TEST_MYSQL_PORT"]),
-                   user=os.environ.get("TEST_MYSQL_USER", "root"),
-                   password=os.environ.get("TEST_MYSQL_PASSWORD", ""), connection_timeout=5, use_pure=True)
-        nombre = "test_devolucion_" + uuid4().hex
-        cn = mysql.connector.connect(**cfg)
-        self.addCleanup(cn.close)
-        c = cn.cursor()
-        self.addCleanup(c.close)
-        c.execute(f"CREATE DATABASE {nombre} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-        self.addCleanup(c.execute, f"DROP DATABASE {nombre}")
-        sql = Path(__file__).resolve().parents[1] / "sql/datos_prueba.sql"
-        c.execute(sql.read_text(encoding="utf-8").replace("prestamos_escuela_pruebas", nombre))
-        while c.nextset():
-            pass
-        cn.commit()
-        self.db = MySQLConnection(dict(cfg, database=nombre))
-        self.app = create_app({"TESTING": True, "MYSQL_CONFIG": self.db.config})
+        from soporte_mysql import preparar_base_integracion
+        preparar_base_integracion(self, prestamos=True)
         self.servicio = self.app.extensions["prestamos"]
         self.repo = self.servicio.repositorio
 
@@ -46,6 +27,8 @@ class DevolucionIntegradaTest(unittest.TestCase):
         self.servicio.registrar_devolucion(1, datos, "98000002")
 
     def test_paginas_y_busquedas_del_sistema_con_base_actual(self):
+        self.app.extensions['acceso'].registrar_cuenta(
+            '99000001', 'estudiante1', 'ClavePrueba2026!')
         client = self.app.test_client()
         client.get("/login")
         with client.session_transaction() as s:
@@ -171,12 +154,14 @@ class DevolucionIntegradaTest(unittest.TestCase):
                 with self.db.sesion(escritura=True) as c:
                     _, tiene_sancion = reservas._consultar_solicitante(c, dni)
                     self.assertEqual(tiene_sancion, bloqueado)
-                    solicitud = SolicitudPrestamo(dni_persona=dni, dni_encargado="98000002", ids_bienes=[2])
-                    if bloqueado:
-                        with self.assertRaisesRegex(ValueError, "sanción activa"):
-                            self.repo._validar_personas(c, solicitud)
-                    else:
-                        self.assertIn(dni, self.repo._validar_personas(c, solicitud))
+                solicitud = SolicitudPrestamo(dni_persona=dni, dni_encargado="98000002", ids_bienes=[2])
+                if bloqueado:
+                    with self.assertRaisesRegex(ValueError, "sanción activa"):
+                        with self.repo.transaccion() as operacion:
+                            operacion.cargar_entrega(solicitud).construir_prestamo(solicitud)
+                else:
+                    with self.repo.transaccion() as operacion:
+                        self.assertIn(dni, operacion.cargar_entrega(solicitud).personas)
         sanciones = RepositorioSancionSQL(self.db)
         sanciones.levantar_sancion_vencimiento(1, 1, "Caso resuelto", "98000002")
         with self.db.sesion(escritura=True) as c:
