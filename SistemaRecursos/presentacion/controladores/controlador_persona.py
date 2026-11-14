@@ -8,36 +8,48 @@ class ControladorPersona:
         self.servicio = servicio
         self.blueprint = Blueprint('personas', __name__, url_prefix='/personas')
         for ruta, nombre, funcion, metodos in (
-            ('', 'listar', self.listar, ['GET']),
-            ('/buscar', 'buscar', self.buscar, ['GET']),
-            ('/nueva', 'nueva', self.formulario, ['GET', 'POST']),
-            ('/<documento>', 'detalle', self.detalle, ['GET']),
-            ('/<documento>/editar', 'editar', self.formulario, ['GET', 'POST']),
-            ('/<documento>/desactivar', 'desactivar', self.desactivar, ['POST']),
+            ('', 'consultar_personas', self.consultar_personas, ['GET']),
+            ('/buscar', 'buscar_personas', self.buscar_personas, ['GET']),
+            (
+                '/nueva',
+                'gestionar_formulario_persona',
+                self.gestionar_formulario_persona,
+                ['GET', 'POST'],
+            ),
+            ('/<documento>', 'consultar_persona', self.consultar_persona, ['GET']),
+            (
+                '/<documento>/editar',
+                'gestionar_formulario_persona',
+                self.gestionar_formulario_persona,
+                ['GET', 'POST'],
+            ),
+            ('/<documento>/desactivar', 'desactivar_persona', self.desactivar_persona, ['POST']),
         ):
             self.blueprint.add_url_rule(ruta, nombre, funcion, methods=metodos)
 
     @requiere_permiso('PERSONAS_CONSULTAR')
-    def listar(self):
-        resultado = self.servicio.listar(request.args)
+    def consultar_personas(self):
+        resultado = self.servicio.consultar_personas(request.args)
         return render_template('vista_persona.html', modo='lista', resultado=resultado)
 
     @requiere_permiso('PERSONAS_CONSULTAR', 'PRESTAMOS_GESTIONAR')
-    def buscar(self):
-        return jsonify(self.servicio.buscar(request.args.get('q', '')))
+    def buscar_personas(self):
+        return jsonify(self.servicio.buscar_personas(request.args.get('q', '')))
 
     @requiere_permiso('PERSONAS_CONSULTAR')
-    def detalle(self, documento):
-        persona, _ = self.servicio.consultar(documento)
+    def consultar_persona(self, documento):
+        persona, _ = self.servicio.consultar_persona(documento)
         return render_template('vista_persona.html', modo='detalle', persona=persona)
 
     @requiere_permiso('PERSONAS_GESTIONAR')
-    def formulario(self, documento=None):
-        persona, version = self.servicio.consultar(documento) if documento else ({}, '')
+    def gestionar_formulario_persona(self, documento=None):
+        persona, version = self.servicio.consultar_persona(documento) if documento else ({}, '')
         if request.method == 'POST':
-            nuevo = self.servicio.guardar(request.form.to_dict(), g.usuario.id_usuario, documento)
+            nuevo = self.servicio.guardar_persona(
+                request.form.to_dict(), g.usuario.id_usuario, documento
+            )
             flash('Ficha de persona guardada.')
-            return redirect(url_for('personas.detalle', documento=nuevo))
+            return redirect(url_for('personas.consultar_persona', documento=nuevo))
         return render_template(
             'vista_persona.html',
             modo='formulario',
@@ -48,7 +60,7 @@ class ControladorPersona:
         )
 
     @requiere_permiso('PERSONAS_GESTIONAR')
-    def desactivar(self, documento):
-        self.servicio.desactivar(documento, g.usuario.id_usuario)
+    def desactivar_persona(self, documento):
+        self.servicio.desactivar_persona(documento, g.usuario.id_usuario)
         flash('Persona desactivada.')
-        return redirect(url_for('personas.detalle', documento=documento))
+        return redirect(url_for('personas.consultar_persona', documento=documento))

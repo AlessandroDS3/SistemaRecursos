@@ -10,7 +10,7 @@ def cargar_cuentas_bloqueadas(repo):
 
 
 class RepositorioCuentaSQL(RepositorioSQL):
-    def consultar(self, documento):
+    def consultar_cuenta(self, documento):
         return self.consultar_sql(
             '''SELECT id_usuario,dni_persona,nombre_usuario,rol,estado_cuenta,
             ultimo_acceso FROM usuario_sistema WHERE dni_persona=%s''',
@@ -18,16 +18,16 @@ class RepositorioCuentaSQL(RepositorioSQL):
             una=True,
         )
 
-    def cargar_cuentas(self):
+    def consultar_cuentas_bloqueadas(self):
         return cargar_cuentas_bloqueadas(self)
 
-    def estado_persona(self, documento):
+    def consultar_estado_persona(self, documento):
         fila = self.consultar_sql(
             'SELECT estado FROM persona WHERE dni=%s FOR UPDATE', (documento,), una=True
         )
         return fila['estado'] if fila else None
 
-    def guardar(self, documento, nombre, hash_clave):
+    def registrar_cuenta(self, documento, nombre, hash_clave):
         return self.insertar(
             'usuario_sistema',
             dict(
@@ -39,7 +39,7 @@ class RepositorioCuentaSQL(RepositorioSQL):
             ),
         )
 
-    def actualizar(self, identificador, datos):
+    def actualizar_cuenta(self, identificador, datos):
         permitidos = {'nombre_usuario', 'contrasena_hash', 'rol', 'estado_cuenta'}
         if set(datos) - permitidos:
             raise ValueError('Campo de cuenta desconocido.')
@@ -50,7 +50,7 @@ class RepositorioCuentaSQL(RepositorioSQL):
                 (*datos.values(), identificador),
             )
 
-    def buscar(self, termino):
+    def buscar_cuentas(self, termino):
         return self.consultar_sql(
             '''SELECT u.id_usuario,u.dni_persona,u.nombre_usuario,u.rol,u.estado_cuenta,
             CONCAT(p.nombres,' ',p.apellidos) AS persona FROM usuario_sistema u

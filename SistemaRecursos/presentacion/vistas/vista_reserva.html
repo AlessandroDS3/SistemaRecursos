@@ -5,7 +5,7 @@
     <div class="cabecera">
       <h1>{{ 'Reservas' if gestionar else 'Mis reservas' }}</h1>
       {% if g.usuario.permite("RESERVAS_PROPIAS_GESTIONAR") %}
-        <a class="boton" href="{{ url_for('reservas.nueva') }}">Solicitar recurso</a>
+        <a class="boton" href="{{ url_for('reservas.registrar_reserva') }}">Solicitar recurso</a>
       {% endif %}
     </div>
     <form class="filtros">
@@ -40,7 +40,7 @@
           {% for r in reservas %}
             <tr>
               <td>
-                <a href="{{ url_for('reservas.detalle',identificador=r.id_reserva) }}">{{ r.id_reserva }}</a>
+                <a href="{{ url_for('reservas.consultar_reserva',identificador=r.id_reserva) }}">{{ r.id_reserva }}</a>
               </td>
               <td>{{ r.solicitante }}</td>
               <td>{{ r.recurso }}</td>
@@ -124,14 +124,14 @@
     </dl>
     {% if reserva.id_prestamo_ref %}
       <a class="boton"
-         href="{{ url_for('prestamos.detalle',identificador=reserva.id_prestamo_ref) }}">
+         href="{{ url_for('prestamos.consultar_prestamo',identificador=reserva.id_prestamo_ref) }}">
         Ver préstamo entregado
       </a>
     {% endif %}
     <div class="acciones">
       {% if reserva.estado in ("EN_ESPERA","LISTA_PARA_RETIRO") %}
         <form method="post"
-              action="{{ url_for('reservas.actuar',identificador=reserva.id_reserva,accion='cancelar') }}">
+              action="{{ url_for('reservas.cancelar_reserva',identificador=reserva.id_reserva) }}">
           {{ csrf() }}
           <button class="secundario">Cancelar reserva</button>
         </form>
@@ -139,13 +139,13 @@
     </div>
     {% if gestionar and reserva.estado=="EN_ESPERA" %}
       <form method="post"
-            action="{{ url_for('reservas.actuar',identificador=reserva.id_reserva,accion='preparar') }}">
+            action="{{ url_for('reservas.preparar_reserva',identificador=reserva.id_reserva) }}">
         {{ csrf() }}
         <button>Preparar bien disponible</button>
       </form>
       <form class="filtros"
             method="post"
-            action="{{ url_for('reservas.actuar',identificador=reserva.id_reserva,accion='rechazar') }}">
+            action="{{ url_for('reservas.rechazar_reserva',identificador=reserva.id_reserva) }}">
         {{ csrf() }}
         {{ campo('motivo','Motivo de rechazo',requerido=true) }}
         <button class="secundario">Rechazar solicitud</button>
@@ -154,7 +154,7 @@
     {% if gestionar and reserva.estado=="LISTA_PARA_RETIRO" %}
       <form method="post"
             class="formulario panel"
-            action="{{ url_for('reservas.actuar',identificador=reserva.id_reserva,accion='entregar') }}">
+            action="{{ url_for('reservas.entregar_reserva',identificador=reserva.id_reserva) }}">
         {{ csrf() }}
         <label class="check">
           <input type="checkbox" name="acepta_condiciones" value="1" required>
@@ -168,7 +168,7 @@
         <summary>Dar por vencida la reserva</summary>
         <form method="post"
               class="filtros"
-              action="{{ url_for('reservas.actuar',identificador=reserva.id_reserva,accion='expirar') }}">
+              action="{{ url_for('reservas.expirar_reserva',identificador=reserva.id_reserva) }}">
           {{ csrf() }}{{ campo('motivo','Motivo',requerido=true) }}<button class="secundario">Confirmar vencimiento manual</button>
         </form>
       </details>

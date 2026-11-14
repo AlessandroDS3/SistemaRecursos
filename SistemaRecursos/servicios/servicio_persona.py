@@ -9,8 +9,8 @@ class ServicioAplicacionPersona:
     def __init__(self, repositorio: IRepositorioPersona):
         self.repositorio = repositorio
 
-    def listar(self, filtros):
-        return self.repositorio.listar(
+    def consultar_personas(self, filtros):
+        return self.repositorio.consultar_personas(
             dict(
                 q=texto(filtros.get('q'), 'Búsqueda', 120),
                 estado=filtros.get('estado', ''),
@@ -18,23 +18,23 @@ class ServicioAplicacionPersona:
             )
         )
 
-    def consultar(self, documento):
-        fila = self.repositorio.consultar(dni(documento))
+    def consultar_persona(self, documento):
+        fila = self.repositorio.consultar_persona(dni(documento))
         if fila is None:
             raise NoEncontrado('Persona inexistente.')
         persona = Persona.desde_datos(fila)
         return persona, version(persona.datos())
 
-    def guardar(self, datos, actor, documento_anterior=None):
+    def guardar_persona(self, datos, actor, documento_anterior=None):
         valores = dict(datos)
         if documento_anterior is None:
             valores['estado'] = 'ACTIVA'
         persona = Persona.desde_datos(valores)
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'PERSONAS_GESTIONAR')
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'PERSONAS_GESTIONAR')
             if documento_anterior is not None:
-                cuentas = operacion.cuentas_bloqueadas()
-                anterior = operacion.consultar(dni(documento_anterior), bloquear=True)
+                cuentas = operacion.consultar_cuentas_bloqueadas()
+                anterior = operacion.consultar_persona(dni(documento_anterior), bloquear=True)
                 if anterior is None:
                     raise NoEncontrado('Persona inexistente.')
                 comprobar_version(
@@ -51,14 +51,14 @@ class ServicioAplicacionPersona:
                     )
                     if cuenta['id_usuario'] == entero(actor) and persona.estado != 'ACTIVA':
                         raise ValueError('No puedes desactivar tu propia persona.')
-            operacion.guardar(persona, documento_anterior)
+            operacion.guardar_persona(persona, documento_anterior)
         return persona.dni
 
-    def desactivar(self, documento, actor):
-        persona, actual = self.consultar(documento)
+    def desactivar_persona(self, documento, actor):
+        persona, actual = self.consultar_persona(documento)
         datos = dict(persona.datos(), estado='INACTIVA', version=actual)
-        return self.guardar(datos, actor, documento)
+        return self.guardar_persona(datos, actor, documento)
 
-    def buscar(self, termino):
+    def buscar_personas(self, termino):
         termino = texto(termino, 'Búsqueda', 120)
-        return self.repositorio.buscar(termino) if len(termino) >= 2 else []
+        return self.repositorio.buscar_personas(termino) if len(termino) >= 2 else []

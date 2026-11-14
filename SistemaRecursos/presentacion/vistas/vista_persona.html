@@ -5,7 +5,7 @@
     <div class="cabecera">
       <h1>Personas</h1>
       {% if g.usuario.permite("PERSONAS_GESTIONAR") %}
-        <a class="boton" href="{{ url_for('personas.nueva') }}">Registrar persona</a>
+        <a class="boton" href="{{ url_for('personas.gestionar_formulario_persona') }}">Registrar persona</a>
       {% endif %}
     </div>
     <form class="filtros" method="get">
@@ -33,7 +33,7 @@
           {% for p in resultado.personas %}
             <tr>
               <td>
-                <a href="{{ url_for('personas.detalle', documento=p.dni) }}">{{ p.dni }}</a>
+                <a href="{{ url_for('personas.consultar_persona', documento=p.dni) }}">{{ p.dni }}</a>
               </td>
               <td>
                 {{ p.apellidos }}
@@ -53,12 +53,12 @@
     </div>
     <div class="acciones">
       {% if resultado.pagina>1 %}
-        <a href="{{ url_for('personas.listar', q=request.args.get('q',''), pagina=resultado.pagina-1) }}">
+        <a href="{{ url_for('personas.consultar_personas', q=request.args.get('q',''), pagina=resultado.pagina-1) }}">
           Anterior
         </a>
       {% endif %}
       {% if resultado.pagina<resultado.paginas %}
-        <a href="{{ url_for('personas.listar', q=request.args.get('q',''), pagina=resultado.pagina+1) }}">
+        <a href="{{ url_for('personas.consultar_personas', q=request.args.get('q',''), pagina=resultado.pagina+1) }}">
           Siguiente
         </a>
       {% endif %}
@@ -89,16 +89,16 @@
     <div class="acciones">
       {% if g.usuario.permite("PERSONAS_GESTIONAR") %}
         <a class="boton"
-           href="{{ url_for('personas.editar', documento=persona.dni) }}">Editar ficha</a>
+           href="{{ url_for('personas.gestionar_formulario_persona', documento=persona.dni) }}">Editar ficha</a>
         <form method="post"
-              action="{{ url_for('personas.desactivar',documento=persona.dni) }}">
+              action="{{ url_for('personas.desactivar_persona',documento=persona.dni) }}">
           {{ csrf() }}
           <button class="secundario">Desactivar persona</button>
         </form>
       {% endif %}
       {% if g.usuario.permite("USUARIOS_GESTIONAR") %}
-        <a href="{{ url_for('cuentas.nueva',documento=persona.dni) }}">Crear cuenta</a>
-        <a href="{{ url_for('cuentas.editar',documento=persona.dni) }}">Editar cuenta</a>
+        <a href="{{ url_for('cuentas.registrar_cuenta',documento=persona.dni) }}">Crear cuenta</a>
+        <a href="{{ url_for('cuentas.actualizar_cuenta',documento=persona.dni) }}">Editar cuenta</a>
       {% endif %}
     </div>
   {% else %}

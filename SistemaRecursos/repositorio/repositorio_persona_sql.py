@@ -12,14 +12,14 @@ CONSULTA = '''SELECT p.*,e.cui,e.ciclo,e.estado_matricula,d.codigo_docente,d.dep
 
 
 class RepositorioPersonaSQL(RepositorioSQL):
-    def consultar(self, documento, bloquear=False):
+    def consultar_persona(self, documento, bloquear=False):
         return self.consultar_sql(
             CONSULTA + ' WHERE p.dni=%s' + (' FOR UPDATE' if bloquear else ''),
             (documento,),
             una=True,
         )
 
-    def listar(self, filtros):
+    def consultar_personas(self, filtros):
         condiciones, parametros = [], []
         if filtros.get('q'):
             condiciones.append(
@@ -40,7 +40,7 @@ class RepositorioPersonaSQL(RepositorioSQL):
         )
         return dict(personas=filas, total=total, pagina=pagina, paginas=max(1, (total + 24) // 25))
 
-    def guardar(self, persona, documento_anterior=None):
+    def guardar_persona(self, persona, documento_anterior=None):
         datos = persona.datos()
         comunes = {
             k: datos[k] for k in ('dni', 'nombres', 'apellidos', 'telefono', 'correo', 'estado')
@@ -64,13 +64,13 @@ class RepositorioPersonaSQL(RepositorioSQL):
                 (*especificos.values(), persona.dni),
             )
 
-    def cuentas_bloqueadas(self):
+    def consultar_cuentas_bloqueadas(self):
         return cargar_cuentas_bloqueadas(self)
 
-    def desactivar(self, documento):
+    def desactivar_persona(self, documento):
         self.ejecutar("UPDATE persona SET estado='INACTIVA' WHERE dni=%s", (documento,))
 
-    def buscar(self, termino):
+    def buscar_personas(self, termino):
         return self.consultar_sql(
             CONSULTA + ' WHERE p.dni LIKE %s OR p.apellidos LIKE %s OR e.cui LIKE %s LIMIT 20',
             (f'%{termino}%',) * 3,

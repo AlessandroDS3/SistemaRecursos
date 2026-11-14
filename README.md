@@ -10,6 +10,8 @@ Se conservan los dos SQL de 19 tablas y las reglas acordadas: préstamos individ
 
 La guía de ejecución y el mapa de archivos están en **[SistemaRecursos/README.md](SistemaRecursos/README.md)**. La copia utiliza el puerto **5001** y propone una base propia **`prestamos_escuela_rehecho`**.
 
+La comparación de archivos, métodos y operaciones con `SistemaRecursos_local` está en **[COMPARACION_COPIAS.md](COMPARACION_COPIAS.md)**.
+
 El proyecto anterior permanece en `D:\TI_sistema_recursos\SistemaRecursos_local`, con sus modificaciones pendientes. Ambas carpetas son árboles de trabajo Git con ramas distintas. Esta reescritura se guarda localmente; no se publica en GitHub.
 
 El commit `438ec36` conserva la copia inmediatamente anterior a la reescritura. Los MDJ, XML/PNG y la auditoría heredados de la raíz son documentos de referencia de la versión anterior; el mapa vigente del código está en el README de la aplicación.

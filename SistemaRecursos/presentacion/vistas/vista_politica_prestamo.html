@@ -4,7 +4,7 @@
   {% if modo=="lista" %}
     <div class="cabecera">
       <h1>Políticas de préstamo</h1>
-      <a class="boton" href="{{ url_for('politicas.nueva') }}">Nueva política</a>
+      <a class="boton" href="{{ url_for('politicas.gestionar_formulario_politica_prestamo') }}">Nueva política</a>
     </div>
     <div class="tabla">
       <table>
@@ -28,9 +28,9 @@
               </td>
               <td>{{ 'Sí' if p.permite_salida else 'No' }}</td>
               <td>
-                <a href="{{ url_for('politicas.editar',identificador=p.id_politica) }}">Editar</a>
+                <a href="{{ url_for('politicas.gestionar_formulario_politica_prestamo',identificador=p.id_politica) }}">Editar</a>
                 <form method="post"
-                      action="{{ url_for('politicas.eliminar',identificador=p.id_politica) }}">
+                      action="{{ url_for('politicas.eliminar_politica_prestamo',identificador=p.id_politica) }}">
                   {{ csrf() }}
                   <button class="secundario">Eliminar</button>
                 </form>
@@ -46,7 +46,7 @@
     </div>
     <h2>Horario de atención y reservas</h2>
     <form method="post"
-          action="{{ url_for('politicas.configuracion') }}"
+          action="{{ url_for('politicas.guardar_configuracion_general') }}"
           class="panel formulario">
       {{ csrf() }}
       <div class="rejilla">
@@ -65,7 +65,7 @@
     {% for tipo in tipos %}
       {% set actual = limites|selectattr('tipo_persona','equalto',tipo)|first|default({}) %}
       <form method="post"
-            action="{{ url_for('politicas.limite') }}"
+            action="{{ url_for('politicas.guardar_limite_articulos') }}"
             class="filtros panel">
         {{ csrf() }}
         <input type="hidden" name="tipo_persona" value="{{ tipo }}">

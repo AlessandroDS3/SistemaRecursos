@@ -3,7 +3,7 @@ from repositorio.base_sql import RepositorioSQL
 
 
 class RepositorioAccesoSQL(RepositorioSQL):
-    def _consultar(self, columna, valor):
+    def _consultar_cuenta(self, columna, valor):
         # La columna procede únicamente de los dos métodos públicos siguientes.
         fila = self.consultar_sql(
             f'''SELECT u.id_usuario,p.dni,u.nombre_usuario,u.contrasena_hash,
@@ -19,11 +19,11 @@ class RepositorioAccesoSQL(RepositorioSQL):
         )
         return CuentaAcceso(**fila, permisos=frozenset(p['permiso'] for p in permisos))
 
-    def consultar_usuario(self, nombre):
-        return self._consultar('u.nombre_usuario', nombre)
+    def consultar_cuenta_por_usuario(self, nombre):
+        return self._consultar_cuenta('u.nombre_usuario', nombre)
 
-    def consultar_id(self, identificador):
-        return self._consultar('u.id_usuario', identificador)
+    def consultar_cuenta_por_id(self, identificador):
+        return self._consultar_cuenta('u.id_usuario', identificador)
 
     def registrar_acceso(self, identificador):
         with self.transaccion() as operacion:

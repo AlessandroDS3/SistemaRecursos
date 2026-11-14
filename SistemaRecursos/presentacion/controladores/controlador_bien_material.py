@@ -8,61 +8,88 @@ class ControladorBienMaterial:
         self.servicio, self.recursos = servicio, recursos
         self.blueprint = Blueprint('bienes', __name__, url_prefix='/bienes')
         for ruta, nombre, funcion, metodos in (
-            ('', 'listar', self.listar, ['GET']),
-            ('/nuevo', 'nuevo', self.formulario, ['GET', 'POST']),
-            ('/<int:identificador>', 'detalle', self.detalle, ['GET']),
-            ('/<int:identificador>/editar', 'editar', self.formulario, ['GET', 'POST']),
-            ('/<int:identificador>/estado', 'estado', self.estado, ['POST']),
-            ('/<int:identificador>/eliminar', 'eliminar', self.eliminar, ['POST']),
+            ('', 'consultar_bienes_materiales', self.consultar_bienes_materiales, ['GET']),
+            (
+                '/nuevo',
+                'gestionar_formulario_bien_material',
+                self.gestionar_formulario_bien_material,
+                ['GET', 'POST'],
+            ),
+            (
+                '/<int:identificador>',
+                'consultar_bien_material',
+                self.consultar_bien_material,
+                ['GET'],
+            ),
+            (
+                '/<int:identificador>/editar',
+                'gestionar_formulario_bien_material',
+                self.gestionar_formulario_bien_material,
+                ['GET', 'POST'],
+            ),
+            (
+                '/<int:identificador>/estado',
+                'cambiar_estado_bien_material',
+                self.cambiar_estado_bien_material,
+                ['POST'],
+            ),
+            (
+                '/<int:identificador>/eliminar',
+                'eliminar_bien_material',
+                self.eliminar_bien_material,
+                ['POST'],
+            ),
         ):
             self.blueprint.add_url_rule(ruta, nombre, funcion, methods=metodos)
 
     @requiere_permiso('RECURSOS_GESTIONAR', 'PRESTAMOS_GESTIONAR')
-    def listar(self):
+    def consultar_bienes_materiales(self):
         return render_template(
             'vista_bien_material.html',
             modo='lista',
-            bienes=self.servicio.listar(request.args),
+            bienes=self.servicio.consultar_bienes_materiales(request.args),
             estados=ESTADOS_BIEN,
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR', 'PRESTAMOS_GESTIONAR')
-    def detalle(self, identificador):
+    def consultar_bien_material(self, identificador):
         return render_template(
             'vista_bien_material.html',
             modo='detalle',
-            bien=self.servicio.consultar(identificador),
-            historial=self.servicio.historial(identificador),
+            bien=self.servicio.consultar_bien_material(identificador),
+            historial=self.servicio.consultar_historial_bien_material(identificador),
             estados=ESTADOS_MANUALES,
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    def formulario(self, identificador=None):
+    def gestionar_formulario_bien_material(self, identificador=None):
         bien = (
-            self.servicio.consultar(identificador)
+            self.servicio.consultar_bien_material(identificador)
             if identificador
             else {'id_recurso': request.args.get('id_recurso')}
         )
         if request.method == 'POST':
-            nuevo = self.servicio.guardar(
+            nuevo = self.servicio.guardar_bien_material(
                 request.form.to_dict(), g.usuario.id_usuario, identificador
             )
             flash('Bien guardado.')
-            return redirect(url_for('bienes.detalle', identificador=nuevo))
+            return redirect(url_for('bienes.consultar_bien_material', identificador=nuevo))
         return render_template(
             'vista_bien_material.html',
             modo='formulario',
             bien=bien,
-            recursos=self.recursos.listar({}),
+            recursos=self.recursos.consultar_recursos({}),
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    def estado(self, identificador):
-        self.servicio.cambiar_estado(identificador, request.form.to_dict(), g.usuario.id_usuario)
+    def cambiar_estado_bien_material(self, identificador):
+        self.servicio.cambiar_estado_bien_material(
+            identificador, request.form.to_dict(), g.usuario.id_usuario
+        )
         flash('Estado actualizado.')
-        return redirect(url_for('bienes.detalle', identificador=identificador))
+        return redirect(url_for('bienes.consultar_bien_material', identificador=identificador))
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    def eliminar(self, identificador):
-        self.servicio.eliminar(identificador, g.usuario.id_usuario)
-        return redirect(url_for('bienes.listar'))
+    def eliminar_bien_material(self, identificador):
+        self.servicio.eliminar_bien_material(identificador, g.usuario.id_usuario)
+        return redirect(url_for('bienes.consultar_bienes_materiales'))

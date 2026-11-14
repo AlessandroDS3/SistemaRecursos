@@ -13,17 +13,17 @@ class ServicioAplicacionBienMaterial:
     def __init__(self, repositorio: IRepositorioBienMaterial):
         self.repositorio = repositorio
 
-    def consultar(self, identificador):
-        fila = self.repositorio.consultar(entero(identificador))
+    def consultar_bien_material(self, identificador):
+        fila = self.repositorio.consultar_bien_material(entero(identificador))
         if fila is None:
             raise NoEncontrado('Bien inexistente.')
         return fila
 
-    def listar(self, filtros):
+    def consultar_bienes_materiales(self, filtros):
         estado = filtros.get('estado', '')
         if estado and estado not in ESTADOS_BIEN:
             raise ValueError('Estado de bien inválido.')
-        return self.repositorio.listar(
+        return self.repositorio.consultar_bienes_materiales(
             dict(
                 q=texto(filtros.get('q'), 'Búsqueda', 120),
                 estado=estado,
@@ -31,11 +31,13 @@ class ServicioAplicacionBienMaterial:
             )
         )
 
-    def guardar(self, datos, actor, identificador=None):
+    def guardar_bien_material(self, datos, actor, identificador=None):
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
             actual = (
-                operacion.consultar(entero(identificador), bloquear=True) if identificador else None
+                operacion.consultar_bien_material(entero(identificador), bloquear=True)
+                if identificador
+                else None
             )
             if identificador and actual is None:
                 raise NoEncontrado('Bien inexistente.')
@@ -47,26 +49,28 @@ class ServicioAplicacionBienMaterial:
             valores['id_recurso'] = actual['id_recurso'] if actual else datos.get('id_recurso')
             valores.setdefault('codigo_inventario', None)
             bien = BienMaterial(**valores, id_bien=actual['id_bien'] if actual else None)
-            return operacion.guardar(bien)
+            return operacion.guardar_bien_material(bien)
 
-    def cambiar_estado(self, identificador, datos, actor):
+    def cambiar_estado_bien_material(self, identificador, datos, actor):
         motivo = texto(datos.get('motivo'), 'Motivo', 255, True)
         with self.repositorio.transaccion() as operacion:
-            cuenta = exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
-            bien = operacion.consultar(entero(identificador), bloquear=True)
+            cuenta = exigir_permiso(
+                operacion.consultar_cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR'
+            )
+            bien = operacion.consultar_bien_material(entero(identificador), bloquear=True)
             if bien is None:
                 raise NoEncontrado('Bien inexistente.')
             validar_cambio_estado(bien['estado'], datos.get('estado'), datos.get('estado_esperado'))
-            if operacion.prestamo_pendiente(bien['id_bien']):
+            if operacion.consultar_prestamo_pendiente(bien['id_bien']):
                 raise Conflicto('El bien tiene una entrega pendiente.')
-            operacion.cambiar_estado(
+            operacion.cambiar_estado_bien_material(
                 bien['id_bien'], bien['estado'], datos['estado'], motivo, cuenta['dni_persona']
             )
 
-    def historial(self, identificador):
-        return self.repositorio.consultar_historial('BIEN_MATERIAL', entero(identificador))
+    def consultar_historial_bien_material(self, identificador):
+        return self.repositorio.consultar_historial_estado('BIEN_MATERIAL', entero(identificador))
 
-    def eliminar(self, identificador, actor):
+    def eliminar_bien_material(self, identificador, actor):
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
-            operacion.eliminar(entero(identificador))
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
+            operacion.eliminar_bien_material(entero(identificador))

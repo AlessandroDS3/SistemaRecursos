@@ -5,7 +5,7 @@
     <div class="cabecera">
       <h1>{{ 'Préstamos' if gestionar else 'Mis préstamos' }}</h1>
       {% if gestionar %}
-        <a class="boton" href="{{ url_for('prestamos.nuevo') }}">Entregar préstamo</a>
+        <a class="boton" href="{{ url_for('prestamos.registrar_prestamo') }}">Entregar préstamo</a>
       {% endif %}
     </div>
     <form class="filtros">
@@ -39,7 +39,7 @@
           {% for p in prestamos %}
             <tr>
               <td>
-                <a href="{{ url_for('prestamos.detalle',identificador=p.id_prestamo) }}">
+                <a href="{{ url_for('prestamos.consultar_prestamo',identificador=p.id_prestamo) }}">
                   {{ p.id_prestamo }}
                 </a>
               </td>
@@ -62,7 +62,7 @@
         <p>
           El estado actual se consulta según los detalles. Este botón deja constancia de los vencimientos en el historial.
         </p>
-        <form method="post" action="{{ url_for('prestamos.vencimientos') }}">
+        <form method="post" action="{{ url_for('prestamos.registrar_vencimientos_prestamos') }}">
           {{ csrf() }}
           <button class="secundario">Registrar vencimientos</button>
         </form>
@@ -72,7 +72,7 @@
     <h1>Entregar préstamo</h1>
     <form method="post"
           class="formulario panel"
-          data-condiciones-prestamo="{{ url_for('prestamos.condiciones') }}">
+          data-condiciones-prestamo="{{ url_for('prestamos.consultar_condiciones_prestamo') }}">
       {{ csrf() }}
       <div class="rejilla">
         {{ campo('dni_persona','DNI del responsable',requerido=true,maximo=8) }}
@@ -144,7 +144,7 @@
     <h2>Bienes y devoluciones</h2>
     {% if gestionar %}
       <form method="post"
-            action="{{ url_for('prestamos.devolver',identificador=prestamo.id_prestamo) }}"
+            action="{{ url_for('prestamos.registrar_devolucion',identificador=prestamo.id_prestamo) }}"
             class="formulario">
         {{ csrf() }}
     {% endif %}
@@ -204,7 +204,7 @@
             {{ d.recurso }}
           </summary>
           <form method="post"
-                action="{{ url_for('ampliaciones.ampliar',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
+                action="{{ url_for('ampliaciones.ampliar_prestamo',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
                 class="formulario">
             {{ csrf() }}
             <input type="hidden"
@@ -225,7 +225,7 @@
           </form>
           {% if d.estado_bien=="PRESTADO" %}
             <form method="post"
-                  action="{{ url_for('prestamos.perdida',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
+                  action="{{ url_for('prestamos.registrar_perdida_bien_material',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
                   class="filtros">
               {{ csrf() }}
               {{ campo('motivo','Motivo de pérdida',requerido=true) }}

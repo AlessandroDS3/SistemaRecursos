@@ -54,7 +54,7 @@
     {{ paginas }}
   </p>
   <a class="boton"
-     href="{{ url_for('reportes.exportar',tipo=filtro.tipo,desde=filtro.desde or '',hasta=filtro.hasta or '',q=filtro.q,estado=filtro.estado,modalidad=filtro.modalidad,tipo_persona=filtro.tipo_persona) }}">
+     href="{{ url_for('reportes.exportar_reportes_csv',tipo=filtro.tipo,desde=filtro.desde or '',hasta=filtro.hasta or '',q=filtro.q,estado=filtro.estado,modalidad=filtro.modalidad,tipo_persona=filtro.tipo_persona) }}">
     Descargar todos los resultados CSV
   </a>
   <div class="tabla">
@@ -102,7 +102,7 @@
   </div>
   <div class="acciones">
     {% for pagina, etiqueta in ((filtro.pagina-1,'Anterior'),(filtro.pagina+1,'Siguiente')) if pagina>=1 and pagina<=paginas %}
-      <a href="{{ url_for('reportes.listar',tipo=filtro.tipo,desde=filtro.desde or '',hasta=filtro.hasta or '',q=filtro.q,estado=filtro.estado,modalidad=filtro.modalidad,tipo_persona=filtro.tipo_persona,pagina=pagina) }}">
+      <a href="{{ url_for('reportes.consultar_reportes',tipo=filtro.tipo,desde=filtro.desde or '',hasta=filtro.hasta or '',q=filtro.q,estado=filtro.estado,modalidad=filtro.modalidad,tipo_persona=filtro.tipo_persona,pagina=pagina) }}">
         {{ etiqueta }}
       </a>
     {% endfor %}

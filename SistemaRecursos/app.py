@@ -121,9 +121,9 @@ def create_app(config=None):
     @app.get('/')
     def inicio():
         for permiso, endpoint in (
-            ('CATALOGO_CONSULTAR', 'recursos.listar'),
-            ('PRESTAMOS_GESTIONAR', 'prestamos.listar'),
-            ('PERSONAS_CONSULTAR', 'personas.listar'),
+            ('CATALOGO_CONSULTAR', 'recursos.consultar_recursos'),
+            ('PRESTAMOS_GESTIONAR', 'prestamos.consultar_prestamos'),
+            ('PERSONAS_CONSULTAR', 'personas.consultar_personas'),
         ):
             if g.usuario.permite(permiso):
                 return redirect(url_for(endpoint))

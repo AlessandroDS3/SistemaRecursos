@@ -13,10 +13,13 @@ class CasoMySQL(unittest.TestCase):
         preparar_base_integracion(self)
         self.servicios = self.app.extensions['servicios']
         self.cliente = self.app.test_client()
-        self.ahora = datetime.now(timezone.utc).replace(
+        self.consultar_fecha_actual = datetime.now(timezone.utc).replace(
             tzinfo=None, hour=15, minute=0, second=0, microsecond=0
         )
-        reloj = patch('repositorio.base_sql.RepositorioSQL.ahora', return_value=self.ahora)
+        reloj = patch(
+            'repositorio.base_sql.RepositorioSQL.consultar_fecha_actual',
+            return_value=self.consultar_fecha_actual,
+        )
         reloj.start()
         self.addCleanup(reloj.stop)
 
@@ -46,12 +49,12 @@ class CasoMySQL(unittest.TestCase):
     def prestar(self, bienes=None, **cambios):
         datos = dict(dni_persona='02167885', bienes=bienes or [2], acepta_condiciones='1')
         datos.update(cambios)
-        return self.servicios['prestamos'].registrar(datos, 2)
+        return self.servicios['prestamos'].registrar_prestamo(datos, 2)
 
     def prestamo(self, identificador):
-        return self.servicios['prestamos'].consultar(identificador, '02167885', True)
+        return self.servicios['prestamos'].consultar_prestamo(identificador, '02167885', True)
 
     def reservar(self, **cambios):
         datos = dict(id_recurso=1, tipo_gestion='PRESTAMO', acepta_condiciones='1')
         datos.update(cambios)
-        return self.servicios['reservas'].registrar(datos, 3)
+        return self.servicios['reservas'].registrar_reserva(datos, 3)

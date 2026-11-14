@@ -18,7 +18,7 @@ from dominio.gestion_prestamos.devolucion import Devolucion
 
 class ReglasDominio(unittest.TestCase):
     def setUp(self):
-        self.ahora = datetime(2026, 11, 14, 15)  # 10:00 de Lima.
+        self.consultar_fecha_actual = datetime(2026, 11, 14, 15)  # 10:00 de Lima.
         self.politica = dict(
             id_politica=1,
             tipo_persona='ESTUDIANTE',
@@ -42,7 +42,7 @@ class ReglasDominio(unittest.TestCase):
             bienes=[dict(id_bien=i, id_categoria=1, estado='DISPONIBLE') for i in (1, 2)],
             politicas={1: self.politica},
             horario=HorarioAtencion(),
-            ahora=self.ahora,
+            ahora=self.consultar_fecha_actual,
         )
 
     def test_cupo_total_cuenta_bienes_de_todas_las_categorias(self):
@@ -92,45 +92,54 @@ class ReglasDominio(unittest.TestCase):
         por_horas = PoliticaPrestamo.desde_datos(
             dict(self.politica, unidad_plazo='HORAS', plazo_maximo=24)
         )
-        self.assertEqual(por_horas.vencimiento(self.ahora, horario), datetime(2026, 11, 14, 21))
         self.assertEqual(
-            PoliticaPrestamo.desde_datos(self.politica).vencimiento(self.ahora, horario),
-            self.ahora + timedelta(days=2),
+            por_horas.vencimiento(self.consultar_fecha_actual, horario), datetime(2026, 11, 14, 21)
+        )
+        self.assertEqual(
+            PoliticaPrestamo.desde_datos(self.politica).vencimiento(
+                self.consultar_fecha_actual, horario
+            ),
+            self.consultar_fecha_actual + timedelta(days=2),
         )
         with self.assertRaises(ValueError):
             horario.cierre(datetime(2026, 11, 14, 22))
 
     def test_ampliacion_limite_y_formulario_duplicado(self):
-        anterior = self.ahora + timedelta(hours=1)
+        anterior = self.consultar_fecha_actual + timedelta(hours=1)
         detalle = dict(
             fecha_limite_devolucion=anterior, fecha_devolucion=None, estado_bien='PRESTADO'
         )
         ampliacion = AmpliacionPrestamo(cantidad=2, unidad='DIAS', fecha_anterior=anterior)
         politica = PoliticaPrestamo.desde_datos(self.politica)
-        nueva = ampliacion.calcular(detalle, self.ahora, politica, HorarioAtencion())
+        nueva = ampliacion.calcular(
+            detalle, self.consultar_fecha_actual, politica, HorarioAtencion()
+        )
         self.assertEqual(nueva, anterior + timedelta(days=2))
         with self.assertRaises(Conflicto):
             ampliacion.calcular(
                 dict(detalle, fecha_limite_devolucion=nueva),
-                self.ahora,
+                self.consultar_fecha_actual,
                 politica,
                 HorarioAtencion(),
             )
         with self.assertRaises(ValueError):
             AmpliacionPrestamo(cantidad=3, unidad='DIAS', fecha_anterior=anterior).calcular(
-                detalle, self.ahora, politica, HorarioAtencion()
+                detalle, self.consultar_fecha_actual, politica, HorarioAtencion()
             )
 
     def test_no_ampliar_perdido_devuelto_o_vencido(self):
-        anterior = self.ahora + timedelta(hours=1)
+        anterior = self.consultar_fecha_actual + timedelta(hours=1)
         detalle = dict(
             fecha_limite_devolucion=anterior, fecha_devolucion=None, estado_bien='PRESTADO'
         )
-        for cambios in (dict(estado_bien='PERDIDO'), dict(fecha_devolucion=self.ahora)):
+        for cambios in (
+            dict(estado_bien='PERDIDO'),
+            dict(fecha_devolucion=self.consultar_fecha_actual),
+        ):
             with self.subTest(cambios=cambios), self.assertRaises(Conflicto):
                 AmpliacionPrestamo(cantidad=1, unidad='HORAS', fecha_anterior=anterior).calcular(
                     dict(detalle, **cambios),
-                    self.ahora,
+                    self.consultar_fecha_actual,
                     PoliticaPrestamo.desde_datos(self.politica),
                     HorarioAtencion(),
                 )
@@ -148,23 +157,28 @@ class ReglasDominio(unittest.TestCase):
 
     def test_estado_prestamo_parcial_vencido_y_devuelto(self):
         devuelto = dict(
-            fecha_devolucion=self.ahora, fecha_limite_devolucion=self.ahora + timedelta(days=1)
+            fecha_devolucion=self.consultar_fecha_actual,
+            fecha_limite_devolucion=self.consultar_fecha_actual + timedelta(days=1),
         )
         pendiente = dict(devuelto, fecha_devolucion=None)
         self.assertEqual(
-            estado_prestamo([devuelto, pendiente], self.ahora), 'PARCIALMENTE_DEVUELTO'
+            estado_prestamo([devuelto, pendiente], self.consultar_fecha_actual),
+            'PARCIALMENTE_DEVUELTO',
         )
         self.assertEqual(
             estado_prestamo(
                 [
                     devuelto,
-                    dict(pendiente, fecha_limite_devolucion=self.ahora - timedelta(seconds=1)),
+                    dict(
+                        pendiente,
+                        fecha_limite_devolucion=self.consultar_fecha_actual - timedelta(seconds=1),
+                    ),
                 ],
-                self.ahora,
+                self.consultar_fecha_actual,
             ),
             'VENCIDO',
         )
-        self.assertEqual(estado_prestamo([devuelto], self.ahora), 'DEVUELTO')
+        self.assertEqual(estado_prestamo([devuelto], self.consultar_fecha_actual), 'DEVUELTO')
 
     def test_reservas_tienen_topes_segun_la_unidad(self):
         for datos in (dict(plazo_espera=31), dict(plazo_retiro=721), dict(unidad_espera='SEMANAS')):
@@ -194,7 +208,7 @@ class ReglasDominio(unittest.TestCase):
         filtro = FiltroReporte(desde='2026-11-14', hasta='2026-11-14')
         self.assertEqual(filtro.inicio, datetime(2026, 11, 14, 5))
         self.assertEqual(filtro.fin, datetime(2026, 11, 15, 5))
-        self.assertEqual(fecha_local('2026-11-14T10:00'), self.ahora)
+        self.assertEqual(fecha_local('2026-11-14T10:00'), self.consultar_fecha_actual)
         with self.assertRaises(ValueError):
             FiltroReporte(desde='2026-11-15', hasta='2026-11-14')
 

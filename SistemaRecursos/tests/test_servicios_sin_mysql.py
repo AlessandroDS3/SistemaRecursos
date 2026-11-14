@@ -24,7 +24,7 @@ class CuentaEnMemoria:
             contrasena_hash=generate_password_hash('ClavePrueba2026!'),
         )
 
-    def consultar_usuario(self, nombre):
+    def consultar_cuenta_por_usuario(self, nombre):
         return self.cuenta if nombre == 'prueba' else None
 
     def registrar_acceso(self, identificador):
@@ -40,7 +40,7 @@ class EntregaEnMemoria:
         yield self
         self.confirmada = True
 
-    def cuenta_actor(self, identificador):
+    def consultar_cuenta_actor(self, identificador):
         return dict(
             dni_persona='87654321',
             estado_cuenta='ACTIVA',
@@ -48,7 +48,7 @@ class EntregaEnMemoria:
             permisos={'PRESTAMOS_GESTIONAR'},
         )
 
-    def cargar_entrega(self, solicitud):
+    def consultar_contexto_entrega_prestamo(self, solicitud):
         return dict(
             personas={
                 '12345678': dict(tipo='ESTUDIANTE', estado='ACTIVA', estado_matricula='VIGENTE')
@@ -72,7 +72,7 @@ class EntregaEnMemoria:
             ahora=datetime(2026, 11, 14, 15),
         )
 
-    def guardar_entrega(self, solicitud, plan, fecha):
+    def registrar_entrega_prestamo(self, solicitud, plan, fecha):
         self.guardado = plan
         return 73
 
@@ -81,19 +81,21 @@ class ServiciosSinMySQL(unittest.TestCase):
     def test_autenticacion_se_prueba_sin_flask_ni_base(self):
         repo = CuentaEnMemoria()
         acceso = ServicioAplicacionAcceso(repo)
-        self.assertIsNotNone(acceso.autenticar('prueba', 'ClavePrueba2026!'))
-        self.assertIsNone(acceso.autenticar('prueba', 'Incorrecta'))
-        self.assertIsNone(acceso.autenticar('ausente', 'ClavePrueba2026!'))
+        self.assertIsNotNone(acceso.autenticar_cuenta('prueba', 'ClavePrueba2026!'))
+        self.assertIsNone(acceso.autenticar_cuenta('prueba', 'Incorrecta'))
+        self.assertIsNone(acceso.autenticar_cuenta('ausente', 'ClavePrueba2026!'))
         self.assertEqual(repo.accesos, [1])
 
     def test_cuenta_bloqueada_no_se_autentica_con_clave_correcta(self):
         repo = CuentaEnMemoria(activa=False)
-        self.assertIsNone(ServicioAplicacionAcceso(repo).autenticar('prueba', 'ClavePrueba2026!'))
+        self.assertIsNone(
+            ServicioAplicacionAcceso(repo).autenticar_cuenta('prueba', 'ClavePrueba2026!')
+        )
         self.assertEqual(repo.accesos, [])
 
     def test_caso_entrega_se_prueba_con_solo_hechos_del_repositorio(self):
         repo = EntregaEnMemoria(limite=2)
-        resultado = ServicioAplicacionPrestamo(repo).registrar(
+        resultado = ServicioAplicacionPrestamo(repo).registrar_prestamo(
             dict(dni_persona='12345678', bienes=[1], acepta_condiciones='1'), 2
         )
         self.assertEqual(resultado, 73)
@@ -103,7 +105,7 @@ class ServiciosSinMySQL(unittest.TestCase):
     def test_cupo_rechazado_no_llega_a_guardar(self):
         repo = EntregaEnMemoria(limite=1)
         with self.assertRaises(Conflicto):
-            ServicioAplicacionPrestamo(repo).registrar(
+            ServicioAplicacionPrestamo(repo).registrar_prestamo(
                 dict(dni_persona='12345678', bienes=[1], acepta_condiciones='1'), 2
             )
         self.assertIsNone(repo.guardado)

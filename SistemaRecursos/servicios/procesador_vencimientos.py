@@ -10,9 +10,12 @@ def iniciar_procesador_vencimientos(sanciones, reservas, intervalo=30):
 
     def procesar():
         while not detener.is_set():
-            for servicio in (sanciones, reservas):
+            for operacion in (
+                sanciones.aplicar_sanciones_por_vencimiento,
+                reservas.expirar_reservas_vencidas,
+            ):
                 try:
-                    servicio.procesar_vencimientos()
+                    operacion()
                 except Exception:
                     logging.getLogger(__name__).exception(
                         'Falló una revisión de vencimientos; se reintentará.'

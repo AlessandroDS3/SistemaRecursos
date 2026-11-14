@@ -6,13 +6,13 @@ from caso_mysql import CasoMySQL
 class RecursosYPoliticas(CasoMySQL):
     def test_recurso_y_primer_bien_son_una_transaccion(self):
         with self.assertRaises(IntegrityError):
-            self.servicios['recursos'].guardar(
+            self.servicios['recursos'].guardar_recurso(
                 dict(nombre='No debe existir', id_categoria=1, codigo_inventario='INV-2'), 1
             )
         self.assertEqual(
             self.fila("SELECT COUNT(*) FROM recurso WHERE nombre='No debe existir'"), (0,)
         )
-        recurso = self.servicios['recursos'].guardar(
+        recurso = self.servicios['recursos'].guardar_recurso(
             dict(nombre='Nuevo', id_categoria=1, codigo_inventario='NUEVO'), 1
         )
         self.assertEqual(
@@ -21,7 +21,7 @@ class RecursosYPoliticas(CasoMySQL):
         )
 
     def test_actualizar_bien_con_fecha_y_descripcion_vacias(self):
-        self.servicios['bienes'].guardar(
+        self.servicios['bienes'].guardar_bien_material(
             dict(codigo_inventario='INV-2', fecha_adquisicion='', descripcion_bien=''), 1, 2
         )
         self.assertEqual(
@@ -33,9 +33,9 @@ class RecursosYPoliticas(CasoMySQL):
 
     def test_cambio_estado_comprueba_version_y_registra_actor(self):
         datos = dict(estado='MANTENIMIENTO', estado_esperado='DISPONIBLE', motivo='Revisión')
-        self.servicios['bienes'].cambiar_estado(2, datos, 1)
+        self.servicios['bienes'].cambiar_estado_bien_material(2, datos, 1)
         with self.assertRaises(Conflicto):
-            self.servicios['bienes'].cambiar_estado(2, datos, 1)
+            self.servicios['bienes'].cambiar_estado_bien_material(2, datos, 1)
         self.assertEqual(
             self.fila(
                 "SELECT estado_anterior,estado_nuevo,dni_responsable FROM historial_estado WHERE entidad='BIEN_MATERIAL' AND id_entidad=2"
@@ -45,20 +45,20 @@ class RecursosYPoliticas(CasoMySQL):
 
     def test_bien_con_pendiente_no_se_habilita_ni_se_elimina(self):
         prestamo = self.prestar()
-        self.servicios['prestamos'].reportar_perdida(
+        self.servicios['prestamos'].registrar_perdida_bien_material(
             prestamo, self.prestamo(prestamo)['detalles'][0]['id_detalle'], 'No encontrado', 2
         )
         with self.assertRaises(Conflicto):
-            self.servicios['bienes'].cambiar_estado(
+            self.servicios['bienes'].cambiar_estado_bien_material(
                 2, dict(estado='DISPONIBLE', estado_esperado='PERDIDO', motivo='Hallado'), 1
             )
         with self.assertRaises(IntegrityError):
-            self.servicios['bienes'].eliminar(2, 1)
+            self.servicios['bienes'].eliminar_bien_material(2, 1)
 
     def test_editar_politica_conserva_version_aplicada(self):
         prestamo = self.prestar()
-        anterior, version = self.servicios['politicas'].consultar(24)
-        nueva = self.servicios['politicas'].guardar(
+        anterior, version = self.servicios['politicas'].consultar_politica_prestamo(24)
+        nueva = self.servicios['politicas'].guardar_politica_prestamo(
             dict(anterior, plazo_maximo=3, version=version), 1, 24
         )
         self.assertNotEqual(nueva, 24)
@@ -69,7 +69,7 @@ class RecursosYPoliticas(CasoMySQL):
         self.assertEqual(self.prestamo(prestamo)['detalles'][0]['id_politica'], 24)
 
     def test_configuracion_y_limites_se_administran_en_politicas(self):
-        self.servicios['politicas'].guardar_configuracion(
+        self.servicios['politicas'].guardar_configuracion_general(
             dict(
                 hora_apertura='09:00',
                 hora_cierre='17:00',
@@ -80,7 +80,7 @@ class RecursosYPoliticas(CasoMySQL):
             ),
             1,
         )
-        self.servicios['politicas'].guardar_limite('ESTUDIANTE', 6, 1)
+        self.servicios['politicas'].guardar_limite_articulos('ESTUDIANTE', 6, 1)
         self.assertEqual(
             self.fila('SELECT plazo_espera,plazo_retiro FROM configuracion_general'), (30, 720)
         )
@@ -91,7 +91,7 @@ class RecursosYPoliticas(CasoMySQL):
             (6,),
         )
         with self.assertRaises(ValueError):
-            self.servicios['politicas'].guardar_configuracion(
+            self.servicios['politicas'].guardar_configuracion_general(
                 dict(
                     hora_apertura='09:00',
                     hora_cierre='17:00',

@@ -8,15 +8,15 @@ class ControladorAmpliacionPrestamo:
         self.blueprint = Blueprint('ampliaciones', __name__)
         self.blueprint.add_url_rule(
             '/prestamos/<int:identificador>/detalles/<int:detalle_id>/ampliar',
-            'ampliar',
-            self.ampliar,
+            'ampliar_prestamo',
+            self.ampliar_prestamo,
             methods=['POST'],
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    def ampliar(self, identificador, detalle_id):
-        self.servicio.ampliar(
+    def ampliar_prestamo(self, identificador, detalle_id):
+        self.servicio.ampliar_prestamo(
             identificador, detalle_id, request.form.to_dict(), g.usuario.id_usuario
         )
         flash('Plazo ampliado.')
-        return redirect(url_for('prestamos.detalle', identificador=identificador))
+        return redirect(url_for('prestamos.consultar_prestamo', identificador=identificador))

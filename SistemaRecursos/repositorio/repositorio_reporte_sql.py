@@ -8,7 +8,7 @@ TIPO_PERSONA_SQL = '''CASE WHEN EXISTS(SELECT 1 FROM estudiante e WHERE e.dni=p.
 
 
 class RepositorioReporteSQL(RepositorioSQL):
-    def consultar(self, filtro, paginar=True):
+    def consultar_reportes(self, filtro, paginar=True):
         es_devolucion = filtro.tipo == 'devoluciones'
         campo_fecha = 'd.fecha_devolucion' if es_devolucion else 'p.fecha_entrega'
         condiciones = ['d.fecha_devolucion IS NOT NULL'] if es_devolucion else ['1=1']
@@ -66,10 +66,10 @@ class RepositorioReporteSQL(RepositorioSQL):
             sql += f' LIMIT {FILAS_POR_PAGINA} OFFSET %s'
             parametros.append((filtro.pagina - 1) * FILAS_POR_PAGINA)
         filas = self.consultar_sql(sql, parametros)
-        self._cargar_integrantes(filas)
+        self._consultar_integrantes_prestamos(filas)
         return filas, resumen
 
-    def _cargar_integrantes(self, filas):
+    def _consultar_integrantes_prestamos(self, filas):
         identificadores = sorted({fila['id_prestamo'] for fila in filas})
         if not identificadores:
             return

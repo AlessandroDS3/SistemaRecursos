@@ -11,7 +11,7 @@ class ServicioAplicacionAmpliacionPrestamo:
     def __init__(self, repositorio: IRepositorioAmpliacionPrestamo):
         self.repositorio = repositorio
 
-    def ampliar(self, prestamo_id, detalle_id, datos, actor):
+    def ampliar_prestamo(self, prestamo_id, detalle_id, datos, actor):
         prestamo_id, detalle_id = entero(prestamo_id), entero(detalle_id)
         ampliacion = AmpliacionPrestamo(
             cantidad=datos.get('cantidad'),
@@ -20,18 +20,22 @@ class ServicioAplicacionAmpliacionPrestamo:
             motivo=datos.get('motivo', ''),
         )
         with self.repositorio.transaccion() as operacion:
-            cuenta = exigir_permiso(operacion.cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR')
-            prestamo, detalle, fila, horario = operacion.cargar(prestamo_id, detalle_id)
+            cuenta = exigir_permiso(
+                operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
+            )
+            prestamo, detalle, fila, horario = operacion.consultar_contexto_ampliacion_prestamo(
+                prestamo_id, detalle_id
+            )
             if fila is None:
                 raise ValueError('No se encontró la política aplicada al bien.')
             nueva = ampliacion.calcular(
                 detalle,
-                operacion.ahora(),
+                operacion.consultar_fecha_actual(),
                 PoliticaPrestamo.desde_datos(fila),
                 HorarioAtencion(**horario) if horario else None,
             )
-            operacion.guardar(detalle_id, ampliacion.fecha_anterior, nueva)
-            operacion.historial(
+            operacion.actualizar_plazo_prestamo(detalle_id, ampliacion.fecha_anterior, nueva)
+            operacion.registrar_historial_estado(
                 'PRESTAMO',
                 prestamo_id,
                 prestamo['estado'],

@@ -2,7 +2,7 @@ from repositorio.base_sql import RepositorioSQL
 
 
 class RepositorioSancionSQL(RepositorioSQL):
-    def listar(self):
+    def consultar_sanciones(self):
         return self.consultar_sql('''SELECT s.*,i.tipo,i.id_detalle,d.id_prestamo,
             CONCAT(p.nombres,' ',p.apellidos) AS responsable FROM sancion s
             JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
@@ -10,14 +10,14 @@ class RepositorioSancionSQL(RepositorioSQL):
             JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo JOIN persona p ON p.dni=pr.dni_persona
             ORDER BY s.fecha DESC,s.id_sancion DESC''')
 
-    def consultar(self, identificador, bloquear=False):
+    def consultar_sancion(self, identificador, bloquear=False):
         return self.consultar_sql(
             'SELECT * FROM sancion WHERE id_sancion=%s' + (' FOR UPDATE' if bloquear else ''),
             (identificador,),
             una=True,
         )
 
-    def tiene_activas(self, documentos):
+    def existen_sanciones_activas(self, documentos):
         documentos = tuple(sorted(set(documentos)))
         marcas = ','.join(['%s'] * len(documentos))
         if not documentos:
@@ -33,7 +33,7 @@ class RepositorioSancionSQL(RepositorioSQL):
         )
         return bool(filas)
 
-    def buscar_retraso(self, detalle):
+    def consultar_incidencia_retraso(self, detalle):
         return self.consultar_sql(
             '''SELECT i.id_incidencia,s.id_sancion,s.estado FROM incidencia i
             LEFT JOIN sancion s ON s.id_incidencia_ref=i.id_incidencia
@@ -42,7 +42,7 @@ class RepositorioSancionSQL(RepositorioSQL):
             una=True,
         )
 
-    def guardar_incidencia(self, detalle, tipo, descripcion, fecha):
+    def registrar_incidencia(self, detalle, tipo, descripcion, fecha):
         return self.insertar(
             'incidencia',
             dict(
@@ -54,7 +54,7 @@ class RepositorioSancionSQL(RepositorioSQL):
             ),
         )
 
-    def guardar_sancion(self, incidencia, motivo, descripcion, fecha):
+    def registrar_sancion(self, incidencia, motivo, descripcion, fecha):
         return self.insertar(
             'sancion',
             dict(
@@ -66,14 +66,14 @@ class RepositorioSancionSQL(RepositorioSQL):
             ),
         )
 
-    def candidatos(self):
+    def consultar_detalles_vencidos(self):
         return self.consultar_sql('''SELECT d.id_detalle FROM detalle_prestamo d
             WHERE d.fecha_devolucion IS NULL AND d.fecha_limite_devolucion<UTC_TIMESTAMP()
             AND NOT EXISTS(SELECT 1 FROM incidencia i JOIN sancion s ON s.id_incidencia_ref=i.id_incidencia
                 WHERE i.id_detalle=d.id_detalle AND i.tipo='RETRASO')
             ORDER BY d.id_prestamo,d.id_detalle LIMIT 100''')
 
-    def cargar_detalle(self, identificador):
+    def consultar_detalle_prestamo(self, identificador):
         return self.consultar_sql(
             '''SELECT d.* FROM detalle_prestamo d
             JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo WHERE d.id_detalle=%s FOR UPDATE''',
@@ -81,7 +81,7 @@ class RepositorioSancionSQL(RepositorioSQL):
             una=True,
         )
 
-    def levantar(self, identificador, fecha, documento, justificacion):
+    def levantar_sancion(self, identificador, fecha, documento, justificacion):
         self.ejecutar(
             '''UPDATE sancion SET estado='LEVANTADA',fecha_levantamiento=%s,
             dni_levantamiento=%s,justificacion_levantamiento=%s WHERE id_sancion=%s''',

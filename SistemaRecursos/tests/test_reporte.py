@@ -7,7 +7,7 @@ class Reportes(CasoMySQL):
     def test_grupo_no_multiplica_filas_y_reportes_no_escriben(self):
         self.prestar([2, 3], tipo_prestamo='GRUPAL', participantes=['99000001', '99000002'])
         antes = self.fila('SELECT COUNT(*) FROM historial_estado')
-        resultado = self.servicios['reportes'].consultar({})
+        resultado = self.servicios['reportes'].consultar_reportes({})
         self.assertEqual(
             resultado['resumen'],
             dict(detalles=2, prestamos=1, devueltos=0, pendientes=2, vencidos=0),
@@ -17,20 +17,25 @@ class Reportes(CasoMySQL):
 
     def test_filtros_incluyen_integrante_inventario_modalidad_y_tipo(self):
         self.prestar([2, 3], tipo_prestamo='GRUPAL', participantes=['99000001'])
-        resultado = self.servicios['reportes'].consultar(
+        resultado = self.servicios['reportes'].consultar_reportes(
             dict(q='99000001', modalidad='GRUPAL', tipo_persona='ESTUDIANTE')
         )
         self.assertEqual(len(resultado['filas']), 2)
         self.assertIn('99000001', resultado['filas'][0]['integrantes'])
-        self.assertEqual(len(self.servicios['reportes'].consultar(dict(q='INV-2'))['filas']), 1)
         self.assertEqual(
-            len(self.servicios['reportes'].consultar(dict(tipo_persona='DOCENTE'))['filas']), 0
+            len(self.servicios['reportes'].consultar_reportes(dict(q='INV-2'))['filas']), 1
+        )
+        self.assertEqual(
+            len(
+                self.servicios['reportes'].consultar_reportes(dict(tipo_persona='DOCENTE'))['filas']
+            ),
+            0,
         )
 
     def test_csv_usa_bom_punto_y_coma_lima_y_protege_formulas(self):
         self.ejecutar("UPDATE persona SET nombres='=CMD()' WHERE dni='02167885'")
         self.prestar()
-        texto, tipo = self.servicios['reportes'].exportar({})
+        texto, tipo = self.servicios['reportes'].exportar_reportes_csv({})
         self.assertTrue(texto.startswith('\ufeff'))
         filas = list(csv.DictReader(StringIO(texto.lstrip('\ufeff')), delimiter=';'))
         self.assertEqual(tipo, 'prestamos')
@@ -40,15 +45,15 @@ class Reportes(CasoMySQL):
     def test_filtro_devoluciones_y_fechas(self):
         prestamo = self.prestar([2, 3])
         detalle = self.prestamo(prestamo)['detalles'][0]['id_detalle']
-        self.servicios['prestamos'].devolver(
+        self.servicios['prestamos'].registrar_devolucion(
             prestamo, dict(detalles=[detalle], **{f'condicion_{detalle}': 'BUENO'}), 2
         )
         datos = dict(
             tipo='devoluciones',
-            desde=self.ahora.date().isoformat(),
-            hasta=self.ahora.date().isoformat(),
+            desde=self.consultar_fecha_actual.date().isoformat(),
+            hasta=self.consultar_fecha_actual.date().isoformat(),
         )
-        resultado = self.servicios['reportes'].consultar(datos)
+        resultado = self.servicios['reportes'].consultar_reportes(datos)
         self.assertEqual(resultado['resumen']['detalles'], 1)
         self.assertEqual(resultado['filas'][0]['id_detalle'], detalle)
 
@@ -73,8 +78,8 @@ class Reportes(CasoMySQL):
                     VALUES(%s,%s,24,UTC_TIMESTAMP(),UTC_TIMESTAMP(),'98000002','BUENO')''',
                     (identificador, bien),
                 )
-        resultado = self.servicios['reportes'].consultar({})
+        resultado = self.servicios['reportes'].consultar_reportes({})
         self.assertEqual(len(resultado['filas']), 50)
         self.assertEqual(resultado['resumen']['detalles'], 54)
-        texto, _ = self.servicios['reportes'].exportar({})
+        texto, _ = self.servicios['reportes'].exportar_reportes_csv({})
         self.assertEqual(len(list(csv.reader(StringIO(texto), delimiter=';'))), 55)

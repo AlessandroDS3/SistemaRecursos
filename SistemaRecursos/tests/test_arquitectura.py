@@ -8,6 +8,36 @@ RAIZ = Path(__file__).resolve().parents[1]
 
 
 class Arquitectura(unittest.TestCase):
+    def test_operaciones_publicas_identifican_su_entidad(self):
+        genericos = {
+            'crear',
+            'consultar',
+            'listar',
+            'guardar',
+            'actualizar',
+            'eliminar',
+            'buscar',
+            'recuperar',
+            'autenticar',
+            'actuar',
+            'ampliar',
+            'levantar',
+        }
+        for carpeta in ('servicios', 'repositorio', 'presentacion/controladores', 'dominio'):
+            for archivo in (RAIZ / carpeta).rglob('*.py'):
+                if archivo.name in ('base_sql.py', 'conexion_mysql.py'):
+                    continue
+                arbol = ast.parse(archivo.read_text(encoding='utf-8-sig'))
+                for clase in (n for n in ast.walk(arbol) if isinstance(n, ast.ClassDef)):
+                    if not clase.name.startswith(
+                        ('ServicioAplicacion', 'Repositorio', 'IRepositorio', 'Controlador')
+                    ):
+                        continue
+                    for metodo in (n for n in clase.body if isinstance(n, ast.FunctionDef)):
+                        self.assertNotIn(
+                            metodo.name, genericos, f'{archivo}: {clase.name}.{metodo.name}'
+                        )
+
     def test_dependencias_apuntan_hacia_dominio_y_no_forman_ciclos(self):
         archivos = [
             p

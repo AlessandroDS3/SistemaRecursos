@@ -8,7 +8,7 @@ class ServicioAplicacionAcceso:
         self.repositorio = repositorio
         self._hash_ausente = generate_password_hash('cuenta-ausente', method='scrypt')
 
-    def autenticar(self, nombre, clave):
+    def autenticar_cuenta(self, nombre, clave):
         if (
             not isinstance(nombre, str)
             or not isinstance(clave, str)
@@ -16,7 +16,7 @@ class ServicioAplicacionAcceso:
             or len(clave) > 256
         ):
             return None
-        cuenta = self.repositorio.consultar_usuario(nombre.strip())
+        cuenta = self.repositorio.consultar_cuenta_por_usuario(nombre.strip())
         try:
             correcta = check_password_hash(
                 cuenta.contrasena_hash if cuenta else self._hash_ausente, clave
@@ -28,9 +28,9 @@ class ServicioAplicacionAcceso:
             return cuenta
         return None
 
-    def recuperar(self, identificador):
+    def consultar_cuenta_activa(self, identificador):
         try:
-            cuenta = self.repositorio.consultar_id(entero(identificador))
+            cuenta = self.repositorio.consultar_cuenta_por_id(entero(identificador))
         except ValueError:
             return None
         return cuenta if cuenta and cuenta.puede_acceder() else None

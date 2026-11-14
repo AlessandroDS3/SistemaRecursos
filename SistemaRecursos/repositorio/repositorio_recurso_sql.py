@@ -4,7 +4,7 @@ from repositorio.repositorio_bien_material_sql import RepositorioBienMaterialSQL
 
 
 class RepositorioRecursoSQL(RepositorioSQL):
-    def listar(self, filtros):
+    def consultar_recursos(self, filtros):
         sql = '''SELECT r.*,c.nombre AS categoria,
             (SELECT COUNT(*) FROM bien_material b WHERE b.id_recurso=r.id_recurso) AS total,
             (SELECT COUNT(*) FROM bien_material b WHERE b.id_recurso=r.id_recurso AND b.estado='DISPONIBLE') AS disponibles
@@ -20,12 +20,12 @@ class RepositorioRecursoSQL(RepositorioSQL):
             sql += " AND EXISTS(SELECT 1 FROM bien_material b WHERE b.id_recurso=r.id_recurso AND b.estado='DISPONIBLE')"
         return self.consultar_sql(sql + ' ORDER BY r.nombre,r.id_recurso', parametros)
 
-    def consultar(self, identificador):
+    def consultar_recurso(self, identificador):
         return self.consultar_sql(
             'SELECT * FROM recurso WHERE id_recurso=%s', (identificador,), una=True
         )
 
-    def guardar(self, recurso):
+    def guardar_recurso(self, recurso):
         datos = asdict(recurso)
         identificador = datos.pop('id_recurso')
         if identificador is None:
@@ -37,13 +37,13 @@ class RepositorioRecursoSQL(RepositorioSQL):
             )
         return recurso.id_recurso
 
-    def guardar_bien(self, bien):
-        return RepositorioBienMaterialSQL(self.conexion, self._cursor).guardar(bien)
+    def guardar_bien_material(self, bien):
+        return RepositorioBienMaterialSQL(self.conexion, self._cursor).guardar_bien_material(bien)
 
-    def eliminar(self, identificador):
+    def eliminar_recurso(self, identificador):
         self.ejecutar('DELETE FROM recurso WHERE id_recurso=%s', (identificador,))
 
-    def categorias(self):
+    def consultar_categorias(self):
         return self.consultar_sql('SELECT * FROM categoria_recurso ORDER BY nombre')
 
     def guardar_categoria(self, nombre, descripcion, identificador=None):

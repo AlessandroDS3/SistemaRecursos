@@ -14,11 +14,11 @@ class ServicioAplicacionReporte:
     def __init__(self, repositorio: IRepositorioReporte):
         self.repositorio = repositorio
 
-    def consultar(self, datos, paginar=True):
+    def consultar_reportes(self, datos, paginar=True):
         filtro = FiltroReporte(
             **{k: datos[k] for k in FiltroReporte.__dataclass_fields__ if k in datos}
         )
-        filas, resumen = self.repositorio.consultar(filtro, paginar)
+        filas, resumen = self.repositorio.consultar_reportes(filtro, paginar)
         return dict(
             filtro=filtro,
             filas=filas,
@@ -26,8 +26,8 @@ class ServicioAplicacionReporte:
             paginas=max(1, (resumen['detalles'] + FILAS_POR_PAGINA - 1) // FILAS_POR_PAGINA),
         )
 
-    def exportar(self, datos):
-        resultado = self.consultar(datos, paginar=False)
+    def exportar_reportes_csv(self, datos):
+        resultado = self.consultar_reportes(datos, paginar=False)
         campos = (
             'id_prestamo',
             'dni_persona',

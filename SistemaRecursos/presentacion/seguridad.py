@@ -46,7 +46,11 @@ def configurar_seguridad(app, acceso):
         identificador = session.get('id_usuario')
         if identificador is not None:
             iniciada = session.get('iniciada', 0)
-            cuenta = acceso.recuperar(identificador) if 0 <= time() - iniciada < 8 * 3600 else None
+            cuenta = (
+                acceso.consultar_cuenta_activa(identificador)
+                if 0 <= time() - iniciada < 8 * 3600
+                else None
+            )
             if (
                 cuenta
                 and cuenta.puede_acceder()
@@ -55,8 +59,8 @@ def configurar_seguridad(app, acceso):
                 g.usuario = cuenta
             else:
                 session.clear()
-        if request.endpoint not in ('auth.login', 'static') and g.usuario is None:
-            return redirect(url_for('auth.login'))
+        if request.endpoint not in ('auth.iniciar_sesion', 'static') and g.usuario is None:
+            return redirect(url_for('auth.iniciar_sesion'))
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             recibido = request.form.get('csrf_token', '')
             esperado = session.get('csrf', '')

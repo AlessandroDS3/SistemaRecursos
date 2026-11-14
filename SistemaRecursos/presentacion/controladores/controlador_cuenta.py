@@ -7,30 +7,33 @@ class ControladorCuenta:
         self.servicio = servicio
         self.blueprint = Blueprint('cuentas', __name__, url_prefix='/cuentas')
         self.blueprint.add_url_rule(
-            '/<documento>/nueva', 'nueva', self.nueva, methods=['GET', 'POST']
+            '/<documento>/nueva', 'registrar_cuenta', self.registrar_cuenta, methods=['GET', 'POST']
         )
         self.blueprint.add_url_rule(
-            '/<documento>/editar', 'editar', self.editar, methods=['GET', 'POST']
+            '/<documento>/editar',
+            'actualizar_cuenta',
+            self.actualizar_cuenta,
+            methods=['GET', 'POST'],
         )
 
     @requiere_permiso('USUARIOS_GESTIONAR')
-    def nueva(self, documento):
+    def registrar_cuenta(self, documento):
         if request.method == 'POST':
-            self.servicio.crear(
+            self.servicio.registrar_cuenta(
                 documento,
                 request.form.get('nombre_usuario'),
                 request.form.get('clave'),
                 g.usuario.id_usuario,
             )
             flash('Cuenta creada con el rol Usuario.')
-            return redirect(url_for('personas.detalle', documento=documento))
+            return redirect(url_for('personas.consultar_persona', documento=documento))
         return render_template('vista_cuenta.html', documento=documento, cuenta={}, nueva=True)
 
     @requiere_permiso('USUARIOS_GESTIONAR')
-    def editar(self, documento):
-        cuenta = self.servicio.consultar(documento)
+    def actualizar_cuenta(self, documento):
+        cuenta = self.servicio.consultar_cuenta(documento)
         if request.method == 'POST':
-            self.servicio.actualizar(documento, request.form.to_dict(), g.usuario.id_usuario)
+            self.servicio.actualizar_cuenta(documento, request.form.to_dict(), g.usuario.id_usuario)
             flash('Cuenta actualizada.')
-            return redirect(url_for('personas.detalle', documento=documento))
+            return redirect(url_for('personas.consultar_persona', documento=documento))
         return render_template('vista_cuenta.html', documento=documento, cuenta=cuenta, nueva=False)

@@ -4,7 +4,7 @@ from repositorio.base_sql import RepositorioSQL
 
 
 class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
-    def cargar(self, prestamo, detalle):
+    def consultar_contexto_ampliacion_prestamo(self, prestamo, detalle):
         cabecera = self.consultar_sql(
             'SELECT * FROM prestamo WHERE id_prestamo=%s FOR UPDATE', (prestamo,), una=True
         )
@@ -29,7 +29,7 @@ class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
         )
         return cabecera, fila, politica, horario
 
-    def guardar(self, detalle, anterior, nueva):
+    def actualizar_plazo_prestamo(self, detalle, anterior, nueva):
         self.ejecutar(
             '''UPDATE detalle_prestamo SET fecha_limite_devolucion=%s
             WHERE id_detalle=%s AND fecha_limite_devolucion=%s AND fecha_devolucion IS NULL''',

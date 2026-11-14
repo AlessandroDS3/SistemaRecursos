@@ -112,7 +112,7 @@ class RecorridosWeb(CasoMySQL):
     def test_error_mysql_no_expone_detalle_interno(self):
         self.login()
         with patch(
-            'repositorio.repositorio_recurso_sql.RepositorioRecursoSQL.listar',
+            'repositorio.repositorio_recurso_sql.RepositorioRecursoSQL.consultar_recursos',
             side_effect=DatabaseError('DETALLE_INTERNO_PRIVADO'),
         ):
             respuesta = self.cliente.get('/recursos')

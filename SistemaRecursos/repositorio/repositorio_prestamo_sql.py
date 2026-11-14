@@ -17,7 +17,7 @@ ESTADO_SQL = '''CASE
 
 
 class RepositorioPrestamoSQL(RepositorioSQL):
-    def condiciones(self, documento):
+    def consultar_condiciones_prestamo(self, documento):
         persona = self.consultar_sql(PERSONAS + ' WHERE p.dni=%s', (documento,), una=True)
         tipo = persona['tipo'] if persona else None
         politicas = self.consultar_sql(
@@ -54,7 +54,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
     def sanciones(self):
         return RepositorioSancionSQL(self.conexion, self._cursor)
 
-    def listar(self, filtros, documento=None):
+    def consultar_prestamos(self, filtros, documento=None):
         sql = f'''SELECT p.*,CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
             {ESTADO_SQL} AS estado_actual FROM prestamo p JOIN persona per ON per.dni=p.dni_persona WHERE 1=1'''
         parametros = []
@@ -82,7 +82,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             sql + ' ORDER BY p.fecha_entrega DESC,p.id_prestamo DESC', parametros
         )
 
-    def consultar(self, identificador, bloquear=False):
+    def consultar_prestamo(self, identificador, bloquear=False):
         fila = self.consultar_sql(
             f'''SELECT p.*,CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
             {ESTADO_SQL} AS estado_actual FROM prestamo p JOIN persona per ON per.dni=p.dni_persona
@@ -110,7 +110,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         return fila
 
-    def cargar_entrega(self, solicitud):
+    def consultar_contexto_entrega_prestamo(self, solicitud):
         documentos = tuple(sorted(set([*solicitud.solicitantes, solicitud.dni_encargado])))
         marcas = ','.join(['%s'] * len(documentos))
         personas = {
@@ -164,7 +164,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         return dict(
             personas=personas,
-            sancion=self.sanciones.tiene_activas(participantes),
+            sancion=self.sanciones.existen_sanciones_activas(participantes),
             vencido=bool(vencidos),
             limite=limite['maximo_articulos'] if limite else None,
             pendientes=pendientes,
@@ -172,10 +172,10 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             entregas_pendientes=bool(entregas),
             politicas={p['id_categoria']: p for p in politicas},
             horario=HorarioAtencion(**configuracion) if configuracion else None,
-            ahora=self.ahora(),
+            ahora=self.consultar_fecha_actual(),
         )
 
-    def guardar_entrega(self, solicitud, plan, fecha):
+    def registrar_entrega_prestamo(self, solicitud, plan, fecha):
         identificador = self.insertar(
             'prestamo',
             dict(
@@ -198,7 +198,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             )
             if self._cursor.rowcount != 1:
                 raise Conflicto('El inventario cambió durante la entrega.')
-            self.historial(
+            self.registrar_historial_estado(
                 'BIEN_MATERIAL',
                 fila['id_bien'],
                 anterior,
@@ -218,7 +218,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
                         rol_participacion='Responsable' if responsable else 'Integrante',
                     ),
                 )
-        self.historial(
+        self.registrar_historial_estado(
             'PRESTAMO',
             identificador,
             None,
@@ -228,7 +228,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         return identificador
 
-    def guardar_devolucion(self, detalle, devolucion, fecha, actor):
+    def registrar_devolucion(self, detalle, devolucion, fecha, actor):
         self.ejecutar(
             '''UPDATE detalle_prestamo SET fecha_devolucion=%s,dni_encargado_devolucion=%s,
             condicion_devolucion=%s,observaciones_devolucion=%s WHERE id_detalle=%s AND fecha_devolucion IS NULL''',
@@ -246,7 +246,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             'UPDATE bien_material SET estado=%s WHERE id_bien=%s',
             (devolucion.estado_bien, detalle['id_bien']),
         )
-        self.historial(
+        self.registrar_historial_estado(
             'BIEN_MATERIAL',
             detalle['id_bien'],
             detalle['estado_bien'],
@@ -255,22 +255,22 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             f'Recepción del préstamo #{detalle["id_prestamo"]}.',
         )
 
-    def guardar_estado(self, prestamo, nuevo, actor, motivo):
+    def actualizar_estado_prestamo(self, prestamo, nuevo, actor, motivo):
         self.ejecutar(
             'UPDATE prestamo SET estado=%s WHERE id_prestamo=%s', (nuevo, prestamo['id_prestamo'])
         )
-        self.historial(
+        self.registrar_historial_estado(
             'PRESTAMO', prestamo['id_prestamo'], prestamo['estado'], nuevo, actor, motivo
         )
 
-    def guardar_perdida(self, prestamo, detalle, actor, motivo):
+    def registrar_perdida_bien_material(self, prestamo, detalle, actor, motivo):
         self.ejecutar(
             "UPDATE bien_material SET estado='PERDIDO' WHERE id_bien=%s", (detalle['id_bien'],)
         )
-        self.historial(
+        self.registrar_historial_estado(
             'BIEN_MATERIAL', detalle['id_bien'], detalle['estado_bien'], 'PERDIDO', actor, motivo
         )
-        self.historial(
+        self.registrar_historial_estado(
             'PRESTAMO',
             prestamo['id_prestamo'],
             prestamo['estado'],

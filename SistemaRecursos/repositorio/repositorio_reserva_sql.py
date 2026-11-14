@@ -4,7 +4,7 @@ from repositorio.repositorio_prestamo_sql import RepositorioPrestamoSQL
 
 
 class RepositorioReservaSQL(RepositorioSQL):
-    def opciones(self, documento):
+    def consultar_recursos_para_reserva(self, documento):
         persona = self.consultar_sql(PERSONAS + ' WHERE p.dni=%s', (documento,), una=True)
         return self.consultar_sql(
             '''SELECT r.id_recurso,r.nombre,p.plazo_maximo,p.unidad_plazo,p.permite_salida,
@@ -19,7 +19,7 @@ class RepositorioReservaSQL(RepositorioSQL):
     def prestamos(self):
         return RepositorioPrestamoSQL(self.conexion, self._cursor)
 
-    def listar(self, documento=None, filtros=None):
+    def consultar_reservas(self, documento=None, filtros=None):
         filtros = filtros or {}
         sql = '''SELECT re.*,r.nombre AS recurso,
             CONCAT(p.nombres,' ',p.apellidos) AS solicitante,
@@ -44,7 +44,7 @@ class RepositorioReservaSQL(RepositorioSQL):
             sql + ' ORDER BY re.fecha_solicitud DESC,re.id_reserva DESC', parametros
         )
 
-    def consultar(self, identificador, bloquear=False):
+    def consultar_reserva(self, identificador, bloquear=False):
         return self.consultar_sql(
             '''SELECT re.*,r.nombre AS recurso,b.codigo_inventario,
             b.estado AS estado_bien,b.id_recurso AS recurso_bien,
@@ -56,7 +56,7 @@ class RepositorioReservaSQL(RepositorioSQL):
             una=True,
         )
 
-    def cargar_solicitud(self, documento, recurso):
+    def consultar_contexto_reserva(self, documento, recurso):
         persona = self.consultar_sql(
             PERSONAS + ' WHERE p.dni=%s FOR UPDATE', (documento,), una=True
         )
@@ -81,26 +81,26 @@ class RepositorioReservaSQL(RepositorioSQL):
             '''SELECT id_reserva FROM reserva
             WHERE dni_persona=%s AND id_recurso=%s AND estado IN ('EN_ESPERA','LISTA_PARA_RETIRO')
             AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>%s) FOR UPDATE''',
-            (documento, recurso, self.ahora()),
+            (documento, recurso, self.consultar_fecha_actual()),
         )
         return dict(
             persona=persona,
             recurso=fila,
             politica=politica,
             vencido=bool(vencido),
-            sancion=self.prestamos.sanciones.tiene_activas([documento]),
+            sancion=self.prestamos.sanciones.existen_sanciones_activas([documento]),
             duplicada=bool(duplicada),
         )
 
-    def configuracion(self):
+    def consultar_configuracion_general(self):
         return self.consultar_sql(
             'SELECT * FROM configuracion_general WHERE id_configuracion=1 FOR UPDATE', una=True
         )
 
-    def guardar(self, datos):
+    def registrar_reserva(self, datos):
         return self.insertar('reserva', datos)
 
-    def cambiar(self, identificador, datos):
+    def actualizar_reserva(self, identificador, datos):
         permitidos = {
             'estado',
             'id_bien',
@@ -122,7 +122,7 @@ class RepositorioReservaSQL(RepositorioSQL):
             una=True,
         )
 
-    def primera_en_espera(self, recurso, ahora):
+    def consultar_primera_reserva_en_espera(self, recurso, ahora):
         return self.consultar_sql(
             '''SELECT id_reserva FROM reserva WHERE id_recurso=%s
             AND estado='EN_ESPERA' AND fecha_requerida<=%s
@@ -132,7 +132,7 @@ class RepositorioReservaSQL(RepositorioSQL):
             una=True,
         )
 
-    def bien_disponible(self, recurso):
+    def consultar_bien_disponible(self, recurso):
         return self.consultar_sql(
             '''SELECT b.* FROM bien_material b WHERE b.id_recurso=%s
             AND b.estado='DISPONIBLE' AND NOT EXISTS(SELECT 1 FROM detalle_prestamo d
@@ -142,7 +142,7 @@ class RepositorioReservaSQL(RepositorioSQL):
             una=True,
         )
 
-    def cambiar_bien(self, bien, estado, esperado, actor, reserva):
+    def cambiar_estado_bien_reservado(self, bien, estado, esperado, actor, reserva):
         from dominio.compartido.validacion import Conflicto
 
         self.ejecutar(
@@ -151,9 +151,11 @@ class RepositorioReservaSQL(RepositorioSQL):
         )
         if self._cursor.rowcount != 1:
             raise Conflicto('El bien cambió de estado. Recarga la reserva.')
-        self.historial('BIEN_MATERIAL', bien, esperado, estado, actor, f'Reserva #{reserva}.')
+        self.registrar_historial_estado(
+            'BIEN_MATERIAL', bien, esperado, estado, actor, f'Reserva #{reserva}.'
+        )
 
-    def candidatas_vencidas(self):
+    def consultar_reservas_vencidas(self):
         return self.consultar_sql('''SELECT id_reserva FROM reserva
             WHERE estado IN ('EN_ESPERA','LISTA_PARA_RETIRO')
             AND fecha_limite_vencimiento<=UTC_TIMESTAMP() ORDER BY id_reserva LIMIT 100''')

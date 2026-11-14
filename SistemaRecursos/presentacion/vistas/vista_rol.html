@@ -2,7 +2,7 @@
 {% from 'formularios.html' import csrf,campo %}
 {% block contenido %}
   <h1>Roles y permisos</h1>
-  <form method="post" action="{{ url_for('roles.guardar') }}">
+  <form method="post" action="{{ url_for('roles.guardar_matriz_permisos') }}">
     {{ csrf() }}
     <input type="hidden" name="version" value="{{ version }}">
     <div class="tabla">
@@ -67,7 +67,7 @@
               {% if g.usuario.permite("ROLES_GESTIONAR") %}
                 <form method="post"
                       class="acciones"
-                      action="{{ url_for('roles.asignar') }}">
+                      action="{{ url_for('roles.asignar_rol_cuenta') }}">
                   {{ csrf() }}
                   <input type="hidden" name="dni" value="{{ c.dni_persona }}">
                   <select name="rol" aria-label="Rol de {{ c.nombre_usuario }}">

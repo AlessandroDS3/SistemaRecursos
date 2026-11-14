@@ -6,16 +6,20 @@ class ControladorReporte:
     def __init__(self, servicio):
         self.servicio = servicio
         self.blueprint = Blueprint('reportes', __name__, url_prefix='/reportes')
-        self.blueprint.add_url_rule('', 'listar', self.listar)
-        self.blueprint.add_url_rule('/exportar.csv', 'exportar', self.exportar)
+        self.blueprint.add_url_rule('', 'consultar_reportes', self.consultar_reportes)
+        self.blueprint.add_url_rule(
+            '/exportar.csv', 'exportar_reportes_csv', self.exportar_reportes_csv
+        )
 
     @requiere_permiso('REPORTES_CONSULTAR')
-    def listar(self):
-        return render_template('vista_reporte.html', **self.servicio.consultar(request.args))
+    def consultar_reportes(self):
+        return render_template(
+            'vista_reporte.html', **self.servicio.consultar_reportes(request.args)
+        )
 
     @requiere_permiso('REPORTES_CONSULTAR')
-    def exportar(self):
-        contenido, tipo = self.servicio.exportar(request.args)
+    def exportar_reportes_csv(self):
+        contenido, tipo = self.servicio.exportar_reportes_csv(request.args)
         return Response(
             contenido.encode('utf-8'),
             content_type='text/csv; charset=utf-8',

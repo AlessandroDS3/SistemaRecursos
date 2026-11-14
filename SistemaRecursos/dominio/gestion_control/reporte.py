@@ -63,4 +63,6 @@ def celda_csv(valor):
 
 
 class IRepositorioReporte(Protocol):
-    def consultar(self, filtro: FiltroReporte, paginar=True) -> tuple[list[dict], dict]: ...
+    def consultar_reportes(
+        self, filtro: FiltroReporte, paginar=True
+    ) -> tuple[list[dict], dict]: ...

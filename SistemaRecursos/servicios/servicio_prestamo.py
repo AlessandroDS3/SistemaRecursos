@@ -15,13 +15,13 @@ class ServicioAplicacionPrestamo:
     def __init__(self, repositorio: IRepositorioPrestamo):
         self.repositorio = repositorio
 
-    def condiciones(self, documento):
-        resultado = self.repositorio.condiciones(dni(documento))
+    def consultar_condiciones_prestamo(self, documento):
+        resultado = self.repositorio.consultar_condiciones_prestamo(dni(documento))
         validar_elegibilidad(resultado['persona'])
         persona = resultado.pop('persona')
         return dict(resultado, solicitante=f'{persona["nombres"]} {persona["apellidos"]}')
 
-    def listar(self, filtros, documento=None):
+    def consultar_prestamos(self, filtros, documento=None):
         estado = filtros.get('estado', '')
         if estado and estado not in (
             'ACTIVO',
@@ -32,12 +32,12 @@ class ServicioAplicacionPrestamo:
             'PERDIDOS',
         ):
             raise ValueError('Estado de préstamo inválido.')
-        return self.repositorio.listar(
+        return self.repositorio.consultar_prestamos(
             dict(q=texto(filtros.get('q'), 'Búsqueda', 120), estado=estado), documento
         )
 
-    def consultar(self, identificador, documento, gestionar=False):
-        prestamo = self.repositorio.consultar(entero(identificador))
+    def consultar_prestamo(self, identificador, documento, gestionar=False):
+        prestamo = self.repositorio.consultar_prestamo(entero(identificador))
         if prestamo is None:
             raise NoEncontrado('Préstamo inexistente.')
         afectados = {
@@ -46,14 +46,16 @@ class ServicioAplicacionPrestamo:
         }
         if not gestionar and dni(documento) not in afectados:
             raise PermissionError('Solo puedes consultar los préstamos en los que participas.')
-        prestamo['historial'] = self.repositorio.consultar_historial(
+        prestamo['historial'] = self.repositorio.consultar_historial_estado(
             'PRESTAMO', prestamo['id_prestamo']
         )
         return prestamo
 
-    def registrar(self, datos, actor):
+    def registrar_prestamo(self, datos, actor):
         with self.repositorio.transaccion() as operacion:
-            cuenta = exigir_permiso(operacion.cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR')
+            cuenta = exigir_permiso(
+                operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
+            )
             if datos.get('acepta_condiciones') != '1':
                 raise ValueError('Confirma que comunicaste el plazo y las condiciones de entrega.')
             solicitud = SolicitudPrestamo(
@@ -65,15 +67,15 @@ class ServicioAplicacionPrestamo:
                 salida_solicitada=datos.get('salida_solicitada') == '1',
                 observaciones=datos.get('observaciones', ''),
             )
-            return self.entregar_en_operacion(operacion, solicitud)
+            return self.registrar_prestamo_en_operacion(operacion, solicitud)
 
     @staticmethod
-    def entregar_en_operacion(operacion, solicitud, bien_reservado=None):
-        contexto = operacion.cargar_entrega(solicitud)
+    def registrar_prestamo_en_operacion(operacion, solicitud, bien_reservado=None):
+        contexto = operacion.consultar_contexto_entrega_prestamo(solicitud)
         plan = solicitud.planificar(contexto, bien_reservado)
-        return operacion.guardar_entrega(solicitud, plan, contexto['ahora'])
+        return operacion.registrar_entrega_prestamo(solicitud, plan, contexto['ahora'])
 
-    def devolver(self, identificador, datos, actor):
+    def registrar_devolucion(self, identificador, datos, actor):
         detalles = ids(datos.get('detalles', []))
         devoluciones = [
             Devolucion(
@@ -84,8 +86,10 @@ class ServicioAplicacionPrestamo:
             for d in detalles
         ]
         with self.repositorio.transaccion() as operacion:
-            cuenta = exigir_permiso(operacion.cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR')
-            prestamo = operacion.consultar(entero(identificador), bloquear=True)
+            cuenta = exigir_permiso(
+                operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
+            )
+            prestamo = operacion.consultar_prestamo(entero(identificador), bloquear=True)
             if prestamo is None:
                 raise NoEncontrado('Préstamo inexistente.')
             por_id = {d['id_detalle']: d for d in prestamo['detalles']}
@@ -93,22 +97,26 @@ class ServicioAplicacionPrestamo:
                 if devolucion.id_detalle not in por_id:
                     raise NoEncontrado('El bien seleccionado no pertenece al préstamo.')
                 devolucion.validar(por_id[devolucion.id_detalle])
-            ahora = operacion.ahora()
+            ahora = operacion.consultar_fecha_actual()
             for devolucion in devoluciones:
                 detalle = por_id[devolucion.id_detalle]
-                ServicioAplicacionSancion.registrar_retraso(operacion.sanciones, detalle, ahora)
-                operacion.guardar_devolucion(detalle, devolucion, ahora, cuenta['dni_persona'])
+                ServicioAplicacionSancion.registrar_sancion_por_retraso(
+                    operacion.sanciones, detalle, ahora
+                )
+                operacion.registrar_devolucion(detalle, devolucion, ahora, cuenta['dni_persona'])
                 detalle['fecha_devolucion'] = ahora
             nuevo = estado_prestamo(prestamo['detalles'], ahora)
-            operacion.guardar_estado(
+            operacion.actualizar_estado_prestamo(
                 prestamo, nuevo, cuenta['dni_persona'], f'Recepción de {len(detalles)} bien(es).'
             )
 
-    def reportar_perdida(self, identificador, detalle_id, motivo, actor):
+    def registrar_perdida_bien_material(self, identificador, detalle_id, motivo, actor):
         motivo = texto(motivo, 'Motivo de pérdida', 255, True)
         with self.repositorio.transaccion() as operacion:
-            cuenta = exigir_permiso(operacion.cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR')
-            prestamo = operacion.consultar(entero(identificador), bloquear=True)
+            cuenta = exigir_permiso(
+                operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
+            )
+            prestamo = operacion.consultar_prestamo(entero(identificador), bloquear=True)
             if prestamo is None:
                 raise NoEncontrado('Préstamo inexistente.')
             detalle = next(
@@ -118,15 +126,19 @@ class ServicioAplicacionPrestamo:
                 raise NoEncontrado('El bien no pertenece al préstamo.')
             if detalle['fecha_devolucion'] is not None or detalle['estado_bien'] != 'PRESTADO':
                 raise Conflicto('El bien debe estar prestado y pendiente para reportar su pérdida.')
-            operacion.guardar_perdida(prestamo, detalle, cuenta['dni_persona'], motivo)
+            operacion.registrar_perdida_bien_material(
+                prestamo, detalle, cuenta['dni_persona'], motivo
+            )
 
-    def actualizar_vencimientos(self, actor):
+    def registrar_vencimientos_prestamos(self, actor):
         with self.repositorio.transaccion() as operacion:
-            cuenta = exigir_permiso(operacion.cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR')
-            for fila in operacion.listar({'estado': 'VENCIDO'}):
-                prestamo = operacion.consultar(fila['id_prestamo'], bloquear=True)
-                nuevo = estado_prestamo(prestamo['detalles'], operacion.ahora())
+            cuenta = exigir_permiso(
+                operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
+            )
+            for fila in operacion.consultar_prestamos({'estado': 'VENCIDO'}):
+                prestamo = operacion.consultar_prestamo(fila['id_prestamo'], bloquear=True)
+                nuevo = estado_prestamo(prestamo['detalles'], operacion.consultar_fecha_actual())
                 if nuevo != prestamo['estado']:
-                    operacion.guardar_estado(
+                    operacion.actualizar_estado_prestamo(
                         prestamo, nuevo, cuenta['dni_persona'], 'Vencimiento registrado.'
                     )

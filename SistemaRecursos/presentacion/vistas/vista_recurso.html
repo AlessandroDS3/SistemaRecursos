@@ -5,8 +5,8 @@
     <div class="cabecera">
       <h1>Catálogo de recursos</h1>
       {% if g.usuario.permite("RECURSOS_GESTIONAR") %}
-        <a class="boton" href="{{ url_for('recursos.nuevo') }}">Registrar recurso</a>
-        <a href="{{ url_for('recursos.categorias') }}">Categorías</a>
+        <a class="boton" href="{{ url_for('recursos.gestionar_formulario_recurso') }}">Registrar recurso</a>
+        <a href="{{ url_for('recursos.gestionar_categorias') }}">Categorías</a>
       {% endif %}
     </div>
     <form class="filtros">
@@ -37,7 +37,7 @@
         <article class="panel">
           <p class="suave">{{ r.categoria }}</p>
           <h2>
-            <a href="{{ url_for('recursos.detalle',identificador=r.id_recurso) }}">{{ r.nombre }}</a>
+            <a href="{{ url_for('recursos.consultar_recurso',identificador=r.id_recurso) }}">{{ r.nombre }}</a>
           </h2>
           <p>
             {{ r.marca or '' }}
@@ -64,13 +64,13 @@
     <div class="acciones">
       {% if g.usuario.permite("RESERVAS_PROPIAS_GESTIONAR") %}
         <a class="boton"
-           href="{{ url_for('reservas.nueva',id_recurso=recurso.id_recurso) }}">Solicitar o reservar</a>
+           href="{{ url_for('reservas.registrar_reserva',id_recurso=recurso.id_recurso) }}">Solicitar o reservar</a>
       {% endif %}
       {% if g.usuario.permite("RECURSOS_GESTIONAR") %}
-        <a href="{{ url_for('recursos.editar',identificador=recurso.id_recurso) }}">Editar recurso</a>
-        <a href="{{ url_for('bienes.nuevo',id_recurso=recurso.id_recurso) }}">Agregar bien</a>
+        <a href="{{ url_for('recursos.gestionar_formulario_recurso',identificador=recurso.id_recurso) }}">Editar recurso</a>
+        <a href="{{ url_for('bienes.gestionar_formulario_bien_material',id_recurso=recurso.id_recurso) }}">Agregar bien</a>
         <form method="post"
-              action="{{ url_for('recursos.eliminar',identificador=recurso.id_recurso) }}">
+              action="{{ url_for('recursos.eliminar_recurso',identificador=recurso.id_recurso) }}">
           {{ csrf() }}
           <button class="secundario">Eliminar recurso</button>
         </form>
@@ -91,7 +91,7 @@
             <tr>
               <td>
                 {% if g.usuario.permite("RECURSOS_GESTIONAR") or g.usuario.permite("PRESTAMOS_GESTIONAR") %}
-                  <a href="{{ url_for('bienes.detalle',identificador=b.id_bien) }}">
+                  <a href="{{ url_for('bienes.consultar_bien_material',identificador=b.id_bien) }}">
                     {{ b.codigo_inventario }}
                   </a>
                 {% else %}

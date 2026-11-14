@@ -73,44 +73,64 @@ El dominio define los datos, las reglas y los contratos `IRepositorio...` que ne
 
 Los servicios coordinan los casos de uso. El repositorio controla la conexión, las consultas, los bloqueos y la escritura. Presentación recibe HTTP, llama al servicio y muestra su resultado. El dominio no importa Flask, MySQL, servicios ni repositorios concretos; los servicios tampoco importan presentación o persistencia.
 
+## Convención de nombres
+
+Las operaciones públicas usan **verbo + entidad**, con el mismo vocabulario en controladores, servicios y contratos/repositorios:
+
+| Acción | Convención | Ejemplo |
+| --- | --- | --- |
+| Obtener un registro | `consultar_<entidad>` | `consultar_cuenta` |
+| Obtener un conjunto | `consultar_<plural>` | `consultar_personas` |
+| Buscar por texto | `buscar_<plural>` | `buscar_cuentas` |
+| Crear un registro | `registrar_<entidad>` | `registrar_cuenta` |
+| Modificar un registro existente | `actualizar_<entidad>` | `actualizar_cuenta` |
+| Registrar o actualizar según el identificador | `guardar_<entidad>` | `guardar_recurso` |
+| Eliminar un registro | `eliminar_<entidad>` | `eliminar_recurso` |
+| Operación propia del negocio | Verbo específico y entidad | `preparar_reserva`, `entregar_reserva`, `levantar_sancion` |
+| Formulario que atiende consulta y envío | `gestionar_formulario_<entidad>` | `gestionar_formulario_persona` |
+
+El acceso utiliza `autenticar_cuenta` y `consultar_cuenta_activa`. Las reservas exponen `preparar_reserva`, `entregar_reserva`, `cancelar_reserva`, `rechazar_reserva` y `expirar_reserva`; comparten un coordinador privado `_resolver_reserva`. Los identificadores de rutas utilizados desde las plantillas también indican la operación, por ejemplo `cuentas.registrar_cuenta`.
+
+Los nombres técnicos compartidos (`transaccion`, `consultar_sql`, `__init__`) y las propiedades de los modelos conservan su significado técnico. Las pruebas de arquitectura impiden reintroducir operaciones públicas genéricas como `crear`, `guardar` o `actuar`.
+
 ## Recorridos por nombre
 
 En cada fila, se utiliza el mismo nombre en los archivos `controlador_<nombre>.py`, `servicio_<nombre>.py` y `repositorio_<nombre>_sql.py`.
 
 | Nombre | Archivo del dominio | Operaciones principales del servicio |
 | --- | --- | --- |
-| `acceso` | `gestion_personas_usuarios/acceso.py` | `autenticar`, `recuperar` |
-| `cuenta` | `gestion_personas_usuarios/cuenta.py` | `crear`, `actualizar`, `asignar_rol` |
-| `persona` | `gestion_personas_usuarios/persona.py` | `listar`, `consultar`, `guardar`, `desactivar`, `buscar` |
-| `rol` | `gestion_personas_usuarios/rol.py` | `consultar`, `guardar` |
-| `recurso` | `gestion_recursos/recurso.py` | `listar`, `consultar`, `guardar`, `eliminar`, categorías |
-| `bien_material` | `gestion_recursos/bien_material.py` | `listar`, `consultar`, `guardar`, `cambiar_estado`, `historial`, `eliminar` |
-| `politica_prestamo` | `gestion_control/politica_prestamo.py` | `guardar`, `eliminar`, `guardar_configuracion`, `guardar_limite` |
-| `prestamo` | `gestion_prestamos/prestamo.py` | `condiciones`, `registrar`, `consultar`, `devolver`, `reportar_perdida` |
-| `ampliacion_prestamo` | `gestion_prestamos/ampliacion_prestamo.py` | `ampliar` |
-| `reserva` | `gestion_prestamos/reserva.py` | `opciones`, `registrar`, `actuar`, `procesar_vencimientos` |
-| `sancion` | `gestion_control/sancion.py` | `listar`, `levantar`, `procesar_vencimientos` |
-| `reporte` | `gestion_control/reporte.py` | `consultar`, `exportar` |
+| `acceso` | `gestion_personas_usuarios/acceso.py` | `autenticar_cuenta`, `consultar_cuenta_activa` |
+| `cuenta` | `gestion_personas_usuarios/cuenta.py` | `consultar_cuenta`, `registrar_cuenta`, `actualizar_cuenta`, `asignar_rol_cuenta`, `buscar_cuentas` |
+| `persona` | `gestion_personas_usuarios/persona.py` | `consultar_personas`, `consultar_persona`, `guardar_persona`, `desactivar_persona`, `buscar_personas` |
+| `rol` | `gestion_personas_usuarios/rol.py` | `consultar_matriz_permisos`, `guardar_matriz_permisos` |
+| `recurso` | `gestion_recursos/recurso.py` | `consultar_recursos`, `consultar_recurso`, `guardar_recurso`, `eliminar_recurso`, `consultar_categorias`, `guardar_categoria`, `eliminar_categoria` |
+| `bien_material` | `gestion_recursos/bien_material.py` | `consultar_bien_material`, `consultar_bienes_materiales`, `guardar_bien_material`, `cambiar_estado_bien_material`, `consultar_historial_bien_material`, `eliminar_bien_material` |
+| `politica_prestamo` | `gestion_control/politica_prestamo.py` | `consultar_politica_prestamo`, `consultar_politicas_prestamo`, `consultar_configuracion_general`, `consultar_limites_articulos`, `guardar_politica_prestamo`, `guardar_configuracion_general`, `guardar_limite_articulos`, `eliminar_politica_prestamo` |
+| `prestamo` | `gestion_prestamos/prestamo.py` | `consultar_condiciones_prestamo`, `consultar_prestamos`, `consultar_prestamo`, `registrar_prestamo`, `registrar_prestamo_en_operacion`, `registrar_devolucion`, `registrar_perdida_bien_material`, `registrar_vencimientos_prestamos` |
+| `ampliacion_prestamo` | `gestion_prestamos/ampliacion_prestamo.py` | `ampliar_prestamo` |
+| `reserva` | `gestion_prestamos/reserva.py` | `consultar_recursos_para_reserva`, `consultar_reservas`, `consultar_reserva`, `registrar_reserva`, `preparar_reserva`, `entregar_reserva`, `cancelar_reserva`, `rechazar_reserva`, `expirar_reserva`, `expirar_reservas_vencidas` |
+| `sancion` | `gestion_control/sancion.py` | `registrar_sancion_por_retraso`, `aplicar_sanciones_por_vencimiento`, `consultar_sanciones`, `levantar_sancion` |
+| `reporte` | `gestion_control/reporte.py` | `consultar_reportes`, `exportar_reportes_csv` |
 
 Por ejemplo, para cambiar una regla de bienes:
 
 ```text
 vista_bien_material.html
-  → ControladorBienMaterial.estado
-    → ServicioAplicacionBienMaterial.cambiar_estado
+  → ControladorBienMaterial.cambiar_estado_bien_material
+    → ServicioAplicacionBienMaterial.cambiar_estado_bien_material
       → bien_material.validar_cambio_estado
       → IRepositorioBienMaterial
-        → RepositorioBienMaterialSQL.cambiar_estado
+        → RepositorioBienMaterialSQL.cambiar_estado_bien_material
 ```
 
-Las devoluciones son una operación del préstamo: `ControladorPrestamo.devolver` → `ServicioAplicacionPrestamo.devolver` → reglas de `Devolucion` en `devolucion.py` → `RepositorioPrestamoSQL.guardar_devolucion`. El horario, los límites y los plazos de reserva se administran en Políticas y utilizan `servicio_politica_prestamo.py` y `repositorio_politica_prestamo_sql.py`.
+Las devoluciones son una operación del préstamo: `ControladorPrestamo.registrar_devolucion` → `ServicioAplicacionPrestamo.registrar_devolucion` → reglas de `Devolucion` en `devolucion.py` → `RepositorioPrestamoSQL.registrar_devolucion`. El horario, los límites y los plazos de reserva se administran en Políticas y utilizan `servicio_politica_prestamo.py` y `repositorio_politica_prestamo_sql.py`.
 
 ## Reglas y transacciones
 
 - **Acceso:** consulta una cuenta mínima y sus permisos. Cuenta y persona deben estar activas. La sesión dura como máximo ocho horas; el cambio de contraseña invalida sus cookies. Cada petición vuelve a cargar permisos y estados. Los formularios de escritura usan CSRF.
 - **Personas y cuentas:** los datos institucionales pertenecen a persona; contraseña y acceso pertenecen a cuenta. Las ediciones de persona y la matriz de permisos detectan formularios desactualizados. Se protege la propia cuenta y la existencia de un administrador activo.
 - **Entrega:** el formulario consulta cupo, plazos y permiso de salida antes de confirmar. `SolicitudPrestamo.planificar` comprueba a los integrantes, sanciones, vencimientos, cupo total del responsable, inventario, política y horario. El repositorio carga esos hechos bajo bloqueo. Préstamo, detalles, integrantes, inventario e historial se confirman juntos.
-- **Reservas:** la persona solicita un recurso; el personal prepara un ejemplar y confirma la entrega al recogerlo. Se comprueban solicitudes duplicadas, elegibilidad y turno. La posición se calcula al consultar. Entregar una reserva reutiliza `ServicioAplicacionPrestamo.entregar_en_operacion` con la misma conexión y transacción.
+- **Reservas:** la persona solicita un recurso; el personal prepara un ejemplar y confirma la entrega al recogerlo. Se comprueban solicitudes duplicadas, elegibilidad y turno. La posición se calcula al consultar. Entregar una reserva reutiliza `ServicioAplicacionPrestamo.registrar_prestamo_en_operacion` con la misma conexión y transacción.
 - **Devolución y pérdida:** se pueden recibir bienes parcialmente. Un daño requiere observación. La pérdida deja el detalle pendiente y el inventario en `PERDIDO`; recuperarlo se registra como devolución `BUENO` o `DANADO`.
 - **Ampliación:** la petición es presencial. El personal añade horas o días a un detalle pendiente y no vencido. Cada ampliación admite como máximo otro plazo de la política aplicada y respeta el cierre cuando corresponde. La fecha anterior evita aplicar dos veces un formulario. Se actualizan detalle e historial juntos.
 - **Sanciones:** el retraso genera una incidencia y una sanción por detalle; afecta al responsable y a todos los integrantes. Una sanción levantada no se reactiva automáticamente. Daño y pérdida mantienen el registro de inventario e historial; no se añadieron reglas nuevas de sanción para esos casos.
@@ -126,7 +146,7 @@ El esquema conserva sus restricciones anteriores: la aplicación evita entregas 
 
 Se reemplazaron los módulos agrupados `personas.py`, `cuentas.py`, `recursos.py`, `prestamos.py`, `reservas.py`, `control.py` y `reportes.py` por archivos identificables por función. Las decisiones de entrega, devolución y ampliación se implementan como reglas que se pueden probar sin MySQL. También se reescribieron los servicios, adaptadores SQL, controladores y formularios, con una interfaz más sencilla.
 
-Frente al commit de respaldo `438ec36`, el Python de producción pasó de **7133 a 3853 líneas**, incluyendo comentarios y líneas en blanco, y de **58 a 67 módulos**, contando los inicializadores vacíos de paquetes. Los nombres separados por función explican el aumento de módulos. Las cifras no incluyen pruebas, SQL, HTML, CSS, el entorno ni archivos locales.
+Frente al commit de respaldo `438ec36`, el Python de producción pasó de **7133 a 4078 líneas**, incluyendo comentarios y líneas en blanco, y de **58 a 67 módulos**, contando los inicializadores vacíos de paquetes. Los nombres separados por función explican el aumento de módulos. Las cifras no incluyen pruebas, SQL, HTML, CSS, el entorno ni archivos locales. La comparación con el contenido actual de `SistemaRecursos_local` figura en [COMPARACION_COPIAS.md](../COMPARACION_COPIAS.md); utiliza esa otra base de comparación.
 
 El esquema sigue teniendo 19 tablas. No se modificó el proyecto anterior ni se publicaron los cambios. Las pruebas de la API anterior quedan conservadas en el commit de respaldo; la suite actual comprueba los nuevos contratos y sus recorridos.
 
@@ -152,5 +172,9 @@ Se crean bases `test_*` y se eliminan al terminar. `verificar.py` falla si hay p
 Las pruebas cubren transacciones y reversión ante fallos, entregas simultáneas del mismo bien, sanciones grupales, devolución parcial y recuperación de pérdidas, ampliaciones, reservas, ediciones concurrentes, acceso/CSRF, permisos actuales, formularios HTTP, filtros/CSV y la importación de ambos SQL. Las de arquitectura impiden ciclos y saltos entre las capas.
 
 Verificación de esta reescritura: **77 pruebas correctas, sin omisiones, en 135,503 segundos**, sobre MySQL temporal en el puerto 13307. Los dos SQL son idénticos a los del proyecto anterior por comparación SHA-256. El registro local está en `datos_locales/reescritura_completa.log`.
+
+Después se corrigió la validación de contraseñas en actualizaciones sin nombre de usuario. Se verificó con las **10 pruebas de personas y cuentas**, incluidas tres nuevas, en 21,812 segundos. Esta comprobación fue específica de la corrección; su registro está en `datos_locales/correccion_claves.log`.
+
+Tras unificar los nombres de operaciones y de los identificadores utilizados por las plantillas, la suite completa terminó con **81 pruebas correctas, sin omisiones, en 140,158 segundos**. Incluye la corrección de contraseñas y una comprobación que impide nombres genéricos en las operaciones públicas de negocio. Registro: `datos_locales/nombres_uniformes_final.log`.
 
 El formato opcional de desarrollo utiliza `requirements-dev.txt` y `pyproject.toml`: Black para Python y djLint para las plantillas. No son dependencias de ejecución de la aplicación.

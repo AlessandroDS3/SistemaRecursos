@@ -46,10 +46,10 @@ class RepositorioSQL:
             f'INSERT INTO {tabla} ({columnas}) VALUES ({marcas})', tuple(datos.values())
         )
 
-    def ahora(self):
+    def consultar_fecha_actual(self):
         return self.consultar_sql('SELECT UTC_TIMESTAMP() AS fecha', una=True)['fecha']
 
-    def cuenta_actor(self, identificador):
+    def consultar_cuenta_actor(self, identificador):
         cuenta = self.consultar_sql(
             '''SELECT u.id_usuario,u.dni_persona,u.rol,u.estado_cuenta,
             p.estado AS estado_persona FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona
@@ -66,7 +66,9 @@ class RepositorioSQL:
             }
         return cuenta
 
-    def historial(self, entidad, identificador, anterior, nuevo, actor, observacion):
+    def registrar_historial_estado(
+        self, entidad, identificador, anterior, nuevo, actor, observacion
+    ):
         self.insertar(
             'historial_estado',
             dict(
@@ -74,13 +76,13 @@ class RepositorioSQL:
                 id_entidad=identificador,
                 estado_anterior=anterior,
                 estado_nuevo=nuevo,
-                fecha=self.ahora(),
+                fecha=self.consultar_fecha_actual(),
                 dni_responsable=actor,
                 observacion=observacion,
             ),
         )
 
-    def consultar_historial(self, entidad, identificador):
+    def consultar_historial_estado(self, entidad, identificador):
         return self.consultar_sql(
             '''SELECT h.*,CONCAT(p.nombres,' ',p.apellidos) AS responsable
             FROM historial_estado h LEFT JOIN persona p ON p.dni=h.dni_responsable

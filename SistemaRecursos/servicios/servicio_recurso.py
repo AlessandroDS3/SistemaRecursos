@@ -9,8 +9,8 @@ class ServicioAplicacionRecurso:
     def __init__(self, repositorio: IRepositorioRecurso):
         self.repositorio = repositorio
 
-    def listar(self, filtros):
-        return self.repositorio.listar(
+    def consultar_recursos(self, filtros):
+        return self.repositorio.consultar_recursos(
             dict(
                 q=texto(filtros.get('q'), 'Búsqueda', 120),
                 id_categoria=(
@@ -20,13 +20,13 @@ class ServicioAplicacionRecurso:
             )
         )
 
-    def consultar(self, identificador):
-        fila = self.repositorio.consultar(entero(identificador))
+    def consultar_recurso(self, identificador):
+        fila = self.repositorio.consultar_recurso(entero(identificador))
         if fila is None:
             raise NoEncontrado('Recurso inexistente.')
         return fila
 
-    def guardar(self, datos, actor, identificador=None):
+    def guardar_recurso(self, datos, actor, identificador=None):
         recurso = Recurso(
             **{
                 k: datos.get(k)
@@ -35,12 +35,17 @@ class ServicioAplicacionRecurso:
             id_recurso=entero(identificador) if identificador else None,
         )
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
-            if recurso.id_recurso is not None and operacion.consultar(recurso.id_recurso) is None:
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
+            if (
+                recurso.id_recurso is not None
+                and operacion.consultar_recurso(recurso.id_recurso) is None
+            ):
                 raise NoEncontrado('Recurso inexistente.')
-            if not any(c['id_categoria'] == recurso.id_categoria for c in operacion.categorias()):
+            if not any(
+                c['id_categoria'] == recurso.id_categoria for c in operacion.consultar_categorias()
+            ):
                 raise ValueError('Categoría inexistente.')
-            nuevo_id = operacion.guardar(recurso)
+            nuevo_id = operacion.guardar_recurso(recurso)
             if identificador is None and datos.get('codigo_inventario', '').strip():
                 bien = BienMaterial(
                     id_recurso=nuevo_id,
@@ -56,27 +61,27 @@ class ServicioAplicacionRecurso:
                         if k in datos
                     },
                 )
-                operacion.guardar_bien(bien)
+                operacion.guardar_bien_material(bien)
         return nuevo_id
 
-    def eliminar(self, identificador, actor):
+    def eliminar_recurso(self, identificador, actor):
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
-            operacion.eliminar(entero(identificador))
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
+            operacion.eliminar_recurso(entero(identificador))
 
-    def categorias(self):
-        return self.repositorio.categorias()
+    def consultar_categorias(self):
+        return self.repositorio.consultar_categorias()
 
     def guardar_categoria(self, datos, actor, identificador=None):
         nombre = texto(datos.get('nombre'), 'Nombre de categoría', 80, True)
         descripcion = texto(datos.get('descripcion'), 'Descripción', 255)
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
             return operacion.guardar_categoria(
                 nombre, descripcion, entero(identificador) if identificador else None
             )
 
     def eliminar_categoria(self, identificador, actor):
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'RECURSOS_GESTIONAR')
             operacion.eliminar_categoria(entero(identificador))
