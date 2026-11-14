@@ -5,10 +5,10 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from dominio.control import HorarioAtencion, LimiteArticulosPrestamo
-from dominio.personas import tiene_matricula_vigente, validar_dni
-from dominio.recursos import CondicionBien, EstadoBienMaterial
-from dominio.validaciones import entero, instante_utc, texto
+from dominio.gestion_control.control import HorarioAtencion, LimiteArticulosPrestamo
+from dominio.gestion_personas_usuarios.personas import tiene_matricula_vigente, validar_dni
+from dominio.gestion_recursos.recursos import CondicionBien, EstadoBienMaterial
+from dominio.compartido.validaciones import entero, instante_utc, texto
 from enum import Enum
 from typing import TypedDict
 

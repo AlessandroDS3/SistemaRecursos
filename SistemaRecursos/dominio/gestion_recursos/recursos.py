@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from dominio.validaciones import entero, fecha, texto
+from dominio.compartido.validaciones import entero, fecha, texto
 from enum import Enum
 from typing import Any, TypedDict
 

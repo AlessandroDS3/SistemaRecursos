@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dominio.control import (
+from dominio.gestion_control.control import (
     FabricaPoliticaPrestamo,
     HorarioAtencion,
     IRepositorioPoliticaPrestamo,
@@ -7,7 +7,7 @@ from dominio.control import (
     PoliticaPrestamo,
     PoliticaVencimientoReserva,
 )
-from dominio.prestamos import ConflictoPrestamoError
+from dominio.gestion_prestamos.prestamos import ConflictoPrestamoError
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.politica_vencimiento_reserva_sql import consultar_politica_vencimiento_reserva
 

@@ -1,7 +1,7 @@
 import os
 import secrets
 from datetime import timedelta, timezone
-from dominio.validaciones import ConflictoEdicion
+from dominio.compartido.validaciones import ConflictoEdicion
 from flask import Flask, g, render_template
 from mysql.connector import Error
 from pathlib import Path

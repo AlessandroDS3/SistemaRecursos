@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dominio.recursos import (
+from dominio.gestion_recursos.recursos import (
     CategoriaRecurso,
     ConflictoRecursoError,
     EstadoBienMaterial,
@@ -9,7 +9,7 @@ from dominio.recursos import (
     ResultadoRecursos,
     crear_recurso,
 )
-from dominio.validaciones import entero as identificador, texto
+from dominio.compartido.validaciones import entero as identificador, texto
 
 
 class ServicioAplicacionRecurso:

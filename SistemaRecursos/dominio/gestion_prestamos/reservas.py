@@ -4,9 +4,9 @@ from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
-from dominio.personas import validar_dni
-from dominio.prestamos import ConflictoPrestamoError, IOperacionPrestamo, SolicitudPrestamo, validar_persona
-from dominio.validaciones import entero, instante_utc, texto
+from dominio.gestion_personas_usuarios.personas import validar_dni
+from dominio.gestion_prestamos.prestamos import ConflictoPrestamoError, IOperacionPrestamo, SolicitudPrestamo, validar_persona
+from dominio.compartido.validaciones import entero, instante_utc, texto
 from enum import Enum
 from typing import TypedDict
 

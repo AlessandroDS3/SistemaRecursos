@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dominio.reservas import EstadoReserva
+from dominio.gestion_prestamos.reservas import EstadoReserva
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 from presentacion.seguridad import requiere_permiso
 from servicios.servicio_persona import ServicioAplicacionPersona

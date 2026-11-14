@@ -1,8 +1,8 @@
 from __future__ import annotations
 from contextlib import contextmanager
-from dominio.control import FabricaPoliticaPrestamo
-from dominio.prestamos import ConflictoPrestamoError
-from dominio.reservas import (
+from dominio.gestion_control.control import FabricaPoliticaPrestamo
+from dominio.gestion_prestamos.prestamos import ConflictoPrestamoError
+from dominio.gestion_prestamos.reservas import (
     AccionReserva,
     IOperacionEntregaReserva,
     IRepositorioReserva,

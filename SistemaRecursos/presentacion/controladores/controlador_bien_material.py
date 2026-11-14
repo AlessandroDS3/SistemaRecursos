@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import date
-from dominio.recursos import ESTADOS_CAMBIO_MANUAL, ESTADOS_GESTION_PRESTAMOS, EstadoBienMaterial
+from dominio.gestion_recursos.recursos import ESTADOS_CAMBIO_MANUAL, ESTADOS_GESTION_PRESTAMOS, EstadoBienMaterial
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from mysql.connector import IntegrityError
 from presentacion.formularios import error_formulario

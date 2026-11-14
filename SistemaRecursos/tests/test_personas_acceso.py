@@ -5,9 +5,9 @@ import unittest
 from unittest.mock import patch
 
 import mysql.connector
-from dominio.personas import FabricaPersona
-from dominio.validaciones import version_persona, version_matriz
-from dominio.personas import ValidacionPersonaError
+from dominio.gestion_personas_usuarios.personas import FabricaPersona
+from dominio.compartido.validaciones import version_persona, version_matriz
+from dominio.gestion_personas_usuarios.personas import ValidacionPersonaError
 from repositorio.repositorio_persona_sql import RepositorioPersonaSQL
 from repositorio.repositorio_rol_sql import RepositorioRolSQL
 from servicios.servicio_rol import ServicioAplicacionRol
@@ -278,7 +278,7 @@ class PersonasAccesoTest(unittest.TestCase):
         with self.db.sesion(escritura=True) as c:
             c.execute("UPDATE persona SET estado='ACTIVA' WHERE dni='99000011'")
         def cambiar_rol_y_guardar(usuario):
-            from dominio.cuentas import NombreRol
+            from dominio.gestion_personas_usuarios.cuentas import NombreRol
             usuario.rol.nombre = NombreRol.ADMINISTRADOR
             return real(usuario)
         with patch.object(repo, "registrar_cuenta", cambiar_rol_y_guardar):

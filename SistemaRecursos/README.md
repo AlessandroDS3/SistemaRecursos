@@ -68,22 +68,24 @@ sql/                         Los dos SQL
 tests/                       Pruebas unitarias, de integración y arquitectura
 ```
 
-| Dominio | Qué contiene |
+| Archivo dentro de `dominio/` | Qué contiene |
 | --- | --- |
-| `personas.py` | Persona, tipos institucionales, validaciones, construcción de fichas y su contrato. |
-| `cuentas.py` | Cuenta, identidad de acceso, credenciales, roles, permisos y contratos de acceso/administración. |
-| `recursos.py` | Categorías, recursos, bienes, condiciones y estados, conversiones y contratos. |
-| `prestamos.py` | Préstamo, detalles, participantes, entrega, devolución, ampliación y contratos transaccionales. |
-| `reservas.py` | Estados y reglas de reserva, preparación y retiro, y su contrato. |
-| `control.py` | Políticas, horario, límites, incidencias y sanciones. |
-| `reportes.py` | Contrato y resultados tipados de los reportes. |
-| `validaciones.py` | Texto, enteros, fechas y versiones de edición compartidas. |
+| `gestion_personas_usuarios/personas.py` | Persona, tipos institucionales, validaciones, construcción de fichas y su contrato. |
+| `gestion_personas_usuarios/cuentas.py` | Cuenta, identidad de acceso, credenciales, roles, permisos y contratos de acceso/administración. |
+| `gestion_recursos/recursos.py` | Categorías, recursos, bienes, condiciones y estados, conversiones y contratos. |
+| `gestion_prestamos/prestamos.py` | Préstamo, detalles, participantes, entrega, devolución, ampliación y contratos transaccionales. |
+| `gestion_prestamos/reservas.py` | Estados y reglas de reserva, preparación y retiro, y su contrato. |
+| `gestion_control/control.py` | Políticas, horario, límites, incidencias y sanciones. |
+| `gestion_control/reportes.py` | Contrato y resultados tipados de los reportes. |
+| `compartido/validaciones.py` | Texto, enteros, fechas y versiones de edición compartidas. |
+
+Estas carpetas identifican las cuatro áreas del negocio; `compartido` contiene lo que utilizan varias. Los `__init__.py` son inicializadores vacíos de paquetes. La agrupación de archivos se conserva y el movimiento a carpetas actualiza importaciones, sin cambiar reglas.
 
 Las conversiones `crear_recurso` y `crear_bien_material` están junto a sus entidades. `FabricaPersona` conserva la selección del tipo institucional; las construcciones que coordinan varios objetos o convierten entradas de políticas permanecen dentro de su área.
 
 ## Recorridos para explicar el código
 
-**Login:** formulario HTML → `ControladorAcceso` → `ServicioAplicacionAcceso` → `IRepositorioAcceso` (en `dominio/cuentas.py`) → `RepositorioAccesoSQL`. La contraseña se comprueba en el servicio; la cuenta decide si tiene acceso. `seguridad.py` crea y recupera la sesión. El login solo carga cuenta e identidad básica; una ficha académica o laboral se consulta cuando se necesita.
+**Login:** formulario HTML → `ControladorAcceso` → `ServicioAplicacionAcceso` → `IRepositorioAcceso` (en `dominio/gestion_personas_usuarios/cuentas.py`) → `RepositorioAccesoSQL`. La contraseña se comprueba en el servicio; la cuenta decide si tiene acceso. `seguridad.py` crea y recupera la sesión. El login solo carga cuenta e identidad básica; una ficha académica o laboral se consulta cuando se necesita.
 
 **Administrar cuentas:** `ControladorPersona` → `ServicioAplicacionCuenta` → `IRepositorioCuenta` → el mismo adaptador SQL. Crear cuentas, editar contraseñas y activar/desactivar no amplía el contrato del login.
 
@@ -101,9 +103,9 @@ Las conversiones `crear_recurso` y `crear_bien_material` están junto a sus enti
 | Sesión, formularios protegidos y permisos | `presentacion/seguridad.py` |
 | Autenticación | `servicios/servicio_acceso.py` y reglas de cuenta |
 | Alta o edición de cuenta | `servicios/servicio_cuenta.py` |
-| Matrícula, ciclo o datos de persona | `dominio/personas.py` y su servicio |
-| Plazo, límite o horario | `dominio/control.py` y servicio de políticas |
-| Entrega, devolución o ampliación | Servicio del caso y `dominio/prestamos.py` |
+| Matrícula, ciclo o datos de persona | `dominio/gestion_personas_usuarios/personas.py` y su servicio |
+| Plazo, límite o horario | `dominio/gestion_control/control.py` y servicio de políticas |
+| Entrega, devolución o ampliación | Servicio del caso y `dominio/gestion_prestamos/prestamos.py` |
 | Consulta SQL | Su repositorio |
 | Bloqueo por sanción activa | Consulta compartida en `repositorio_sancion_sql.py` |
 

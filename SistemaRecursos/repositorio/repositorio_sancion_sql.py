@@ -1,4 +1,4 @@
-from dominio.control import IRepositorioSancion, Sancion
+from dominio.gestion_control.control import IRepositorioSancion, Sancion
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.sanciones_vencimiento_sql import aplicar_sancion_vencimiento
 

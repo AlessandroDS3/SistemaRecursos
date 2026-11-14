@@ -1,7 +1,7 @@
 from __future__ import annotations
 from contextlib import contextmanager
-from dominio.control import FabricaPoliticaPrestamo, HorarioAtencion, LimiteArticulosPrestamo
-from dominio.prestamos import (
+from dominio.gestion_control.control import FabricaPoliticaPrestamo, HorarioAtencion, LimiteArticulosPrestamo
+from dominio.gestion_prestamos.prestamos import (
     ConflictoAmpliacionError,
     ContextoEntrega,
     DetallePrestamo,

@@ -1,8 +1,8 @@
 from __future__ import annotations
 from datetime import datetime, timedelta, timezone
-from dominio.personas import validar_dni
-from dominio.prestamos import ConflictoPrestamoError
-from dominio.reservas import (
+from dominio.gestion_personas_usuarios.personas import validar_dni
+from dominio.gestion_prestamos.prestamos import ConflictoPrestamoError
+from dominio.gestion_prestamos.reservas import (
     AccionReserva,
     EstadoReserva,
     IRepositorioReserva,
@@ -11,7 +11,7 @@ from dominio.reservas import (
     ResultadoReservas,
     TipoSolicitud,
 )
-from dominio.validaciones import entero as identificador, texto
+from dominio.compartido.validaciones import entero as identificador, texto
 from servicios.servicio_prestamo import ServicioAplicacionPrestamo
 
 

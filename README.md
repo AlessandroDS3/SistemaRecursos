@@ -14,7 +14,7 @@ La aplicación nueva utiliza por defecto el puerto **5001** y el nombre de base 
 
 ## Qué cambió
 
-- El dominio se agrupa en ocho módulos reconocibles: personas, cuentas, recursos, préstamos, reservas, control, reportes y validaciones.
+- El dominio se organiza en cuatro carpetas de negocio: personas y usuarios, recursos, préstamos y control, más una carpeta compartida. Dentro se agrupan ocho módulos reconocibles.
 - Las clases, estados, contratos y resultados de consulta de cada área se encuentran juntos.
 - Los controladores renderizan directamente las plantillas; se retiraron seis clases intermedias `Vista`.
 - Las conversiones simples de recurso y bien están en su módulo de dominio, sin fábricas separadas.
@@ -31,7 +31,7 @@ Comparación con los archivos actuales de `SistemaRecursos_local`, incluida la r
 
 | Medida | Anterior | Copia simplificada |
 | --- | ---: | ---: |
-| Módulos Python de producción, incluidos los inicializadores de paquetes | 104 | 53 |
+| Módulos Python de producción, incluidos los inicializadores de paquetes | 104 | 58 |
 | Líneas Python de producción, incluidos comentarios y blancos | 7135 | 7133 |
 | Pruebas | 79 | 83 |
 | Rutas y métodos HTTP | 68 | 68 |
@@ -39,7 +39,9 @@ Comparación con los archivos actuales de `SistemaRecursos_local`, incluida la r
 
 La reducción principal es de fragmentación y de archivos intermediarios; se conserva prácticamente el mismo volumen de reglas y comportamiento.
 
-La verificación completa terminó con **83 pruebas correctas en 148,533 segundos, sin omisiones**, usando el entorno virtual nuevo y bases MySQL temporales. Se comprobaron también las 12 plantillas HTML, la sintaxis de JavaScript, la igualdad de los dos SQL y las dependencias entre capas. No se ejecutaron modificaciones sobre la base habitual del proyecto anterior.
+La primera reorganización tenía 53 archivos Python; ordenar el dominio en carpetas añadió cinco `__init__.py` vacíos. El total actual de producción es 58. Este ordenamiento físico no es una nueva refactorización de las reglas.
+
+Tras ordenar el dominio en carpetas, la verificación completa terminó con **83 pruebas correctas en 135,451 segundos, sin omisiones**, usando el entorno virtual nuevo y bases MySQL temporales. En la preparación de la copia se comprobaron también las 12 plantillas HTML, la sintaxis de JavaScript, la igualdad de los dos SQL y las dependencias entre capas. No se ejecutaron modificaciones sobre la base habitual del proyecto anterior.
 
 ## Documentación de referencia
 

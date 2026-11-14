@@ -1,9 +1,9 @@
 import csv
 from datetime import date, datetime, time, timedelta, timezone
-from dominio.personas import TipoPersona
-from dominio.prestamos import EstadoPrestamo, TipoPrestamo
-from dominio.reportes import IRepositorioReporte
-from dominio.validaciones import entero as identificador, texto
+from dominio.gestion_personas_usuarios.personas import TipoPersona
+from dominio.gestion_prestamos.prestamos import EstadoPrestamo, TipoPrestamo
+from dominio.gestion_control.reportes import IRepositorioReporte
+from dominio.compartido.validaciones import entero as identificador, texto
 from io import StringIO
 
 

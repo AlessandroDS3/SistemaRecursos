@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dominio.cuentas import (
+from dominio.gestion_personas_usuarios.cuentas import (
     CuentaParaRol,
     IRepositorioCuenta,
     IRepositorioRol,
@@ -8,8 +8,8 @@ from dominio.cuentas import (
     UsuarioSistema,
     validar_permisos_administrador,
 )
-from dominio.personas import validar_dni
-from dominio.validaciones import entero as identificador
+from dominio.gestion_personas_usuarios.personas import validar_dni
+from dominio.compartido.validaciones import entero as identificador
 
 
 class ServicioAplicacionRol:

@@ -4,7 +4,7 @@ import unittest
 import mysql.connector
 from repositorio.repositorio_sancion_sql import RepositorioSancionSQL
 from repositorio.repositorio_reserva_sql import RepositorioReservaSQL
-from dominio.prestamos import SolicitudPrestamo
+from dominio.gestion_prestamos.prestamos import SolicitudPrestamo
 
 
 @unittest.skipUnless(os.environ.get("TEST_MYSQL_PORT"), "Configura MySQL de pruebas.")

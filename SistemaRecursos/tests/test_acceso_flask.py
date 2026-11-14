@@ -11,9 +11,9 @@ from werkzeug.security import generate_password_hash
 
 from app import create_app, obtener_clave_sesion
 from mysql.connector import DatabaseError
-from dominio.cuentas import Credenciales, IRepositorioAcceso
-from dominio.cuentas import Rol
-from dominio.cuentas import EstadoCuenta, UsuarioSistema, IdentidadAcceso
+from dominio.gestion_personas_usuarios.cuentas import Credenciales, IRepositorioAcceso
+from dominio.gestion_personas_usuarios.cuentas import Rol
+from dominio.gestion_personas_usuarios.cuentas import EstadoCuenta, UsuarioSistema, IdentidadAcceso
 from presentacion.seguridad import requiere_permiso, token_csrf
 
 

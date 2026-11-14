@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dominio.validaciones import version_matriz
+from dominio.compartido.validaciones import version_matriz
 from flask import Blueprint, flash, g, render_template, request
 from mysql.connector import IntegrityError
 from presentacion.formularios import error_formulario

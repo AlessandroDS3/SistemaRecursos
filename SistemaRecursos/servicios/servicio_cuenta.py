@@ -1,4 +1,4 @@
-from dominio.cuentas import (
+from dominio.gestion_personas_usuarios.cuentas import (
     Credenciales,
     IRepositorioCuenta,
     IRepositorioRol,
@@ -6,8 +6,8 @@ from dominio.cuentas import (
     NombreRol,
     UsuarioSistema,
 )
-from dominio.personas import IRepositorioPersona, validar_dni
-from dominio.validaciones import entero as identificador
+from dominio.gestion_personas_usuarios.personas import IRepositorioPersona, validar_dni
+from dominio.compartido.validaciones import entero as identificador
 from werkzeug.security import generate_password_hash
 
 

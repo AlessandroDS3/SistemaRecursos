@@ -3,11 +3,11 @@ import os
 import unittest
 
 import mysql.connector
-from dominio.control import HorarioAtencion
-from dominio.control import PoliticaVencimientoReserva
+from dominio.gestion_control.control import HorarioAtencion
+from dominio.gestion_control.control import PoliticaVencimientoReserva
 from repositorio.repositorio_politica_prestamo_sql import RepositorioPoliticaPrestamoSQL
 from repositorio.repositorio_reserva_sql import RepositorioReservaSQL
-from dominio.reservas import Reserva
+from dominio.gestion_prestamos.reservas import Reserva
 
 
 @unittest.skipUnless(os.environ.get("TEST_MYSQL_PORT"), "Configura MySQL de pruebas.")

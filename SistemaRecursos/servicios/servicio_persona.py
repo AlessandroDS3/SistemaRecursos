@@ -1,6 +1,6 @@
 from __future__ import annotations
-from dominio.personas import FabricaPersona, IRepositorioPersona, Persona, ResultadoPersonas, validar_dni
-from dominio.validaciones import entero as identificador
+from dominio.gestion_personas_usuarios.personas import FabricaPersona, IRepositorioPersona, Persona, ResultadoPersonas, validar_dni
+from dominio.compartido.validaciones import entero as identificador
 
 
 class ServicioAplicacionPersona:

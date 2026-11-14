@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dominio.cuentas import (
+from dominio.gestion_personas_usuarios.cuentas import (
     Credenciales,
     CuentaParaRol,
     EstadoCuenta,
@@ -12,7 +12,7 @@ from dominio.cuentas import (
     es_administrador_activo,
     validar_conservacion_administrador,
 )
-from dominio.personas import validar_dni
+from dominio.gestion_personas_usuarios.personas import validar_dni
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_rol_sql import cargar_permisos_roles
 

@@ -1,6 +1,6 @@
-from dominio.control import IRepositorioSancion
-from dominio.personas import validar_dni
-from dominio.validaciones import entero as identificador, texto
+from dominio.gestion_control.control import IRepositorioSancion
+from dominio.gestion_personas_usuarios.personas import validar_dni
+from dominio.compartido.validaciones import entero as identificador, texto
 
 
 class ServicioAplicacionSancion:

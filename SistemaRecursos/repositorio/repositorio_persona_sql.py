@@ -1,6 +1,6 @@
 from __future__ import annotations
-from dominio.cuentas import validar_baja_persona
-from dominio.personas import (
+from dominio.gestion_personas_usuarios.cuentas import validar_baja_persona
+from dominio.gestion_personas_usuarios.personas import (
     ESTADOS_MATRICULA_VIGENTE,
     EstadoPersona,
     FabricaPersona,
@@ -9,7 +9,7 @@ from dominio.personas import (
     ResultadoPersonas,
     ValidacionPersonaError,
 )
-from dominio.validaciones import exigir_version, version_persona
+from dominio.compartido.validaciones import exigir_version, version_persona
 from repositorio.conexion_mysql import MySQLConnection
 from typing import Any
 

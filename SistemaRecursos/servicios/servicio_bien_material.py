@@ -1,6 +1,6 @@
 from __future__ import annotations
-from dominio.personas import validar_dni
-from dominio.recursos import (
+from dominio.gestion_personas_usuarios.personas import validar_dni
+from dominio.gestion_recursos.recursos import (
     BienMaterial,
     ConflictoRecursoError,
     ESTADOS_CAMBIO_MANUAL,
@@ -11,7 +11,7 @@ from dominio.recursos import (
     ResultadoBienes,
     crear_bien_material,
 )
-from dominio.validaciones import entero as identificador, texto
+from dominio.compartido.validaciones import entero as identificador, texto
 
 
 class ServicioAplicacionBienMaterial:

@@ -1,6 +1,6 @@
 from __future__ import annotations
-from dominio.personas import IRepositorioPersona, validar_dni
-from dominio.prestamos import (
+from dominio.gestion_personas_usuarios.personas import IRepositorioPersona, validar_dni
+from dominio.gestion_prestamos.prestamos import (
     Devolucion,
     IOperacionPrestamo,
     IRepositorioPrestamo,
@@ -12,8 +12,8 @@ from dominio.prestamos import (
     lista_dnis,
     lista_ids,
 )
-from dominio.recursos import IRepositorioBienMaterial, IRepositorioRecurso
-from dominio.validaciones import entero as identificador, texto
+from dominio.gestion_recursos.recursos import IRepositorioBienMaterial, IRepositorioRecurso
+from dominio.compartido.validaciones import entero as identificador, texto
 
 
 class ServicioAplicacionPrestamo:

@@ -1,6 +1,6 @@
 from __future__ import annotations
-from dominio.personas import ValidacionPersonaError
-from dominio.validaciones import version_persona
+from dominio.gestion_personas_usuarios.personas import ValidacionPersonaError
+from dominio.compartido.validaciones import version_persona
 from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 from mysql.connector import IntegrityError
 from presentacion.formularios import error_formulario

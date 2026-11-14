@@ -1,4 +1,4 @@
-from dominio.cuentas import (
+from dominio.gestion_personas_usuarios.cuentas import (
     CATALOGO_PERMISOS,
     IRepositorioRol,
     NombreRol,
@@ -7,7 +7,7 @@ from dominio.cuentas import (
     consultar_catalogo_permisos,
     validar_permisos_administrador,
 )
-from dominio.validaciones import exigir_version, version_matriz
+from dominio.compartido.validaciones import exigir_version, version_matriz
 from repositorio.conexion_mysql import MySQLConnection
 
 

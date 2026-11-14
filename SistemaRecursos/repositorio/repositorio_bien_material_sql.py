@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dominio.recursos import (
+from dominio.gestion_recursos.recursos import (
     BienDisponible,
     BienListado,
     BienMaterial,

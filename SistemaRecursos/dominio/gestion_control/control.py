@@ -3,8 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
-from dominio.personas import TipoPersona, validar_dni
-from dominio.validaciones import entero, texto
+from dominio.gestion_personas_usuarios.personas import TipoPersona, validar_dni
+from dominio.compartido.validaciones import entero, texto
 from enum import Enum
 
 

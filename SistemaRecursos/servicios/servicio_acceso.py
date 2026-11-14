@@ -1,5 +1,5 @@
-from dominio.cuentas import IRepositorioAcceso
-from dominio.validaciones import entero as identificador
+from dominio.gestion_personas_usuarios.cuentas import IRepositorioAcceso
+from dominio.compartido.validaciones import entero as identificador
 from hashlib import sha256
 from werkzeug.security import check_password_hash, generate_password_hash
 

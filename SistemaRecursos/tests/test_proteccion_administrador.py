@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from dominio.cuentas import validar_baja_persona, validar_conservacion_administrador
+from dominio.gestion_personas_usuarios.cuentas import validar_baja_persona, validar_conservacion_administrador
 from repositorio.repositorio_acceso_sql import RepositorioAccesoSQL
 from repositorio.repositorio_persona_sql import RepositorioPersonaSQL
 

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dominio.control import (
+from dominio.gestion_control.control import (
     FabricaPoliticaPrestamo,
     HorarioAtencion,
     IRepositorioPoliticaPrestamo,
@@ -7,9 +7,9 @@ from dominio.control import (
     PoliticaPrestamo,
     PoliticaVencimientoReserva,
 )
-from dominio.personas import TipoPersona
-from dominio.recursos import IRepositorioRecurso
-from dominio.validaciones import entero, entero as identificador
+from dominio.gestion_personas_usuarios.personas import TipoPersona
+from dominio.gestion_recursos.recursos import IRepositorioRecurso
+from dominio.compartido.validaciones import entero, entero as identificador
 
 
 class ServicioAplicacionPoliticaPrestamo:
