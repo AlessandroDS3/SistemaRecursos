@@ -1,0 +1,96 @@
+{% from 'formularios.html' import csrf, campo %}
+
+{% macro formulario_recurso(datos, categorias, accion, primer_bien=false, volver='') %}
+  <form method="post" action="{{ accion }}" class="formulario">
+    {{ csrf() }}
+    {% if volver %}
+      <input type="hidden" name="volver" value="{{ volver }}">
+    {% endif %}
+    <div class="rejilla cuatro-columnas">
+      {{ campo('nombre','Nombre',datos.get('nombre',''),requerido=true,maximo=120) }}
+      <label>
+        Categoría<select name="id_categoria" required>
+        <option value="">Seleccione una categoría</option>
+        {% for c in categorias %}
+          <option value="{{ c.id_categoria }}"
+                  {% if c.id_categoria==datos.get('id_categoria') %}selected{% endif %}>{{ c.nombre }}
+          </option>
+        {% endfor %}
+        </select>
+      </label>
+      {{ campo('marca','Marca (opcional)',datos.get('marca',''),maximo=80) }}
+      {{ campo('modelo','Modelo (opcional)',datos.get('modelo',''),maximo=80) }}
+    </div>
+    <label>
+      Descripción general (opcional)<textarea name="descripcion" rows="3" maxlength="255">{{ datos.get('descripcion','') or '' }}
+</textarea>
+    </label>
+    {% if primer_bien %}
+      <fieldset>
+        <legend>Primer bien físico (opcional)</legend>
+        <p class="suave">Deja el código vacío si agregarás los bienes después.</p>
+        <div class="rejilla cuatro-columnas">
+          {{ campo('codigo_inventario','Código de inventario',maximo=40) }}
+          {{ campo('numero_serie','Número de serie (opcional)',maximo=60) }}
+          {{ campo('fecha_adquisicion','Fecha de adquisición (opcional)',tipo='date') }}
+          {{ campo('ubicacion','Ubicación (opcional)',maximo=120) }}
+        </div>
+        {{ campo('descripcion_bien','Descripción del bien (opcional)') }}
+        <p class="suave">Estado inicial: disponible.</p>
+      </fieldset>
+    {% endif %}
+    <button type="submit">Guardar recurso</button>
+  </form>
+{% endmacro %}
+
+{% macro categorias_recursos(categorias, volver='') %}
+  <section class="panel" id="categorias">
+    <div class="encabezado-seccion">
+      <h2>Categorías de recursos</h2>
+      <small>{{ categorias|length }} registradas</small>
+    </div>
+    <div class="dos-columnas">
+      <div class="lista-categorias">
+        {% for c in categorias %}
+          <article class="fila-categoria">
+            <div>
+              <strong>{{ c.nombre }}</strong>
+              <small>{{ c.descripcion or 'Sin descripción' }}</small>
+            </div>
+            <details>
+              <summary>Editar categoría</summary>
+              <form method="post"
+                    action="{{ url_for('recursos.gestionar_categorias') }}"
+                    class="formulario">
+                {{ csrf() }}
+                <input type="hidden" name="volver" value="{{ volver }}">
+                <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
+                {{ campo('nombre','Nombre',c.nombre,requerido=true,maximo=80) }}
+                {{ campo('descripcion','Descripción',c.descripcion or '') }}
+                <button>Guardar cambios</button>
+              </form>
+            </details>
+            <form method="post"
+                  action="{{ url_for('recursos.eliminar_categoria',identificador=c.id_categoria) }}">
+              {{ csrf() }}
+              <input type="hidden" name="volver" value="{{ volver }}">
+              <button class="secundario">Eliminar categoría</button>
+            </form>
+          </article>
+        {% else %}
+          <p>Aún no hay categorías.</p>
+        {% endfor %}
+      </div>
+      <form method="post"
+            action="{{ url_for('recursos.gestionar_categorias') }}"
+            class="formulario">
+        <h3>Registrar categoría</h3>
+        {{ csrf() }}
+        <input type="hidden" name="volver" value="{{ volver }}">
+        {{ campo('nombre','Nombre de categoría',requerido=true,maximo=80) }}
+        {{ campo('descripcion', 'Descripción (opcional)') }}
+        <button>Guardar categoría</button>
+      </form>
+    </div>
+  </section>
+{% endmacro %}

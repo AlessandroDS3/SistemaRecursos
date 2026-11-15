@@ -1,10 +1,11 @@
 {% macro csrf() %}
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 {% endmacro %}
-{% macro campo(nombre, etiqueta, valor='', tipo='text', requerido=false, maximo=255) %}
+{% macro campo(nombre, etiqueta, valor='', tipo='text', requerido=false, maximo=255, formulario='') %}
   <label>
     {{ etiqueta }}
     <input name="{{ nombre }}"
+           {% if formulario %}form="{{ formulario }}"{% endif %}
            type="{{ tipo }}"
            value="{{ valor if valor is not none else '' }}"
            {% if requerido %}required{% endif %}
@@ -12,10 +13,12 @@
            {% if tipo == 'number' %}min="1" step="1"{% endif %}>
   </label>
 {% endmacro %}
-{% macro opciones(nombre, etiqueta, valores, actual='') %}
+{% macro opciones(nombre, etiqueta, valores, actual='', formulario='') %}
   <label>
     {{ etiqueta }}
-    <select name="{{ nombre }}" required>
+    <select name="{{ nombre }}"
+            {% if formulario %}form="{{ formulario }}"{% endif %}
+            required>
       {% for valor in valores %}
         <option value="{{ valor }}" {% if actual == valor %}selected{% endif %}>
           {{ valor|replace('_', ' ')|title }}

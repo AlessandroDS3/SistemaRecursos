@@ -1,5 +1,6 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
+from dominio.compartido.validacion import version
 from presentacion.seguridad import requiere_permiso
 
 
@@ -39,10 +40,16 @@ class ControladorPoliticaPrestamo:
 
     @requiere_permiso('POLITICAS_GESTIONAR')
     def consultar_politicas_prestamo(self):
+        politicas = self.servicio.consultar_politicas_prestamo()
+        matriz = {(p['id_categoria'], p['tipo_persona']): dict(p, version=version({k: v for k, v in p.items() if k != 'categoria'}))
+            for p in politicas
+        }
         return render_template(
             'vista_politica_prestamo.html',
             modo='lista',
-            politicas=self.servicio.consultar_politicas_prestamo(),
+            politicas=politicas,
+            matriz=matriz,
+            categorias=self.recursos.consultar_categorias(),
             configuracion=self.servicio.consultar_configuracion_general(),
             limites=self.servicio.consultar_limites_articulos(),
             tipos=TIPOS_PERSONA,

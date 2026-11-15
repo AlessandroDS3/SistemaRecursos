@@ -1,59 +1,70 @@
 {% extends "base.html" %}
-{% from 'formularios.html' import csrf,campo %}
+{% from 'formularios.html' import csrf, campo %}
+{% from 'fragmentos_recursos.html' import formulario_recurso, categorias_recursos %}
 {% block contenido %}
   {% if modo=="lista" %}
     <div class="cabecera">
       <h1>Catálogo de recursos</h1>
+      {% if g.usuario.permite("RECURSOS_GESTIONAR") %}
+        <a class="boton"
+           href="{{ url_for('recursos.consultar_administracion_recursos') }}">Administrar recursos</a>
+      {% endif %}
     </div>
-    <form class="filtros">
-      {{ campo('q','Nombre, marca o modelo',request.args.get('q',''),maximo=120) }}
-      <label>
-        Categoría
-        <select name="id_categoria">
-          <option value="">Todas</option>
+    <form class="filtros filtros-bloque">
+      <div class="rejilla filtros-tres">
+        {{ campo('q','Buscar recurso',request.args.get('q',''),maximo=120) }}
+        <label>
+          Categoría<select name="id_categoria">
+          <option value="">Todas las categorías</option>
           {% for c in categorias %}
             <option value="{{ c.id_categoria }}"
-                    {% if request.args.get('id_categoria')==c.id_categoria|string %}selected{% endif %}>
-              {{ c.nombre }}
+                    {% if request.args.get('id_categoria')==c.id_categoria|string %}selected{% endif %}>{{ c.nombre }}
             </option>
           {% endfor %}
-        </select>
-      </label>
-      <label class="check">
-        <input type="checkbox"
-               name="solo_disponibles"
-               value="1"
-               {% if request.args.get('solo_disponibles')=='1' %}checked{% endif %}>
-        Solo disponibles
-      </label>
-      <button>Filtrar</button>
+          </select>
+        </label>
+        <label>
+          Disponibilidad<select name="solo_disponibles">
+          <option value="">Todos</option>
+          <option value="1"
+                  {% if request.args.get('solo_disponibles')=='1' %}selected{% endif %}>Con bienes disponibles</option>
+          </select>
+        </label>
+      </div>
+      <div class="acciones">
+        <button>Buscar</button>
+        <a href="{{ url_for('recursos.consultar_recursos') }}">Limpiar</a>
+      </div>
     </form>
+    <div class="encabezado-seccion">
+      <h2>Recursos</h2>
+      <small>Mostrando {{ recursos|length }}</small>
+    </div>
     <div class="rejilla tarjetas">
       {% for r in recursos %}
-        <article class="panel">
+        <article class="tarjeta-recurso">
           <div class="ilustracion-recurso" aria-hidden="true">
-            <img src="{{ url_for('static', filename='imagenes/recursos/recurso.svg') }}"
+            <img src="{{ url_for('static',filename='imagenes/recursos/recurso.svg') }}"
                  alt=""
                  width="64"
                  height="51">
           </div>
-          <p class="suave">{{ r.categoria }}</p>
-          <h2>
-            <a href="{{ url_for('recursos.consultar_recurso',identificador=r.id_recurso) }}">{{ r.nombre }}</a>
-          </h2>
-          <p>
-            {{ r.marca or '' }}
-            {{ r.modelo or '' }}
-          </p>
-          <p>{{ r.descripcion or '' }}</p>
-          <strong>
-            {{ r.disponibles }}
-            disponibles de
-            {{ r.total }}
-          </strong>
+          <div class="cuerpo-tarjeta">
+            <p class="etiqueta">{{ r.categoria }}</p>
+            <h3>{{ r.nombre }}</h3>
+            <p>{{ r.marca or '' }} {{ r.modelo or '' }}</p>
+          </div>
+          <footer class="pie-tarjeta">
+            <div>
+              <strong>{{ r.disponibles }} disponibles</strong>
+              <small>{{ r.total }} bienes en total</small>
+            </div>
+            <a class="boton secundario"
+               href="{{ url_for('recursos.consultar_recurso',identificador=r.id_recurso) }}">Ver detalle</a>
+          </footer>
         </article>
       {% else %}
-        <p>No hay recursos.</p>
+        <p>No hay recursos para estos filtros.</p>
       {% endfor %}
     </div>
   {% elif modo=="detalle" %}
@@ -107,68 +118,21 @@
         </tbody>
       </table>
     </div>
+
   {% elif modo=="categorias" %}
-    <h1>Categorías</h1>
-    <form method="post" class="filtros">
-      {{ csrf() }}
-      {{ campo('nombre','Nueva categoría',requerido=true,maximo=80) }}
-      {{ campo('descripcion', 'Descripción') }}
-      <button>Registrar</button>
-    </form>
-    {% for c in categorias %}
-      <section class="panel">
-        <form method="post" class="filtros">
-          {{ csrf() }}
-          <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
-          {{ campo('nombre','Nombre',c.nombre,requerido=true,maximo=80) }}
-          {{ campo('descripcion','Descripción',c.descripcion) }}
-          <button>Guardar</button>
-        </form>
-        <form method="post"
-              action="{{ url_for('recursos.eliminar_categoria',identificador=c.id_categoria) }}">
-          {{ csrf() }}
-          <button class="secundario">Eliminar categoría</button>
-        </form>
-      </section>
-    {% endfor %}
+    <div class="cabecera">
+      <h1>Categorías de recursos</h1>
+      <a class="boton secundario"
+         href="{{ url_for('recursos.consultar_administracion_recursos') }}">Administrar recursos</a>
+    </div>
+    {{ categorias_recursos(categorias) }}
   {% else %}
-    <h1>
-      {{ 'Editar' if recurso else 'Registrar' }}
-      recurso
-    </h1>
-    <form method="post" class="formulario panel">
-      {{ csrf() }}
-      <div class="rejilla">
-        {{ campo('nombre','Nombre',recurso.nombre,requerido=true,maximo=120) }}
-        <label>
-          Categoría
-          <select name="id_categoria" required>
-            {% for c in categorias %}
-              <option value="{{ c.id_categoria }}"
-                      {% if c.id_categoria==recurso.id_categoria %}selected{% endif %}>
-                {{ c.nombre }}
-              </option>
-            {% endfor %}
-          </select>
-        </label>
-        {{ campo('marca','Marca',recurso.marca,maximo=80) }}
-        {{ campo('modelo','Modelo',recurso.modelo,maximo=80) }}
-        {{ campo('descripcion','Descripción',recurso.descripcion) }}
-      </div>
-      {% if not recurso %}
-        <fieldset>
-          <legend>Primer bien (opcional)</legend>
-          <p>Completa el código de inventario si deseas registrar un ejemplar junto al recurso.</p>
-          <div class="rejilla">
-            {{ campo('codigo_inventario','Código de inventario',maximo=40) }}
-            {{ campo('numero_serie','Número de serie',maximo=60) }}
-            {{ campo('fecha_adquisicion','Fecha de adquisición',tipo='date') }}
-            {{ campo('ubicacion','Ubicación',maximo=120) }}
-            {{ campo('descripcion_bien', 'Descripción del bien') }}
-          </div>
-        </fieldset>
-      {% endif %}
-      <button>Guardar recurso</button>
-    </form>
+    <div class="cabecera">
+      <h1>{{ 'Editar' if recurso else 'Registrar' }} recurso</h1>
+      <a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Volver a administración</a>
+    </div>
+    <section class="panel">
+      {{ formulario_recurso(recurso,categorias,request.path,primer_bien=not recurso) }}
+    </section>
   {% endif %}
 {% endblock %}

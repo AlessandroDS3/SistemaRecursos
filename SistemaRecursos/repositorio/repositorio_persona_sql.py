@@ -23,22 +23,45 @@ class RepositorioPersonaSQL(RepositorioSQL):
         condiciones, parametros = [], []
         if filtros.get('q'):
             condiciones.append(
-                "(p.dni LIKE %s OR p.nombres LIKE %s OR p.apellidos LIKE %s OR e.cui LIKE %s)"
+                "(listado.dni LIKE %s OR listado.nombres LIKE %s OR listado.apellidos LIKE %s OR listado.cui LIKE %s)"
             )
             parametros.extend([f"%{filtros['q']}%"] * 4)
         if filtros.get('estado'):
-            condiciones.append('p.estado=%s')
+            condiciones.append('listado.estado=%s')
             parametros.append(filtros['estado'])
-        sql = CONSULTA + (' WHERE ' + ' AND '.join(condiciones) if condiciones else '')
-        total = self.consultar_sql(
-            'SELECT COUNT(*) AS total FROM (' + sql + ') personas', parametros, una=True
-        )['total']
+        if filtros.get('tipo'):
+            condiciones.append('listado.tipo=%s')
+            parametros.append(filtros['tipo'])
+        if filtros.get('cuenta'):
+            condiciones.append(
+                'u.id_usuario IS ' + ('NOT NULL' if filtros['cuenta'] == 'CON_CUENTA' else 'NULL')
+            )
+        sql = (
+            'SELECT listado.*,u.id_usuario,u.estado_cuenta FROM ('
+            + CONSULTA
+            + ') listado LEFT JOIN usuario_sistema u ON u.dni_persona=listado.dni'
+            + (' WHERE ' + ' AND '.join(condiciones) if condiciones else '')
+        )
+        resumen = self.consultar_sql(
+            "SELECT COUNT(*) AS total,COALESCE(SUM(estado='ACTIVA'),0) AS activas,"
+            "COALESCE(SUM(estado='INACTIVA'),0) AS inactivas FROM (" + sql + ') personas',
+            parametros,
+            una=True,
+        )
+        total = resumen['total']
         pagina = min(filtros.get('pagina', 1), max(1, (total + 24) // 25))
         filas = self.consultar_sql(
-            sql + ' ORDER BY p.apellidos,p.nombres,p.dni LIMIT 25 OFFSET %s',
+            sql + ' ORDER BY listado.apellidos,listado.nombres,listado.dni LIMIT 25 OFFSET %s',
             (*parametros, (pagina - 1) * 25),
         )
-        return dict(personas=filas, total=total, pagina=pagina, paginas=max(1, (total + 24) // 25))
+        return dict(
+            personas=filas,
+            total=total,
+            pagina=pagina,
+            paginas=max(1, (total + 24) // 25),
+            activas=int(resumen['activas']),
+            inactivas=int(resumen['inactivas']),
+        )
 
     def guardar_persona(self, persona, documento_anterior=None):
         datos = persona.datos()

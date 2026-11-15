@@ -1,4 +1,5 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from dominio.gestion_recursos.bien_material import ESTADOS_BIEN
 from presentacion.seguridad import requiere_permiso
 
 
@@ -8,6 +9,12 @@ class ControladorRecurso:
         self.blueprint = Blueprint('recursos', __name__, url_prefix='/recursos')
         for ruta, nombre, funcion, metodos in (
             ('', 'consultar_recursos', self.consultar_recursos, ['GET']),
+            (
+                '/administracion',
+                'consultar_administracion_recursos',
+                self.consultar_administracion_recursos,
+                ['GET'],
+            ),
             (
                 '/nuevo',
                 'gestionar_formulario_recurso',
@@ -51,6 +58,36 @@ class ControladorRecurso:
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
+    def consultar_administracion_recursos(self):
+        recursos = self.servicio.consultar_recursos(
+            {'id_categoria': request.args.get('id_categoria')}
+        )
+        bienes = self.bienes.consultar_bienes_materiales(request.args)
+        por_recurso = {}
+        for bien in bienes:
+            por_recurso.setdefault(bien['id_recurso'], []).append(bien)
+        coincidentes = {r['id_recurso'] for r in self.servicio.consultar_recursos(request.args)}
+        grupos = [
+            dict(recurso=r, bienes=por_recurso.get(r['id_recurso'], []))
+            for r in recursos
+            if (not request.args.get('q') and not request.args.get('estado'))
+            or r['id_recurso'] in por_recurso
+            or (not request.args.get('estado') and r['id_recurso'] in coincidentes)
+        ]
+        visibles = [b for grupo in grupos for b in grupo['bienes']]
+        return render_template(
+            'vista_administracion_recursos.html',
+            grupos=grupos,
+            categorias=self.servicio.consultar_categorias(),
+            estados=ESTADOS_BIEN,
+            resumen={
+                'recursos': len(grupos),
+                'bienes': len(visibles),
+                'disponibles': sum(b['estado'] == 'DISPONIBLE' for b in visibles),
+            },
+        )
+
+    @requiere_permiso('RECURSOS_GESTIONAR')
     def gestionar_formulario_recurso(self, identificador=None):
         recurso = self.servicio.consultar_recurso(identificador) if identificador else {}
         if request.method == 'POST':
@@ -58,6 +95,8 @@ class ControladorRecurso:
                 request.form.to_dict(), g.usuario.id_usuario, identificador
             )
             flash('Recurso guardado.')
+            if request.form.get('volver') == 'administracion':
+                return redirect(url_for('recursos.consultar_administracion_recursos'))
             return redirect(url_for('recursos.consultar_recurso', identificador=nuevo))
         return render_template(
             'vista_recurso.html',
@@ -81,6 +120,10 @@ class ControladorRecurso:
                 request.form.get('id_categoria') or None,
             )
             flash('Categoría guardada.')
+            if request.form.get('volver') == 'administracion':
+                return redirect(
+                    url_for('recursos.consultar_administracion_recursos', _anchor='categorias')
+                )
             return redirect(url_for('recursos.gestionar_categorias'))
         return render_template(
             'vista_recurso.html', modo='categorias', categorias=self.servicio.consultar_categorias()
@@ -89,4 +132,8 @@ class ControladorRecurso:
     @requiere_permiso('RECURSOS_GESTIONAR')
     def eliminar_categoria(self, identificador):
         self.servicio.eliminar_categoria(identificador, g.usuario.id_usuario)
+        if request.form.get('volver') == 'administracion':
+            return redirect(
+                url_for('recursos.consultar_administracion_recursos', _anchor='categorias')
+            )
         return redirect(url_for('recursos.gestionar_categorias'))

@@ -1,109 +1,123 @@
 {% extends "base.html" %}
 {% from 'formularios.html' import campo,opciones %}
+{% from 'componentes.html' import indicador, estado %}
 {% block contenido %}
-  <h1>Reportes</h1>
-  <form class="filtros">
-    {{ opciones('tipo','Reporte',('prestamos','devoluciones'),filtro.tipo) }}
-    {{ campo('desde','Desde',filtro.desde,tipo='date') }}
-    {{ campo('hasta','Hasta',filtro.hasta,tipo='date') }}
-    {{ campo('q','DNI, persona, bien o recurso',filtro.q,maximo=120) }}
-    <label>
-      Estado
-      <select name="estado">
+  <div class="cabecera">
+    <div>
+      <h1>Reportes</h1>
+      <p class="suave">Préstamos y devoluciones</p>
+    </div>
+    <a class="boton"
+       href="{{ url_for('reportes.exportar_reportes_csv',tipo=filtro.tipo,desde=filtro.desde or '',hasta=filtro.hasta or '',q=filtro.q,estado=filtro.estado,modalidad=filtro.modalidad,tipo_persona=filtro.tipo_persona) }}">Descargar CSV</a>
+  </div>
+  <form class="filtros filtros-bloque">
+    <div class="rejilla filtros-reportes">
+      {{ opciones('tipo','Reporte',('prestamos','devoluciones'),filtro.tipo) }}
+      {{ campo('desde','Desde',filtro.desde,tipo='date') }}
+      {{ campo('hasta','Hasta',filtro.hasta,tipo='date') }}
+      <label>
+        Estado del préstamo<select name="estado">
         <option value="">Todos</option>
         {% for e in ('ACTIVO','VENCIDO','DEVUELTO','PARCIALMENTE_DEVUELTO') %}
-          <option {% if filtro.estado==e %}selected{% endif %}>{{ e }}</option>
+          <option value="{{ e }}"
+                  {% if filtro.estado==e %}selected{% endif %}>{{ e|replace('_', ' ')|capitalize }}</option>
         {% endfor %}
-      </select>
-    </label>
-    <label>
-      Modalidad
-      <select name="modalidad">
-        <option value="">Todas</option>
-        {% for m in ("INDIVIDUAL","GRUPAL") %}
-          <option {% if m==filtro.modalidad %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      Tipo de persona
-      <select name="tipo_persona">
+        </select>
+      </label>
+      <label>
+        Tipo de solicitante<select name="tipo_persona">
         <option value="">Todos</option>
-        {% for t in ("ESTUDIANTE","DOCENTE","ADMINISTRATIVO") %}
-          <option {% if t==filtro.tipo_persona %}selected{% endif %}>{{ t }}</option>
+        {% for t in ('ESTUDIANTE','DOCENTE','ADMINISTRATIVO') %}
+          <option value="{{ t }}" {% if filtro.tipo_persona==t %}selected{% endif %}>{{ t|capitalize }}
+          </option>
         {% endfor %}
-      </select>
-    </label>
-    <button>Consultar</button>
+        </select>
+      </label>
+      <label>
+        Modalidad<select name="modalidad">
+        <option value="">Todas</option>
+        {% for m in ('INDIVIDUAL','GRUPAL') %}
+          <option value="{{ m }}" {% if filtro.modalidad==m %}selected{% endif %}>{{ m|capitalize }}</option>
+        {% endfor %}
+        </select>
+      </label>
+      {{ campo('q','Buscar persona o bien',filtro.q,maximo=120) }}
+    </div>
+    <p class="suave">Las fechas corresponden a la {{ 'devolución' if filtro.tipo=='devoluciones' else 'entrega' }}, en horario de Lima, e incluyen ambos días.</p>
+    <div class="acciones">
+      <button>Consultar reporte</button>
+      <a href="{{ url_for('reportes.consultar_reportes') }}">Limpiar filtros</a>
+    </div>
   </form>
-  <p>
-    {{ resumen.devueltos }}
-    devueltos ·
-    {{ resumen.pendientes }}
-    pendientes ·
-    {{ resumen.vencidos }}
-    vencidos
-  </p>
-  <p>
-    {{ resumen.prestamos }}
-    préstamos ·
-    {{ resumen.detalles }}
-    bienes · Página
-    {{ filtro.pagina }}
-    de
-    {{ paginas }}
-  </p>
-  <a class="boton"
-     href="{{ url_for('reportes.exportar_reportes_csv',tipo=filtro.tipo,desde=filtro.desde or '',hasta=filtro.hasta or '',q=filtro.q,estado=filtro.estado,modalidad=filtro.modalidad,tipo_persona=filtro.tipo_persona) }}">
-    Descargar todos los resultados CSV
-  </a>
-  <div class="tabla">
-    <table>
-      <thead>
-        <tr>
-          <th>Préstamo</th>
-          <th>Persona</th>
-          <th>Bien</th>
-          <th>Entrega</th>
-          <th>Vencimiento</th>
-          <th>Devolución</th>
-          <th>Estado</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for f in filas %}
+  <section class="resumen-estadisticas cinco-indicadores"
+           aria-label="Resumen del reporte">
+    {{ indicador('Préstamos',resumen.prestamos) }}
+    {{ indicador('Bienes',resumen.detalles) }}
+    {{ indicador('Devueltos',resumen.devueltos) }}
+    {{ indicador('Pendientes',resumen.pendientes) }}
+    {{ indicador('Bienes vencidos pendientes',resumen.vencidos,clase='alerta' if resumen.vencidos else '') }}
+  </section>
+  <p class="suave">Mostrando {{ filas|length }} de {{ resumen.detalles }} bienes. Los vencidos forman parte de los pendientes. La descarga incluye todas las páginas con estos filtros.</p>
+  <section class="panel panel-tabla">
+    <div class="tabla">
+      <table class="tabla-reporte">
+        <thead>
           <tr>
-            <td>
-              #
-              {{ f.id_prestamo }}
-            </td>
-            <td>
-              {{ f.solicitante }}
-              ·
-              {{ f.dni_persona }}
-            </td>
-            <td>
-              {{ f.codigo_inventario }}
-              ·
-              {{ f.recurso }}
-            </td>
-            <td>{{ f.fecha_entrega|fecha }}</td>
-            <td>{{ f.fecha_limite_devolucion|fecha }}</td>
-            <td>{{ f.fecha_devolucion|fecha }}</td>
-            <td>{{ f.estado }}</td>
+            <th>Préstamo</th>
+            <th>Solicitante y grupo</th>
+            <th>Bien</th>
+            <th>Entrega</th>
+            <th>Fecha límite</th>
+            <th>Devolución</th>
+            <th>Situación del bien</th>
           </tr>
-        {% else %}
-          <tr>
-            <td colspan="7">No hay resultados para estos filtros.</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <div class="acciones">
+        </thead>
+        <tbody>
+          {% for f in filas %}
+            <tr>
+              <td>
+                <a href="{{ url_for('prestamos.consultar_prestamo',identificador=f.id_prestamo) }}">#{{ f.id_prestamo }}
+                </a>
+                <small>{{ f.tipo_prestamo|capitalize }}</small>
+                <small>{{ f.estado|replace('_', ' ')|capitalize }}</small>
+              </td>
+              <td>
+                {{ f.solicitante }}
+                <small>DNI: {{ f.dni_persona }} · {{ f.tipo_persona|capitalize }}</small>
+                {% if f.tipo_prestamo=="GRUPAL" and f.integrantes %}
+                  <details>
+                    <summary>Integrantes</summary>
+                    <ul>
+                      {% for integrante in f.integrantes.split('; ') %}
+                        <li>{{ integrante }}</li>
+                      {% endfor %}
+                    </ul>
+                  </details>
+                {% endif %}
+              </td>
+              <td>
+                {{ f.codigo_inventario }}
+                <small>{{ f.recurso }}</small>
+              </td>
+              <td>{{ f.fecha_entrega|fecha }}</td>
+              <td>{{ f.fecha_limite_devolucion|fecha }}</td>
+              <td>{{ f.fecha_devolucion|fecha }}</td>
+              <td>{{ estado(f.situacion) }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="7">No hay resultados para estos filtros.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <div class="acciones paginacion">
+    <small>Página {{ filtro.pagina }} de {{ paginas }}</small>
     {% for pagina, etiqueta in ((filtro.pagina-1,'Anterior'),(filtro.pagina+1,'Siguiente')) if pagina>=1 and pagina<=paginas %}
-      <a href="{{ url_for('reportes.consultar_reportes',tipo=filtro.tipo,desde=filtro.desde or '',hasta=filtro.hasta or '',q=filtro.q,estado=filtro.estado,modalidad=filtro.modalidad,tipo_persona=filtro.tipo_persona,pagina=pagina) }}">
-        {{ etiqueta }}
+      <a class="boton secundario"
+         href="{{ url_for('reportes.consultar_reportes',tipo=filtro.tipo,desde=filtro.desde or '',hasta=filtro.hasta or '',q=filtro.q,estado=filtro.estado,modalidad=filtro.modalidad,tipo_persona=filtro.tipo_persona,pagina=pagina) }}">{{ etiqueta }}
       </a>
     {% endfor %}
   </div>

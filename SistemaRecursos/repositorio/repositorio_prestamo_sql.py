@@ -56,7 +56,11 @@ class RepositorioPrestamoSQL(RepositorioSQL):
 
     def consultar_prestamos(self, filtros, documento=None):
         sql = f'''SELECT p.*,CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
-            {ESTADO_SQL} AS estado_actual FROM prestamo p JOIN persona per ON per.dni=p.dni_persona WHERE 1=1'''
+            {ESTADO_SQL} AS estado_actual,
+            (SELECT COUNT(*) FROM detalle_prestamo d WHERE d.id_prestamo=p.id_prestamo) AS total_bienes,
+            (SELECT COUNT(*) FROM detalle_prestamo d WHERE d.id_prestamo=p.id_prestamo AND d.fecha_devolucion IS NOT NULL) AS devueltos,
+            (SELECT MIN(d.fecha_limite_devolucion) FROM detalle_prestamo d WHERE d.id_prestamo=p.id_prestamo AND d.fecha_devolucion IS NULL) AS fecha_limite
+            FROM prestamo p JOIN persona per ON per.dni=p.dni_persona WHERE 1=1'''
         parametros = []
         if documento:
             sql += ''' AND (p.dni_persona=%s OR EXISTS(SELECT 1 FROM participante_prestamo pp

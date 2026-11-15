@@ -2,88 +2,104 @@
 {% from 'formularios.html' import csrf,campo %}
 {% block contenido %}
   <h1>Roles y permisos</h1>
-  <form method="post" action="{{ url_for('roles.guardar_matriz_permisos') }}">
-    {{ csrf() }}
-    <input type="hidden" name="version" value="{{ version }}">
-    <div class="tabla">
-      <table>
-        <thead>
-          <tr>
-            <th>Permiso</th>
-            {% for rol in roles %}
-              <th>{{ rol|replace('_', ' ')|title }}</th>
-            {% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for codigo, descripcion in permisos.items() %}
+  <section class="panel">
+    <h2>Asignar rol a una cuenta</h2>
+    <p class="suave">Busca por DNI, apellidos o nombre de usuario y elige el rol de la cuenta.</p>
+    <form class="filtros">
+      {{ campo('q','DNI, apellidos o usuario',request.args.get('q',''),maximo=120) }}
+      <button>Buscar</button>
+      <a href="{{ url_for('roles.consultar_roles') }}">Limpiar</a>
+    </form>
+    {% if cuentas %}
+      <div class="tabla">
+        <table>
+          <thead>
             <tr>
-              <th scope="row">{{ descripcion }}</th>
-              {% for rol in roles %}
+              <th>Persona</th>
+              <th>Usuario</th>
+              <th>Estado</th>
+              <th>Rol</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in cuentas %}
+              <tr>
                 <td>
-                  <input type="checkbox"
-                         aria-label="{{ descripcion }} para {{ rol }}"
-                         name="permisos_{{ rol }}"
-                         value="{{ codigo }}"
-                         {% if codigo in matriz[rol] %}checked{% endif %}
-                         {% if not g.usuario.permite('ROLES_GESTIONAR') %}disabled{% endif %}>
+                  {{ c.persona }}
+                  ·
+                  {{ c.dni_persona }}
                 </td>
+                <td>{{ c.nombre_usuario }}</td>
+                <td>{{ c.estado_cuenta }}</td>
+                <td>
+                  {% if g.usuario.permite("ROLES_GESTIONAR") %}
+                    <form method="post"
+                          class="acciones"
+                          action="{{ url_for('roles.asignar_rol_cuenta') }}">
+                      {{ csrf() }}
+                      <input type="hidden" name="dni" value="{{ c.dni_persona }}">
+                      <select name="rol" aria-label="Rol de {{ c.nombre_usuario }}">
+                        {% for rol in roles %}
+                          <option {% if c.rol==rol %}selected{% endif %}>{{ rol }}</option>
+                        {% endfor %}
+                      </select>
+                      <button>Asignar</button>
+                    </form>
+                  {% else %}
+                    {{ c.rol }}
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    {% elif request.args.get("q", "")|length >= 2 %}
+      <p class="suave">No se encontraron cuentas.</p>
+    {% else %}
+      <p class="suave">Escribe al menos dos caracteres para buscar una cuenta.</p>
+    {% endif %}
+  </section>
+  <section class="panel permisos-panel">
+    <h2>Permisos por rol</h2>
+    <p class="suave">Marca los permisos del rol. Se aplican a todas sus cuentas.</p>
+    <form method="post" action="{{ url_for('roles.guardar_matriz_permisos') }}">
+      {{ csrf() }}
+      <input type="hidden" name="version" value="{{ version }}">
+      <div class="tabla">
+        <table>
+          <thead>
+            <tr>
+              <th>Permiso</th>
+              {% for rol in roles %}
+                <th>{{ rol|replace('_', ' ')|title }}</th>
               {% endfor %}
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% if g.usuario.permite("ROLES_GESTIONAR") %}
-      <button>Guardar permisos</button>
-    {% endif %}
-  </form>
-  <h2>Asignar roles a cuentas</h2>
-  <form class="filtros">
-    {{ campo('q','DNI, apellidos o usuario',request.args.get('q',''),maximo=120) }}
-    <button>Buscar</button>
-  </form>
-  <div class="tabla">
-    <table>
-      <thead>
-        <tr>
-          <th>Persona</th>
-          <th>Usuario</th>
-          <th>Estado</th>
-          <th>Rol</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in cuentas %}
-          <tr>
-            <td>
-              {{ c.persona }}
-              ·
-              {{ c.dni_persona }}
-            </td>
-            <td>{{ c.nombre_usuario }}</td>
-            <td>{{ c.estado_cuenta }}</td>
-            <td>
-              {% if g.usuario.permite("ROLES_GESTIONAR") %}
-                <form method="post"
-                      class="acciones"
-                      action="{{ url_for('roles.asignar_rol_cuenta') }}">
-                  {{ csrf() }}
-                  <input type="hidden" name="dni" value="{{ c.dni_persona }}">
-                  <select name="rol" aria-label="Rol de {{ c.nombre_usuario }}">
-                    {% for rol in roles %}
-                      <option {% if c.rol==rol %}selected{% endif %}>{{ rol }}</option>
-                    {% endfor %}
-                  </select>
-                  <button>Asignar</button>
-                </form>
-              {% else %}
-                {{ c.rol }}
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+          </thead>
+          <tbody>
+            {% for codigo, descripcion in permisos.items() %}
+              <tr>
+                <th scope="row">{{ descripcion }}</th>
+                {% for rol in roles %}
+                  <td>
+                    <input type="checkbox"
+                           aria-label="{{ descripcion }} para {{ rol }}"
+                           name="permisos_{{ rol }}"
+                           value="{{ codigo }}"
+                           {% if codigo in matriz[rol] %}checked{% endif %}
+                           {% if not g.usuario.permite('ROLES_GESTIONAR') %}disabled{% endif %}>
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if g.usuario.permite("ROLES_GESTIONAR") %}
+        <button>Guardar permisos</button>
+      {% endif %}
+    </form>
+
+  </section>
 {% endblock %}

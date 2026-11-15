@@ -18,13 +18,14 @@ class ControladorRol:
     @requiere_permiso('ROLES_CONSULTAR')
     def consultar_roles(self):
         matriz, version = self.servicio.consultar_matriz_permisos()
+        busqueda = request.args.get('q', '').strip()
         return render_template(
             'vista_rol.html',
             matriz=matriz,
             version=version,
             roles=ROLES,
             permisos=PERMISOS,
-            cuentas=self.cuentas.buscar_cuentas(request.args.get('q', '')),
+            cuentas=self.cuentas.buscar_cuentas(busqueda) if len(busqueda) >= 2 else [],
         )
 
     @requiere_permiso('ROLES_GESTIONAR')

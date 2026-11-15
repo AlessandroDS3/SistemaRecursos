@@ -30,7 +30,7 @@ class ControladorPersona:
     @requiere_permiso('PERSONAS_CONSULTAR')
     def consultar_personas(self):
         resultado = self.servicio.consultar_personas(request.args)
-        return render_template('vista_persona.html', modo='lista', resultado=resultado)
+        return render_template('vista_persona.html', modo='lista', resultado=resultado, tipos=TIPOS_PERSONA)
 
     @requiere_permiso('PERSONAS_CONSULTAR', 'PRESTAMOS_GESTIONAR')
     def buscar_personas(self):

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% from 'formularios.html' import campo %}
+{% from 'componentes.html' import indicador, estado %}
+{% from 'fragmentos_recursos.html' import formulario_recurso, categorias_recursos %}
+{% block contenido %}
+  <div class="cabecera">
+    <h1>Administración de recursos</h1>
+    <a class="boton secundario"
+       href="{{ url_for('recursos.consultar_recursos') }}">Ver catálogo</a>
+    <a class="boton"
+       href="#registro-recurso"
+       data-abrir-detalle="registro-recurso">Registrar recurso</a>
+  </div>
+  <section class="resumen-estadisticas"
+           aria-label="Resumen de recursos encontrados">
+    {{ indicador('Recursos registrados', resumen.recursos) }}
+    {{ indicador('Bienes encontrados', resumen.bienes) }}
+    {{ indicador('Bienes disponibles', resumen.disponibles, clase='disponibilidad') }}
+  </section>
+  <details class="panel registro-desplegable" id="registro-recurso">
+    <summary>Registrar recurso</summary>
+    {{ formulario_recurso({}, categorias, url_for('recursos.gestionar_formulario_recurso'), primer_bien=true, volver='administracion') }}
+  </details>
+  {{ categorias_recursos(categorias, volver='administracion') }}
+  <div class="encabezado-seccion">
+    <h2>Recursos y bienes registrados</h2>
+    <a href="{{ url_for('bienes.consultar_bienes_materiales') }}">Ver inventario completo</a>
+  </div>
+  <form class="filtros filtros-bloque">
+    <div class="rejilla filtros-tres">
+      {{ campo('q','Nombre o código de inventario',request.args.get('q',''),maximo=120) }}
+      <label>
+        Categoría<select name="id_categoria">
+        <option value="">Todas las categorías</option>
+        {% for c in categorias %}
+          <option value="{{ c.id_categoria }}"
+                  {% if request.args.get('id_categoria')==c.id_categoria|string %}selected{% endif %}>{{ c.nombre }}
+          </option>
+        {% endfor %}
+        </select>
+      </label>
+      <label>
+        Estado del bien físico<select name="estado">
+        <option value="">Todos los estados</option>
+        {% for e in estados %}
+          <option value="{{ e }}"
+                  {% if request.args.get('estado')==e %}selected{% endif %}>{{ e|replace('_', ' ')|capitalize }}
+          </option>
+        {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="acciones">
+      <button>Buscar</button>
+      <a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Limpiar filtros</a>
+    </div>
+  </form>
+  {% for grupo in grupos %}
+    {% set r = grupo.recurso %}
+    <details class="panel recurso-inventario">
+      <summary>
+        <div>
+          <small class="etiqueta">{{ r.categoria }}</small>
+          <strong>{{ r.nombre }}</strong>
+          <small>{{ r.marca or '' }} {{ r.modelo or '' }}</small>
+        </div>
+        <span>{{ grupo.bienes|length }} bienes encontrados</span>
+      </summary>
+      <div class="acciones">
+        <a class="boton secundario"
+           href="{{ url_for('recursos.gestionar_formulario_recurso',identificador=r.id_recurso) }}">Editar recurso</a>
+        <a class="boton"
+           href="{{ url_for('bienes.gestionar_formulario_bien_material',id_recurso=r.id_recurso) }}">Agregar bien</a>
+        <a href="{{ url_for('recursos.consultar_recurso',identificador=r.id_recurso) }}">Ver detalle</a>
+      </div>
+      <div class="tabla">
+        <table>
+          <thead>
+            <tr>
+              <th>Inventario</th>
+              <th>Estado</th>
+              <th>Ubicación</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in grupo.bienes %}
+              <tr>
+                <td>{{ b.codigo_inventario }}</td>
+                <td>{{ estado(b.estado) }}</td>
+                <td>{{ b.ubicacion or '—' }}</td>
+                <td>
+                  <a class="boton secundario"
+                     href="{{ url_for('bienes.consultar_bien_material',identificador=b.id_bien) }}">Ver bien</a>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="4">Este recurso no tiene bienes que coincidan con el filtro.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  {% else %}
+    <section class="panel">
+      <p>No hay recursos para estos filtros.</p>
+    </section>
+  {% endfor %}
+{% endblock %}

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block titulo %}Inicio · UNSA{% endblock %}
+{% from 'componentes.html' import indicador %}
 {% block contenido %}
   <div class="cabecera">
     <h1>Inicio</h1>
@@ -45,4 +46,14 @@
     </div>
     <p class="suave">Las acciones disponibles dependen de los permisos asignados a tu cuenta.</p>
   </section>
+
+  {% if resumen %}
+    <section class="resumen-estadisticas" aria-label="Resumen del sistema">
+      {% if resumen.prestamos_pendientes is defined %}
+        {{ indicador('Préstamos por devolver',resumen.prestamos_pendientes,url_for('prestamos.consultar_prestamos',estado='PENDIENTES'),'Ver préstamos') }}
+        {{ indicador('Préstamos vencidos',resumen.prestamos_vencidos,url_for('prestamos.consultar_prestamos',estado='VENCIDO'),'Revisar vencidos','alerta' if resumen.prestamos_vencidos else '') }}
+      {% endif %}
+      {% if resumen.bienes_disponibles is defined %}{{ indicador('Bienes disponibles',resumen.bienes_disponibles,url_for('recursos.consultar_recursos',solo_disponibles='1'),'Consultar catálogo','disponibilidad') }}{% endif %}
+    </section>
+  {% endif %}
 {% endblock %}

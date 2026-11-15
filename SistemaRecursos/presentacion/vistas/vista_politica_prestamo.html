@@ -2,78 +2,129 @@
 {% from 'formularios.html' import csrf,campo,opciones %}
 {% block contenido %}
   {% if modo=="lista" %}
-    <div class="cabecera">
-      <h1>Políticas de préstamo</h1>
-      <a class="boton" href="{{ url_for('politicas.gestionar_formulario_politica_prestamo') }}">Nueva política</a>
-    </div>
-    <div class="tabla">
-      <table>
-        <thead>
-          <tr>
-            <th>Persona</th>
-            <th>Categoría</th>
-            <th>Plazo máximo</th>
-            <th>Salida</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in politicas %}
-            <tr>
-              <td>{{ p.tipo_persona }}</td>
-              <td>{{ p.categoria }}</td>
-              <td>
-                {{ p.plazo_maximo }}
-                {{ p.unidad_plazo|lower }}
-              </td>
-              <td>{{ 'Sí' if p.permite_salida else 'No' }}</td>
-              <td>
-                <a href="{{ url_for('politicas.gestionar_formulario_politica_prestamo',identificador=p.id_politica) }}">Editar</a>
-                <form method="post"
-                      action="{{ url_for('politicas.eliminar_politica_prestamo',identificador=p.id_politica) }}">
-                  {{ csrf() }}
-                  <button class="secundario">Eliminar</button>
-                </form>
-              </td>
-            </tr>
-          {% else %}
-            <tr>
-              <td colspan="5">Aún no hay políticas.</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <h2>Horario de atención y reservas</h2>
+    <h1>Políticas de préstamo</h1>
+    <section class="panel">
+      <h2>Máximo general de artículos por persona</h2>
+      <div class="rejilla tres-columnas">
+        {% for tipo in tipos %}
+          {% set actual = limites|selectattr('tipo_persona','equalto',tipo)|first|default({}) %}
+          <form method="post"
+                action="{{ url_for('politicas.guardar_limite_articulos') }}"
+                class="formulario">
+            {{ csrf() }}
+            <input type="hidden" name="tipo_persona" value="{{ tipo }}">
+            {{ campo('maximo_articulos',tipo|capitalize,actual.maximo_articulos|default(''),tipo='number',requerido=true) }}
+            {% if g.usuario.rol=="ADMINISTRADOR" %}
+              <button class="secundario">Guardar máximo</button>
+            {% endif %}
+          </form>
+        {% endfor %}
+      </div>
+      <p class="suave">El máximo abarca los bienes pendientes de todas las categorías. Solo el administrador puede modificarlo.</p>
+    </section>
     <form method="post"
           action="{{ url_for('politicas.guardar_configuracion_general') }}"
-          class="panel formulario">
+          id="configuracion-general">
       {{ csrf() }}
-      <div class="rejilla">
-        {{ campo('hora_apertura','Apertura',configuracion.hora_apertura|hora,tipo='time',requerido=true) }}
-        {{ campo('hora_cierre','Cierre',configuracion.hora_cierre|hora,tipo='time',requerido=true) }}
-        {{ campo('plazo_espera','Plazo de espera',configuracion.plazo_espera|default(2),tipo='number',requerido=true) }}
-        {{ opciones('unidad_espera','Unidad de espera',('HORAS','DIAS'),configuracion.unidad_espera|default('DIAS')) }}
-        {{ campo('plazo_retiro','Plazo para retirar',configuracion.plazo_retiro|default(24),tipo='number',requerido=true) }}
-        {{ opciones('unidad_retiro','Unidad de retiro',('HORAS','DIAS'),configuracion.unidad_retiro|default('HORAS')) }}
-      </div>
-      <p>Los plazos de reserva admiten hasta 720 horas o 30 días.</p>
-      <button>Guardar configuración</button>
+      <section class="panel">
+        <h2>Horario general de atención</h2>
+        <div class="rejilla dos-columnas">
+          {{ campo('hora_apertura','Hora de apertura',configuracion.hora_apertura|hora,tipo='time',requerido=true) }}
+          {{ campo('hora_cierre','Hora de cierre',configuracion.hora_cierre|hora,tipo='time',requerido=true) }}
+        </div>
+        <div class="acciones acciones-configuracion">
+          <button>Guardar configuración</button>
+        </div>
+        <p class="suave">El horario y los vencimientos se guardan juntos.</p>
+      </section>
     </form>
-    <h2>Máximo total de bienes pendientes</h2>
-    <p>El límite abarca todas las categorías de recursos.</p>
-    {% for tipo in tipos %}
-      {% set actual = limites|selectattr('tipo_persona','equalto',tipo)|first|default({}) %}
-      <form method="post"
-            action="{{ url_for('politicas.guardar_limite_articulos') }}"
-            class="filtros panel">
-        {{ csrf() }}
-        <input type="hidden" name="tipo_persona" value="{{ tipo }}">
-        <strong>{{ tipo|title }}</strong>
-        {{ campo('maximo_articulos','Máximo de bienes',actual.maximo_articulos|default(''),tipo='number',requerido=true) }}
-        <button>Guardar límite</button>
-      </form>
-    {% endfor %}
+    <section class="panel politicas-panel">
+      <h2>Plazos de préstamo</h2>
+      <div class="busqueda-local">
+        <label>
+          Buscar categoría<input type="search"
+                                 data-filtrar-filas="politicas-matriz"
+                                 placeholder="Nombre de la categoría">
+        </label>
+        <button type="button"
+                class="secundario"
+                data-limpiar-busqueda="politicas-matriz">Limpiar</button>
+      </div>
+      <div class="tabla">
+        <table class="politicas-matriz" id="politicas-matriz">
+          <thead>
+            <tr>
+              <th>Categoría</th>
+              {% for tipo in tipos %}
+                <th>{{ tipo|capitalize }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in categorias %}
+              <tr data-busqueda="{{ c.nombre }}">
+                <th scope="row">{{ c.nombre }}</th>
+                {% for tipo in tipos %}
+                  {% set p = matriz.get((c.id_categoria,tipo),{}) %}
+                  <td>
+                    <form method="post"
+                          action="{{ url_for('politicas.gestionar_formulario_politica_prestamo',identificador=p.get('id_politica')) }}"
+                          class="formulario politica-celda">
+                      {{ csrf() }}
+                      <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
+                      <input type="hidden" name="tipo_persona" value="{{ tipo }}">
+                      <input type="hidden" name="version" value="{{ p.get('version', '') }}">
+                      <div class="politica-plazo">
+                        {{ campo('plazo_maximo','Plazo',p.get('plazo_maximo',''),tipo='number',requerido=true) }}
+                        {{ opciones('unidad_plazo','Unidad',('HORAS','DIAS'),p.get('unidad_plazo','DIAS')) }}
+                      </div>
+                      <label class="check">
+                      <input type="checkbox"
+                             name="permite_salida"
+                             value="1"
+                             {% if p.get('permite_salida') %}checked{% endif %}>Permitir salida fuera de la escuela</label>
+                      <button class="secundario">{{ 'Guardar' if p else 'Crear política' }}</button>
+                      {% if p %}
+                        <a href="{{ url_for('politicas.gestionar_formulario_politica_prestamo',identificador=p.id_politica) }}">Más opciones</a>
+                      {% endif %}
+                    </form>
+                  </td>
+                {% endfor %}
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="4">Registra categorías en Administración de recursos.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="suave">Los cambios se aplican a nuevas entregas. Los préstamos registrados conservan sus condiciones.</p>
+    </section>
+    <section class="panel">
+      <h2>Vencimiento de solicitudes y reservas</h2>
+      <p class="suave">Cada plazo admite hasta 30 días o 720 horas.</p>
+      <div class="rejilla dos-columnas">
+        <fieldset>
+          <legend>Solicitudes pendientes</legend>
+          <div class="rejilla dos-columnas">
+            {{ campo('plazo_espera','Plazo',configuracion.plazo_espera|default(2),tipo='number',requerido=true,formulario='configuracion-general') }}
+            {{ opciones('unidad_espera','Unidad',('HORAS','DIAS'),configuracion.unidad_espera|default('DIAS'),formulario='configuracion-general') }}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Reservas listas para retiro</legend>
+          <div class="rejilla dos-columnas">
+            {{ campo('plazo_retiro','Plazo',configuracion.plazo_retiro|default(24),tipo='number',requerido=true,formulario='configuracion-general') }}
+            {{ opciones('unidad_retiro','Unidad',('HORAS','DIAS'),configuracion.unidad_retiro|default('HORAS'),formulario='configuracion-general') }}
+          </div>
+        </fieldset>
+      </div>
+      <div class="acciones acciones-configuracion">
+        <button type="submit" form="configuracion-general">Guardar configuración</button>
+      </div>
+    </section>
+    <a href="{{ url_for('prestamos.consultar_prestamos') }}">Ir a préstamos</a>
   {% else %}
     <h1>
       {{ 'Editar' if politica else 'Nueva' }}
@@ -89,8 +140,7 @@
           <select name="id_categoria" required>
             {% for c in categorias %}
               <option value="{{ c.id_categoria }}"
-                      {% if c.id_categoria==politica.id_categoria %}selected{% endif %}>
-                {{ c.nombre }}
+                      {% if c.id_categoria==politica.id_categoria %}selected{% endif %}>{{ c.nombre }}
               </option>
             {% endfor %}
           </select>
@@ -107,5 +157,17 @@
       </div>
       <button>Guardar política</button>
     </form>
+    {% if politica %}
+      <details class="panel">
+        <summary>Eliminar política</summary>
+        <p class="suave">Solo se puede eliminar si no tiene préstamos asociados.</p>
+        <form method="post"
+              action="{{ url_for('politicas.eliminar_politica_prestamo',identificador=politica.id_politica) }}">
+          {{ csrf() }}
+          <button class="secundario">Eliminar política</button>
+        </form>
+      </details>
+    {% endif %}
+    <a href="{{ url_for('politicas.consultar_politicas_prestamo') }}">Volver a políticas</a>
   {% endif %}
 {% endblock %}

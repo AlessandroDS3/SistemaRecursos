@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, url_for
 from presentacion.seguridad import requiere_permiso
 
@@ -74,7 +75,11 @@ class ControladorPrestamo:
         gestionar = g.usuario.permite('PRESTAMOS_GESTIONAR')
         prestamo = self.servicio.consultar_prestamo(identificador, g.usuario.dni, gestionar)
         return render_template(
-            'vista_prestamo.html', modo='detalle', prestamo=prestamo, gestionar=gestionar
+            'vista_prestamo.html',
+            modo='detalle',
+            prestamo=prestamo,
+            gestionar=gestionar,
+            ahora=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')

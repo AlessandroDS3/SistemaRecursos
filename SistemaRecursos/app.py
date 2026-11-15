@@ -1,12 +1,10 @@
-
-
 from datetime import datetime, timedelta, timezone
 import logging
 import os
 from pathlib import Path
 from secrets import token_hex
 
-from flask import Flask, render_template
+from flask import Flask, g, render_template
 from mysql.connector import Error as ErrorMySQL, IntegrityError
 from werkzeug.exceptions import HTTPException
 
@@ -79,7 +77,9 @@ def crear_servicios(conexion):
         'politicas': ServicioAplicacionPoliticaPrestamo(RepositorioPoliticaPrestamoSQL(conexion)),
         'prestamos': ServicioAplicacionPrestamo(RepositorioPrestamoSQL(conexion)),
         'reservas': ServicioAplicacionReserva(RepositorioReservaSQL(conexion)),
-        'ampliaciones': ServicioAplicacionAmpliacionPrestamo(RepositorioAmpliacionPrestamoSQL(conexion)),
+        'ampliaciones': ServicioAplicacionAmpliacionPrestamo(
+            RepositorioAmpliacionPrestamoSQL(conexion)
+        ),
         'sanciones': ServicioAplicacionSancion(RepositorioSancionSQL(conexion)),
         'reportes': ServicioAplicacionReporte(RepositorioReporteSQL(conexion)),
     }
@@ -104,10 +104,24 @@ def registrar_controladores(app, servicios):
         app.register_blueprint(controlador.blueprint)
 
 
-def registrar_inicio(app):
+def registrar_inicio(app, servicios):
     @app.get('/')
     def inicio():
-        return render_template('inicio.html')
+        resumen = {}
+        gestionar = g.usuario.permite('PRESTAMOS_GESTIONAR')
+        if gestionar or g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'):
+            prestamos = servicios['prestamos'].consultar_prestamos(
+                {}, None if gestionar else g.usuario.dni
+            )
+            resumen['prestamos_pendientes'] = sum(
+                p['estado_actual'] != 'DEVUELTO' for p in prestamos
+            )
+            resumen['prestamos_vencidos'] = sum(p['estado_actual'] == 'VENCIDO' for p in prestamos)
+        if g.usuario.permite('CATALOGO_CONSULTAR'):
+            resumen['bienes_disponibles'] = sum(
+                r['disponibles'] for r in servicios['recursos'].consultar_recursos({})
+            )
+        return render_template('inicio.html', resumen=resumen)
 
 
 def registrar_filtros(app):
@@ -175,7 +189,7 @@ def create_app(config=None):
 
     configurar_seguridad(app, servicios['acceso'])
     registrar_controladores(app, servicios)
-    registrar_inicio(app)
+    registrar_inicio(app, servicios)
     registrar_filtros(app)
     registrar_errores(app)
 
@@ -191,4 +205,3 @@ if __name__ == '__main__':
     create_app({'INICIAR_PROCESADOR_VENCIMIENTOS': True}).run(
         host='127.0.0.1', port=int(os.getenv('PORT', '5001'))
     )
-

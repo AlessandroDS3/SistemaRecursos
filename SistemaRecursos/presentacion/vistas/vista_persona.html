@@ -1,67 +1,108 @@
 {% extends "base.html" %}
 {% from 'formularios.html' import csrf, campo, opciones %}
+{% from 'componentes.html' import indicador, estado %}
 {% block contenido %}
   {% if modo == "lista" %}
     <div class="cabecera">
       <h1>Personas</h1>
       {% if g.usuario.permite("PERSONAS_GESTIONAR") %}
-        <a class="boton" href="{{ url_for('personas.gestionar_formulario_persona') }}">Registrar persona</a>
+        <a class="boton"
+           href="{{ url_for('personas.gestionar_formulario_persona') }}">Registrar persona</a>
       {% endif %}
     </div>
-    <form class="filtros" method="get">
-      {{ campo('q','DNI, apellidos o CUI',request.args.get('q',''),maximo=120) }}
-      <button>Buscar</button>
-    </form>
-    <p>
-      {{ resultado.total }}
-      personas · Página
-      {{ resultado.pagina }}
-      de
-      {{ resultado.paginas }}
-    </p>
-    <div class="tabla">
-      <table>
-        <thead>
-          <tr>
-            <th>DNI</th>
-            <th>Nombre</th>
-            <th>Tipo</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in resultado.personas %}
-            <tr>
-              <td>
-                <a href="{{ url_for('personas.consultar_persona', documento=p.dni) }}">{{ p.dni }}</a>
-              </td>
-              <td>
-                {{ p.apellidos }}
-                ,
-                {{ p.nombres }}
-              </td>
-              <td>{{ p.tipo }}</td>
-              <td>{{ p.estado }}</td>
-            </tr>
-          {% else %}
-            <tr>
-              <td colspan="4">No hay personas.</td>
-            </tr>
+    <section class="resumen-estadisticas"
+             aria-label="Resumen de personas encontradas">
+      {{ indicador('Personas encontradas', resultado.total) }}
+      {{ indicador('Activas', resultado.activas) }}
+      {{ indicador('Inactivas', resultado.inactivas) }}
+    </section>
+    <form class="filtros filtros-bloque" method="get">
+      <div class="rejilla filtros-cuatro">
+        {{ campo('q','Buscar persona',request.args.get('q',''),maximo=120) }}
+        <label>
+          Tipo<select name="tipo">
+          <option value="">Todos</option>
+          {% for t in tipos %}
+            <option value="{{ t }}"
+                    {% if request.args.get('tipo')==t %}selected{% endif %}>{{ t|capitalize }}</option>
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div class="acciones">
-      {% if resultado.pagina>1 %}
-        <a href="{{ url_for('personas.consultar_personas', q=request.args.get('q',''), pagina=resultado.pagina-1) }}">
-          Anterior
+          </select>
+        </label>
+        <label>
+          Estado<select name="estado">
+          <option value="">Todos</option>
+          {% for e in ('ACTIVA','INACTIVA') %}
+            <option value="{{ e }}"
+                    {% if request.args.get('estado')==e %}selected{% endif %}>{{ e|capitalize }}</option>
+          {% endfor %}
+          </select>
+        </label>
+        <label>
+          Cuenta<select name="cuenta">
+          <option value="">Todas</option>
+          <option value="CON_CUENTA"
+                  {% if request.args.get('cuenta')=='CON_CUENTA' %}selected{% endif %}>Con cuenta</option>
+          <option value="SIN_CUENTA"
+                  {% if request.args.get('cuenta')=='SIN_CUENTA' %}selected{% endif %}>Sin cuenta</option>
+          </select>
+        </label>
+      </div>
+      <div class="acciones">
+        <button>Aplicar filtros</button>
+        <a class="boton secundario"
+           href="{{ url_for('personas.consultar_personas') }}">Limpiar</a>
+      </div>
+    </form>
+    <section class="panel panel-tabla">
+      <div class="tabla">
+        <table>
+          <thead>
+            <tr>
+              <th>CUI</th>
+              <th>DNI</th>
+              <th>Persona</th>
+              <th>Correo</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+              <th>Cuenta de acceso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in resultado.personas %}
+              <tr>
+                <td>{{ p.cui or '—' }}</td>
+                <td>{{ p.dni }}</td>
+                <td>
+                  <a href="{{ url_for('personas.consultar_persona',documento=p.dni) }}">{{ p.nombres }} {{ p.apellidos }}
+                  </a>
+                </td>
+                <td>{{ p.correo }}</td>
+                <td>{{ p.tipo|capitalize }}</td>
+                <td>{{ estado(p.estado) }}</td>
+                <td>
+                  {{ estado('CON_ACCESO' if p.id_usuario and p.estado_cuenta=='ACTIVA' else 'SIN_CUENTA' if not p.id_usuario else p.estado_cuenta) }}
+                  {% if g.usuario.permite("USUARIOS_GESTIONAR") %}
+                    <a href="{{ url_for('cuentas.actualizar_cuenta' if p.id_usuario else 'cuentas.registrar_cuenta',documento=p.dni) }}">{{ 'Ver cuenta' if p.id_usuario else 'Crear acceso' }}
+                    </a>
+                  {% endif %}
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="7">No hay personas para estos filtros.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="acciones paginacion">
+      <small>Página {{ resultado.pagina }} de {{ resultado.paginas }}</small>
+      {% for numero, etiqueta in ((resultado.pagina-1,'Anterior'),(resultado.pagina+1,'Siguiente')) if numero>=1 and numero<=resultado.paginas %}
+        <a class="boton secundario"
+           href="{{ url_for('personas.consultar_personas',q=request.args.get('q',''),tipo=request.args.get('tipo',''),estado=request.args.get('estado',''),cuenta=request.args.get('cuenta',''),pagina=numero) }}">{{ etiqueta }}
         </a>
-      {% endif %}
-      {% if resultado.pagina<resultado.paginas %}
-        <a href="{{ url_for('personas.consultar_personas', q=request.args.get('q',''), pagina=resultado.pagina+1) }}">
-          Siguiente
-        </a>
-      {% endif %}
+      {% endfor %}
     </div>
   {% elif modo == "detalle" %}
     <h1>{{ persona.nombre_completo }}</h1>

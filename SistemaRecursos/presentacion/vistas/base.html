@@ -34,7 +34,7 @@
         ('personas.consultar_personas', 'Personas', g.usuario.permite('PERSONAS_CONSULTAR'), 'personas'),
         ('roles.consultar_roles', 'Roles y permisos', g.usuario.permite('ROLES_CONSULTAR'), 'roles'),
         ('recursos.consultar_recursos', 'Catálogo de recursos', g.usuario.permite('CATALOGO_CONSULTAR'), 'recursos'),
-        ('bienes.consultar_bienes_materiales', 'Administrar recursos', g.usuario.permite('RECURSOS_GESTIONAR'), 'administracion_recursos'),
+        ('recursos.consultar_administracion_recursos', 'Administrar recursos', g.usuario.permite('RECURSOS_GESTIONAR'), 'administracion_recursos'),
         ('prestamos.consultar_prestamos', 'Préstamos' if gestiona_prestamos else 'Mis préstamos', gestiona_prestamos or g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'), 'prestamos'),
         ('reservas.consultar_reservas', 'Solicitudes y reservas' if gestiona_prestamos else 'Mis solicitudes y reservas', gestiona_prestamos or g.usuario.permite('RESERVAS_PROPIAS_GESTIONAR'), 'reservas'),
         ('politicas.consultar_politicas_prestamo', 'Políticas de préstamo', g.usuario.permite('POLITICAS_GESTIONAR'), 'politicas'),

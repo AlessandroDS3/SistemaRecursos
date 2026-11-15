@@ -6,13 +6,82 @@ from caso_mysql import CasoMySQL
 
 
 class RecorridosWeb(CasoMySQL):
+    def test_personas_filtra_tipo_cuenta_y_muestra_totales_reales(self):
+        personas = self.servicios['personas']
+        resultado = personas.consultar_personas(
+            {'tipo': 'ESTUDIANTE', 'cuenta': 'SIN_CUENTA', 'estado': 'ACTIVA'}
+        )
+        self.assertEqual(resultado['total'], 5)
+        self.assertEqual(resultado['activas'], 5)
+        self.assertEqual(resultado['inactivas'], 0)
+        self.assertTrue(all(p['id_usuario'] is None for p in resultado['personas']))
+        for filtros in ({'tipo': 'AJENO'}, {'estado': 'OTRO'}, {'cuenta': 'OTRA'}):
+            with self.subTest(filtros=filtros), self.assertRaises(ValueError):
+                personas.consultar_personas(filtros)
+        self.login()
+        self.assertEqual(
+            self.cliente.get('/personas?tipo=ESTUDIANTE&cuenta=SIN_CUENTA').status_code, 200
+        )
+
+    def test_administracion_agrupa_inventario_y_recibe_los_formularios(self):
+        self.login()
+        pagina = self.cliente.get('/recursos/administracion?q=INV-2').get_data(as_text=True)
+        self.assertIn('INV-2', pagina)
+        self.assertNotIn('INV-3', pagina)
+        respuesta = self.post(
+            '/recursos/nuevo',
+            {
+                'nombre': 'Recurso desde administración',
+                'id_categoria': '1',
+                'codigo_inventario': 'ADM-1',
+                'volver': 'administracion',
+            },
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertTrue(respuesta.location.endswith('/recursos/administracion'))
+        respuesta = self.post(
+            '/recursos/categorias', {'nombre': 'Categoría desde panel', 'volver': 'administracion'}
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertTrue(respuesta.location.endswith('/recursos/administracion#categorias'))
+        self.assertEqual(
+            self.fila("SELECT COUNT(*) FROM bien_material WHERE codigo_inventario='ADM-1'"), (1,)
+        )
+
+    def test_matriz_politicas_guarda_con_version_y_no_modifica_al_consultar(self):
+        self.login()
+        pagina = self.cliente.get('/politicas').get_data(as_text=True)
+        self.assertEqual(self.fila('SELECT COUNT(*) FROM politica_prestamo'), (1,))
+        formulario = re.search(
+            r'<form[^>]*action="/politicas/24/editar"[^>]*>(.*?)</form>', pagina, re.S
+        ).group(1)
+        version = re.search(r'name="version"\s+value="([^"]+)"', formulario).group(1)
+        respuesta = self.post(
+            '/politicas/24/editar',
+            {
+                'id_categoria': '1',
+                'tipo_persona': 'ESTUDIANTE',
+                'plazo_maximo': '3',
+                'unidad_plazo': 'DIAS',
+                'permite_salida': '1',
+                'version': version,
+            },
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(
+            self.fila('SELECT vigente FROM politica_prestamo WHERE id_politica=24'), (0,)
+        )
+        self.assertEqual(
+            self.fila('SELECT plazo_maximo FROM politica_prestamo WHERE vigente=TRUE'), (3,)
+        )
+
     def test_filtro_y_botones_reserva_reflejan_estados_del_dominio(self):
         identificador = self.reservar()
         self.login('encargado1', 'EncargadoPrueba2026!')
         pagina = self.cliente.get('/reservas?estado=EN_ESPERA').get_data(as_text=True)
         filtro = re.search(r'<select name="estado">(.*?)</select>', pagina, re.DOTALL).group(1)
-        opciones = re.findall(r'<option[^>]*>([^<]*)</option>', filtro)
-        self.assertEqual(opciones, ['Todos', *ESTADOS_RESERVA])
+        opciones = re.findall(r'<option value="([^"]*)"', filtro)
+        self.assertEqual(opciones, ['', *ESTADOS_RESERVA])
         url = f'/reservas/{identificador}'
         pagina = self.cliente.get(url).get_data(as_text=True)
         self.assertIn(f'action="{url}/preparar"', pagina)

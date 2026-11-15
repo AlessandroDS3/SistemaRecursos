@@ -1,6 +1,6 @@
 from dominio.compartido.validacion import NoEncontrado
 from dominio.compartido.validacion import comprobar_version, dni, entero, texto, version
-from dominio.gestion_personas_usuarios.persona import IRepositorioPersona, Persona
+from dominio.gestion_personas_usuarios.persona import IRepositorioPersona, Persona, TIPOS_PERSONA
 from dominio.gestion_personas_usuarios.cuenta import proteger_administradores
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 
@@ -10,10 +10,18 @@ class ServicioAplicacionPersona:
         self.repositorio = repositorio
 
     def consultar_personas(self, filtros):
+        if filtros.get('estado', '') not in ('', 'ACTIVA', 'INACTIVA'):
+            raise ValueError('Estado de persona inválido.')
+        if filtros.get('tipo', '') not in ('', *TIPOS_PERSONA):
+            raise ValueError('Tipo de persona inválido.')
+        if filtros.get('cuenta', '') not in ('', 'CON_CUENTA', 'SIN_CUENTA'):
+            raise ValueError('Filtro de cuenta inválido.')
         return self.repositorio.consultar_personas(
             dict(
                 q=texto(filtros.get('q'), 'Búsqueda', 120),
                 estado=filtros.get('estado', ''),
+                tipo=filtros.get('tipo', ''),
+                cuenta=filtros.get('cuenta', ''),
                 pagina=entero(filtros.get('pagina', 1), 'Página'),
             )
         )

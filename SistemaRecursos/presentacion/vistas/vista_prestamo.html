@@ -1,67 +1,94 @@
 {% extends "base.html" %}
 {% from 'formularios.html' import csrf,campo,opciones,historial %}
+{% from 'componentes.html' import estado %}
 {% block contenido %}
   {% if modo=="lista" %}
     <div class="cabecera">
-      <h1>{{ 'Préstamos' if gestionar else 'Mis préstamos' }}</h1>
+      <h1>{{ 'Préstamos y devoluciones' if gestionar else 'Mis préstamos' }}</h1>
       {% if gestionar %}
         <a class="boton" href="{{ url_for('prestamos.registrar_prestamo') }}">Registrar préstamo</a>
+        <a class="boton secundario"
+           href="{{ url_for('prestamos.consultar_prestamos',estado='PENDIENTES') }}">Registrar devolución</a>
       {% endif %}
     </div>
-    <form class="filtros">
-      {{ campo('q','N.º, DNI o solicitante',request.args.get('q',''),maximo=120) }}
-      <label>
-        Estado
-        <select name="estado">
-          <option value="">Todos</option>
-          {% for e in ('ACTIVO','VENCIDO','DEVUELTO','PARCIALMENTE_DEVUELTO','PENDIENTES','PERDIDOS') %}
-            <option value="{{ e }}"
-                    {% if request.args.get('estado')==e %}selected{% endif %}>
-              {{ e|replace('_', ' ')|title }}
-            </option>
-          {% endfor %}
-        </select>
-      </label>
-      <button>Filtrar</button>
-    </form>
-    <div class="tabla">
-      <table>
-        <thead>
-          <tr>
-            <th>N.º</th>
-            <th>Solicitante</th>
-            <th>Entrega</th>
-            <th>Tipo</th>
-            <th>Estado actual</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in prestamos %}
-            <tr>
-              <td>
-                <a href="{{ url_for('prestamos.consultar_prestamo',identificador=p.id_prestamo) }}">
-                  {{ p.id_prestamo }}
-                </a>
-              </td>
-              <td>{{ p.solicitante }}</td>
-              <td>{{ p.fecha_entrega|fecha }}</td>
-              <td>{{ p.tipo_prestamo }}</td>
-              <td>{{ p.estado_actual }}</td>
-            </tr>
-          {% else %}
-            <tr>
-              <td colspan="5">No hay préstamos.</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="acciones enlaces-seccion">
+      {% if gestionar or g.usuario.permite("RESERVAS_PROPIAS_GESTIONAR") %}
+        <a class="boton secundario"
+           href="{{ url_for('reservas.consultar_reservas') }}">Solicitudes y reservas</a>
+      {% endif %}
+      {% if g.usuario.permite("CATALOGO_CONSULTAR") %}
+        <a class="boton secundario"
+           href="{{ url_for('recursos.consultar_recursos') }}">Solicitar un recurso desde el catálogo</a>
+      {% endif %}
     </div>
+    <form class="filtros filtros-bloque">
+      <div class="rejilla dos-columnas">
+        {{ campo('q','Buscar por persona, DNI o número de préstamo',request.args.get('q',''),maximo=120) }}
+        <label>
+          Estado o seguimiento<select name="estado">
+          <option value="">Todos</option>
+          {% for codigo,etiqueta in (('ACTIVO','Activos'),('VENCIDO','Vencidos'),('DEVUELTO','Devueltos'),('PARCIALMENTE_DEVUELTO','Parcialmente devueltos'),('PENDIENTES','Con bienes pendientes'),('PERDIDOS','Con bienes perdidos pendientes')) %}
+            <option value="{{ codigo }}"
+                    {% if request.args.get('estado')==codigo %}selected{% endif %}>{{ etiqueta }}</option>
+          {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="acciones">
+        <button>Buscar</button>
+        <a href="{{ url_for('prestamos.consultar_prestamos') }}">Limpiar filtros</a>
+      </div>
+    </form>
+    <p class="suave">Mostrando {{ prestamos|length }} préstamos.</p>
+    <section class="panel panel-tabla">
+      <div class="tabla">
+        <table>
+          <thead>
+            <tr>
+              <th>Préstamo</th>
+              <th>Solicitante</th>
+              <th>Fecha del préstamo</th>
+              <th>Fecha límite de devolución</th>
+              <th>Estado</th>
+              <th>Devueltos / total</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in prestamos %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('prestamos.consultar_prestamo',identificador=p.id_prestamo) }}">#{{ p.id_prestamo }}
+                  </a>
+                  <small>{{ p.tipo_prestamo|capitalize }}</small>
+                </td>
+                <td>
+                  {{ p.solicitante }}
+                  <small>DNI: {{ p.dni_persona }}</small>
+                </td>
+                <td>{{ p.fecha_entrega|fecha }}</td>
+                <td>{{ p.fecha_limite|fecha }}</td>
+                <td>{{ estado(p.estado_actual) }}</td>
+                <td>{{ p.devueltos }} / {{ p.total_bienes }}</td>
+                <td>
+                  <a class="boton secundario"
+                     href="{{ url_for('prestamos.consultar_prestamo',identificador=p.id_prestamo,_anchor='devolucion') }}">{{ 'Registrar devolución' if gestionar and p.estado_actual!='DEVUELTO' else 'Ver detalle' }}
+                  </a>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="7">No hay préstamos para estos filtros.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
     {% if gestionar %}
-      <details>
+      <details class="panel">
         <summary>Registrar vencimientos en el historial</summary>
-        <p>
-          El estado actual se consulta según los detalles. Este botón deja constancia de los vencimientos en el historial.
-        </p>
+        <p>Deja constancia de los préstamos que ya vencieron.</p>
         <form method="post"
               action="{{ url_for('prestamos.registrar_vencimientos_prestamos') }}">
           {{ csrf() }}
@@ -70,172 +97,276 @@
       </details>
     {% endif %}
   {% elif modo=="formulario" %}
-    <h1>Entregar préstamo</h1>
+    <h1>Registrar préstamo</h1>
     <form method="post"
-          class="formulario panel"
-          data-condiciones-prestamo="{{ url_for('prestamos.consultar_condiciones_prestamo') }}">
+          class="prestamo-formulario"
+          data-condiciones-prestamo="{{ url_for('prestamos.consultar_condiciones_prestamo') }}"
+          data-buscar-personas="{{ url_for('personas.buscar_personas') }}">
       {{ csrf() }}
-      <div class="rejilla">
-        {{ campo('dni_persona','DNI del responsable',requerido=true,maximo=8) }}
-        {{ opciones('tipo_prestamo', 'Tipo', ('INDIVIDUAL', 'GRUPAL')) }}
-      </div>
-      <section data-texto-condiciones-prestamo aria-live="polite">
-        <p>Completa el DNI para consultar el cupo y las condiciones aplicables.</p>
-      </section>
-      <label>
-        Otros integrantes (DNI separados por comas)
-        <input name="participantes" placeholder="12345678, 87654321" maxlength="900">
-      </label>
-      <fieldset>
-        <legend>Bienes disponibles</legend>
-        {% for b in bienes %}
-          <label class="check">
-            <input type="checkbox" name="bienes" value="{{ b.id_bien }}">
-            {{ b.codigo_inventario }}
-            ·
-            {{ b.recurso }}
+      <div class="pasos-prestamo">
+        <section class="panel">
+          <h2>
+            <span class="numero-paso">1</span>¿Quién recibe el préstamo?
+          </h2>
+          <p class="suave">Busca y selecciona a la persona registrada, o introduce su DNI.</p>
+          <label>
+            Buscar por apellidos, DNI o CUI<input type="search"
+                                                  data-busqueda-persona
+                                                  placeholder="Apellidos, DNI o CUI"
+                                                  autocomplete="off">
           </label>
-        {% else %}
-          <p>No hay bienes disponibles.</p>
-        {% endfor %}
-      </fieldset>
-      {{ campo('observaciones','Observaciones',maximo=220) }}
-      <label class="check">
-        <input type="checkbox" name="salida_solicitada" value="1">
-        Salida fuera de la institución
-      </label>
-      <label class="check">
-        <input type="checkbox" name="acepta_condiciones" value="1" required>
-        Comuniqué el plazo y las condiciones de entrega.
-      </label>
-      <button>Confirmar entrega</button>
+          <div class="resultados-busqueda"
+               data-resultados-persona
+               aria-live="polite"></div>
+          <div class="rejilla dos-columnas">
+            {{ campo('dni_persona','DNI del solicitante',requerido=true,maximo=8) }}
+            <p data-persona-seleccionada class="suave">Sin seleccionar</p>
+          </div>
+          <div class="rejilla dos-columnas">
+            <fieldset>
+              <legend>Modalidad</legend>
+              <div class="opciones-tarjeta">
+                <label class="check">
+                  <input type="radio" name="tipo_prestamo" value="INDIVIDUAL" checked>Individual
+                </label>
+                <label class="check">
+                  <input type="radio" name="tipo_prestamo" value="GRUPAL">Grupal
+                </label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Uso de los bienes</legend>
+              <label class="check">
+                <input type="checkbox" name="salida_solicitada" value="1">Salida fuera de la institución
+              </label>
+            </fieldset>
+          </div>
+          <label data-integrantes-grupo hidden>
+            Otros integrantes (DNI separados por comas)<input name="participantes"
+                                                              placeholder="12345678, 87654321"
+                                                              maxlength="900"
+                                                              disabled>
+          </label>
+        </section>
+        <section class="panel">
+          <h2>
+            <span class="numero-paso">2</span>¿Qué bienes se llevará?
+          </h2>
+          <p class="suave">Busca por inventario o nombre del recurso y marca los bienes.</p>
+          <label>
+            Buscar bien disponible<input type="search"
+                                         data-buscar-bien
+                                         placeholder="Código de inventario o nombre del recurso">
+          </label>
+          <div class="lista-bienes-prestamo">
+            {% for b in bienes %}
+              <label class="check bien-seleccionable"
+                     data-bien-texto="{{ b.codigo_inventario }} {{ b.recurso }}">
+                <input type="checkbox"
+                       name="bienes"
+                       value="{{ b.id_bien }}"
+                       data-nombre-bien="{{ b.codigo_inventario }} · {{ b.recurso }}">
+                <span>{{ b.codigo_inventario }}
+                  <small>{{ b.recurso }}</small>
+                </span>
+              </label>
+            {% else %}
+              <p>No hay bienes disponibles.</p>
+            {% endfor %}
+          </div>
+          <p class="suave" data-contador-bienes>Bienes seleccionados: 0</p>
+        </section>
+        <section class="panel condiciones-prestamo"
+                 data-texto-condiciones-prestamo
+                 aria-live="polite">
+          <p>Completa el DNI para consultar el cupo, el horario y las condiciones aplicables.</p>
+        </section>
+        <section class="panel">
+          <label>
+            Observaciones del préstamo<textarea name="observaciones" rows="3" maxlength="220">
+</textarea>
+          </label>
+        </section>
+      </div>
+      <aside class="panel resumen-prestamo">
+        <h2>Resumen del préstamo</h2>
+        <dl>
+          <dt>Solicitante</dt>
+          <dd data-resumen-solicitante>
+            Sin seleccionar
+          </dd>
+          <dt>Modalidad</dt>
+          <dd data-resumen-modalidad>
+            Individual
+          </dd>
+          <dt>Uso</dt>
+          <dd data-resumen-uso>
+            Dentro de la institución
+          </dd>
+          <dt>Bienes</dt>
+          <dd data-resumen-bienes>
+            0
+          </dd>
+        </dl>
+        <p class="suave">Las fechas se confirman al registrar la entrega.</p>
+        <ul data-resumen-seleccionados>
+        </ul>
+        <label class="check">
+          <input type="checkbox"
+                 name="acepta_condiciones"
+                 value="1"
+                 required>He comunicado el plazo y el permiso de salida al solicitante.
+        </label>
+        <button type="submit" data-confirmar-prestamo>Registrar préstamo</button>
+        <a href="{{ url_for('prestamos.consultar_prestamos') }}">Cancelar</a>
+      </aside>
     </form>
   {% else %}
-    <h1>
-      Préstamo #
-      {{ prestamo.id_prestamo }}
-    </h1>
-    <p>
-      {{ prestamo.solicitante }}
-      ·
-      {{ prestamo.dni_persona }}
-      ·
-      {{ prestamo.tipo_prestamo }}
-    </p>
-    <p>
-      <strong>{{ prestamo.estado_actual }}</strong>
-      · Entregado el
-      {{ prestamo.fecha_entrega|fecha }}
-    </p>
-    <p>{{ prestamo.observaciones or '' }}</p>
-    {% if prestamo.participantes %}
-      <h2>Integrantes</h2>
-      <ul>
-        {% for p in prestamo.participantes %}
-          <li>
-            {{ p.nombre }}
-            ·
-            {{ p.dni_persona }}
-            ·
-            {{ p.rol_participacion }}
-          </li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-    <h2>Bienes y devoluciones</h2>
-    {% if gestionar %}
-      <form method="post"
-            action="{{ url_for('prestamos.registrar_devolucion',identificador=prestamo.id_prestamo) }}"
-            class="formulario">
-        {{ csrf() }}
-    {% endif %}
-    <div class="tabla">
-      <table>
-        <thead>
-          <tr>
-            <th>Bien</th>
-            <th>Vencimiento</th>
-            <th>Devolución</th>
-            <th>Condición y observación</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for d in prestamo.detalles %}
-            <tr>
-              <td>
-                {% if gestionar and not d.fecha_devolucion %}
-                  <label class="check">
-                    <input type="checkbox" name="detalles" value="{{ d.id_detalle }}">
-                    {{ d.codigo_inventario }}
-                  </label>
-                {% else %}
-                  {{ d.codigo_inventario }}
-                {% endif %}
-                <br>
-                {{ d.recurso }}
-                <br>
-                <small>{{ d.estado_bien }}</small>
-              </td>
-              <td>{{ d.fecha_limite_devolucion|fecha }}</td>
-              <td>{{ d.fecha_devolucion|fecha }}</td>
-              <td>
-                {% if gestionar and not d.fecha_devolucion %}
-                  {{ opciones('condicion_'~d.id_detalle,'Condición',('BUENO','DANADO')) }}
-                  {{ campo('observacion_'~d.id_detalle,'Observación') }}
-                {% else %}
-                  {{ d.condicion_devolucion or 'Pendiente' }}
-                  <br>
-                  {{ d.observaciones_devolucion or '' }}
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <p class="etiqueta">{{ prestamo.tipo_prestamo|capitalize }}</p>
+    <div class="cabecera">
+      <h1>Préstamo #{{ prestamo.id_prestamo }}</h1>
+      {{ estado(prestamo.estado_actual) }}
     </div>
-    {% if gestionar %}
-      <button>Recibir bienes seleccionados</button>
-      </form>
-      <h2>Ampliar plazo o reportar pérdida</h2>
-      {% for d in prestamo.detalles if not d.fecha_devolucion %}
-        <details class="panel">
-          <summary>
-            {{ d.codigo_inventario }}
-            ·
-            {{ d.recurso }}
-          </summary>
-          <form method="post"
-                action="{{ url_for('ampliaciones.ampliar_prestamo',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
-                class="formulario">
-            {{ csrf() }}
-            <input type="hidden"
-                   name="fecha_actual"
-                   value="{{ d.fecha_limite_devolucion.isoformat() }}">
-            <div class="rejilla">
-              {{ campo('cantidad','Tiempo adicional',tipo='number',requerido=true) }}
-              {{ opciones('unidad','Unidad',('HORAS','DIAS'),d.unidad_plazo) }}
-              {{ campo('motivo','Motivo de ampliación',maximo=160) }}
-            </div>
-            <p>
-              Máximo por ampliación: otro plazo de la política aplicada (
-              {{ d.plazo_maximo }}
-              {{ d.unidad_plazo|lower }}
-              ). Los plazos en horas terminan al cierre de atención.
-            </p>
-            <button>Ampliar plazo</button>
-          </form>
-          {% if d.estado_bien=="PRESTADO" %}
-            <form method="post"
-                  action="{{ url_for('prestamos.registrar_perdida_bien_material',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
-                  class="filtros">
-              {{ csrf() }}
-              {{ campo('motivo','Motivo de pérdida',requerido=true) }}
-              <button class="secundario">Reportar pérdida</button>
-            </form>
-          {% endif %}
+    <section class="panel">
+      <div class="ficha-resumen">
+        <div>
+          <small>Solicitante</small>
+          <strong>{{ prestamo.solicitante }}</strong>
+          <small>DNI: {{ prestamo.dni_persona }}</small>
+        </div>
+        <div>
+          <small>Fecha del préstamo</small>
+          <span>{{ prestamo.fecha_entrega|fecha }}</span>
+        </div>
+        <div>
+          <small>Registrado por</small>
+          <span>DNI: {{ prestamo.dni_encargado }}</span>
+        </div>
+      </div>
+      <small>Observaciones</small>
+      <p>{{ prestamo.observaciones or 'Sin observaciones.' }}</p>
+      {% if prestamo.tipo_prestamo=="GRUPAL" %}
+        <details>
+          <summary>Integrantes ({{ prestamo.participantes|length }})</summary>
+          <ul>
+            {% for p in prestamo.participantes %}
+              <li>{{ p.nombre }} · {{ p.dni_persona }} · {{ p.rol_participacion }}</li>
+            {% endfor %}
+          </ul>
         </details>
-      {% endfor %}
+      {% endif %}
+    </section>
+    <section class="panel panel-tabla" id="devolucion">
+      <h2>{{ 'Registrar devolución' if gestionar else 'Bienes y devoluciones' }}</h2>
+      {% if gestionar %}
+        <form method="post"
+              action="{{ url_for('prestamos.registrar_devolucion',identificador=prestamo.id_prestamo) }}">{{ csrf() }}{% endif %}
+        <div class="tabla">
+          <table>
+            <thead>
+              <tr>
+                {% if gestionar %}
+                  <th>Devolver</th>
+                {% endif %}
+                <th>Bien</th>
+                <th>Fecha límite</th>
+                <th>Seguimiento</th>
+                <th>Sanción por tardanza</th>
+                <th>Estado al devolver</th>
+                <th>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in prestamo.detalles %}
+                <tr>
+                  {% if gestionar %}
+                    <td>
+                      {% if not d.fecha_devolucion %}
+                        <input type="checkbox"
+                               name="detalles"
+                               value="{{ d.id_detalle }}"
+                               aria-label="Devolver {{ d.codigo_inventario }}">
+                      {% endif %}
+                    </td>
+                  {% endif %}
+                  <td>
+                    {{ d.codigo_inventario }}
+                    <small>{{ d.recurso }}</small>
+                  </td>
+                  <td>{{ d.fecha_limite_devolucion|fecha }}</td>
+                  <td>{{ estado('DEVUELTO' if d.fecha_devolucion else d.estado_bien) }}{% if d.fecha_devolucion %}
+                    <small>{{ d.fecha_devolucion|fecha }}</small>
+              {% endif %}
+            </td>
+            <td>
+              {% if d.estado_sancion %}{{ estado(d.estado_sancion) }}{% if gestionar %}
+                <a href="{{ url_for('sanciones.consultar_sanciones') }}">Gestionar sanción</a>
+              {% endif %}{% else %}Sin sanción{% endif %}
+            </td>
+            <td>
+              {% if gestionar and not d.fecha_devolucion %}{{ opciones('condicion_'~d.id_detalle,'Condición',('BUENO','DANADO')) }}{% else %}{{ d.condicion_devolucion or 'Pendiente' }}{% endif %}
+            </td>
+            <td>
+              {% if gestionar and not d.fecha_devolucion %}{{ campo('observacion_'~d.id_detalle,'Observación') }}{% else %}{{ d.observaciones_devolucion or '—' }}{% endif %}
+            </td>
+          </tr>
+  {% endfor %}
+  </tbody>
+  </table>
+  </div>
+  {% if gestionar %}
+    {% if prestamo.estado_actual!="DEVUELTO" %}
+      <div class="acciones al-final">
+        <button>Confirmar devolución</button>
+      </div>
     {% endif %}
-    {{ historial(prestamo.historial) }}
+    </form>
   {% endif %}
+  </section>
+  {% if gestionar %}
+    <section class="panel">
+      <h2>Ampliar plazo</h2>
+      <p class="suave">Cada ampliación permite como máximo otro plazo de la política aplicada. Los préstamos por horas respetan el cierre de atención.</p>
+      {% for d in prestamo.detalles if not d.fecha_devolucion and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora %}
+        <form method="post"
+              action="{{ url_for('ampliaciones.ampliar_prestamo',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
+              class="formulario operacion-bien">
+          {{ csrf() }}
+          <strong>{{ d.codigo_inventario }} · {{ d.recurso }}</strong>
+          <input type="hidden"
+                 name="fecha_actual"
+                 value="{{ d.fecha_limite_devolucion.isoformat() }}">
+          <div class="rejilla filtros-tres">
+            {{ campo('cantidad','Tiempo adicional',tipo='number',requerido=true) }}
+            {{ opciones('unidad','Unidad',('HORAS','DIAS'),d.unidad_plazo) }}
+            {{ campo('motivo','Motivo de ampliación',maximo=160) }}
+          </div>
+          <button class="secundario">Ampliar plazo</button>
+        </form>
+      {% else %}
+        <p>No hay bienes pendientes con plazo vigente que se puedan ampliar.</p>
+      {% endfor %}
+    </section>
+    <section class="panel">
+      <h2>Reportar un bien perdido</h2>
+      {% for d in prestamo.detalles if not d.fecha_devolucion and d.estado_bien=='PRESTADO' %}
+        <form method="post"
+              action="{{ url_for('prestamos.registrar_perdida_bien_material',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
+              class="formulario operacion-bien">
+          {{ csrf() }}
+          <strong>{{ d.codigo_inventario }} · {{ d.recurso }}
+          </strong>{{ campo('motivo','Descripción de la pérdida',requerido=true) }}
+          <button class="secundario">Registrar pérdida</button>
+        </form>
+      {% else %}
+        <p>No hay bienes prestados pendientes que se puedan reportar como perdidos.</p>
+      {% endfor %}
+    </section>
+  {% endif %}
+  <details class="panel">
+    <summary>Historial del préstamo ({{ prestamo.historial|length }})</summary>
+    {{ historial(prestamo.historial) }}
+  </details>
+  <a href="{{ url_for('prestamos.consultar_prestamos') }}">Volver al listado</a>
+{% endif %}
 {% endblock %}
