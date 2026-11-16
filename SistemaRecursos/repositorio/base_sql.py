@@ -2,8 +2,21 @@
 
 from contextlib import contextmanager
 import re
+from mysql.connector import IntegrityError
+
+from dominio.compartido.validacion import Conflicto
 
 from repositorio.conexion_mysql import MySQLConnection
+
+MENSAJES_DUPLICADOS = {
+    'persona.PRIMARY': 'Ya existe una persona con ese DNI.',
+    'persona.uq_persona_correo': 'Ese correo ya está registrado.',
+    'estudiante.uq_estudiante_cui': 'Ese CUI ya está registrado.',
+    'docente.codigo_docente': 'Ese código docente ya está registrado.',
+    'administrativo.codigo_empleado': 'Ese código de empleado ya está registrado.',
+    'usuario_sistema.dni_persona': 'La persona ya tiene una cuenta de acceso.',
+    'usuario_sistema.nombre_usuario': 'Ese nombre de usuario ya está registrado.',
+}
 
 
 class RepositorioSQL:
@@ -32,7 +45,14 @@ class RepositorioSQL:
     def ejecutar(self, sql, parametros=()):
         if self._cursor is None:
             raise RuntimeError('Una escritura requiere una transacción del servicio.')
-        self._cursor.execute(sql, parametros)
+        try:
+            self._cursor.execute(sql, parametros)
+        except IntegrityError as error:
+            # MySQL identifica el índice al final del error; no mostramos valores ni SQL.
+            indice = (error.msg or '').rsplit('for key ', 1)[-1].strip("'`")
+            if error.errno == 1062 and indice in MENSAJES_DUPLICADOS:
+                raise Conflicto(MENSAJES_DUPLICADOS[indice]) from None
+            raise
         return self._cursor.lastrowid
 
     def insertar(self, tabla, datos):
@@ -70,17 +90,10 @@ class RepositorioSQL:
     def registrar_historial_estado(
         self, entidad, identificador, anterior, nuevo, actor, observacion
     ):
-        self.insertar(
-            'historial_estado',
-            dict(
-                entidad=entidad,
-                id_entidad=identificador,
-                estado_anterior=anterior,
-                estado_nuevo=nuevo,
-                fecha=self.consultar_fecha_actual(),
-                dni_responsable=actor,
-                observacion=observacion,
-            ),
+        self.ejecutar(
+            '''INSERT INTO historial_estado(entidad,id_entidad,estado_anterior,estado_nuevo,
+            fecha,dni_responsable,observacion) VALUES(%s,%s,%s,%s,UTC_TIMESTAMP(),%s,%s)''',
+            (entidad, identificador, anterior, nuevo, actor, observacion),
         )
 
     def consultar_historial_estado(self, entidad, identificador):

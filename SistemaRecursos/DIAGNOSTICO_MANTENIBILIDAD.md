@@ -2,6 +2,38 @@
 
 Fecha: 16 de noviembre de 2026.
 
+## Estado de las correcciones
+
+La revisión posterior de capas también está atendida: ampliaciones devuelve
+`ContextoAmpliacion` con campos nombrados y el servicio decide los errores de
+ausencia; los formatos y la visibilidad HTML están en `presentacion/formatos_reportes.py`.
+El cálculo de páginas se comparte en `paginas_reporte`, la lectura de filtros usa
+`FiltroReporte.desde_datos` y reportes reutiliza `TABLAS_TIPO` de persistencia.
+Los ocho reportes conservan el formato, el orden y la visibilidad anteriores.
+Esta revisión pasó la suite completa de 139 pruebas, una comprobación adicional de
+20 pruebas de reportes y la revisión de tipos de ocho módulos.
+
+Los diez puntos se han atendido. El historial inserta la hora directamente; las
+políticas y permisos idénticos no se reescriben; las escrituras de préstamos cargan
+solo cabecera y detalles; inicio usa resúmenes SQL; administración omite contadores
+del catálogo; el autocompletado devuelve tres campos; los servicios preparan las
+versiones de políticas y los POST evitan la lectura del formulario.
+
+El identificador cero se rechaza y la configuración exige sus seis campos juntos.
+Los estados de préstamo se comparten desde el dominio y ContextoEntrega documenta
+sus claves con TypedDict. El CSV consulta solo filas y carga integrantes únicamente
+cuando hay grupos. El archivo SQL se ha sincronizado con el repositorio.
+
+Se conserva el cálculo de estado en SQL y Python porque sirve a recorridos distintos;
+una prueba comprueba que coinciden en los cuatro estados. Se conservan permisos,
+versiones y bloqueos necesarios. Las secciones siguientes describen el diagnóstico
+original como referencia de las correcciones.
+
+Validación final: 125 pruebas de la suite existente y siete pruebas nuevas de
+regresión, todas correctas en MySQL temporal. Mypy sin errores en los siete módulos
+comprobados y 16 consultas documentadas iguales a las del repositorio. La descarga
+de préstamos individuales utiliza una consulta de datos y la de grupos utiliza dos.
+
 Se revisaron los doce repositorios de casos de uso, los servicios, el dominio,
 controladores, plantillas y JavaScript, además de la conexión y los auxiliares SQL.
 La revisión distingue repetición de código, lecturas excesivas y escrituras que
@@ -168,5 +200,5 @@ En este recorrido también hay dos correcciones funcionales pendientes:
 4. Estados compartidos y contratos importantes, a medida que se revisa cada recorrido.
 
 La implementación autorizada de reportes se validó con 125 pruebas del proyecto y
-128 combinaciones de consultas y filtros. Esta lista diagnostica el resto del código;
-las recomendaciones anteriores no se han aplicado a los demás módulos.
+128 combinaciones de consultas y filtros antes de estas correcciones. La validación
+de las correcciones incluye la suite completa y pruebas de regresión específicas.

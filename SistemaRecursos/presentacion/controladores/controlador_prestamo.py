@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, url_for
 from presentacion.seguridad import requiere_permiso
+from dominio.gestion_prestamos.prestamo import FILTROS_ESTADO_PRESTAMO
 
 
 class ControladorPrestamo:
@@ -42,7 +43,11 @@ class ControladorPrestamo:
             request.args, None if gestionar else g.usuario.dni
         )
         return render_template(
-            'vista_prestamo.html', modo='lista', prestamos=filas, gestionar=gestionar
+            'vista_prestamo.html',
+            modo='lista',
+            prestamos=filas,
+            gestionar=gestionar,
+            estados=FILTROS_ESTADO_PRESTAMO,
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')

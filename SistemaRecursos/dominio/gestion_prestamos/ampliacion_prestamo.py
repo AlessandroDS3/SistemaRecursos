@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Protocol
+from typing import Protocol, TypedDict
 from dominio.compartido.contratos import IRepositorioTransaccional
 from dominio.compartido.validacion import Conflicto, entero, instante, texto
 
@@ -43,6 +43,15 @@ class AmpliacionPrestamo:
         return nueva
 
 
+class ContextoAmpliacion(TypedDict):
+    prestamo: dict | None
+    detalle: dict | None
+    politica: dict | None
+    horario: dict | None
+
+
 class IRepositorioAmpliacionPrestamo(IRepositorioTransaccional, Protocol):
-    def consultar_contexto_ampliacion_prestamo(self, prestamo: int, detalle: int) -> tuple: ...
+    def consultar_contexto_ampliacion_prestamo(
+        self, prestamo: int, detalle: int
+    ) -> ContextoAmpliacion: ...
     def actualizar_plazo_prestamo(self, detalle: int, anterior, nueva): ...

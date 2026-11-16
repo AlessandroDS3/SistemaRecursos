@@ -5,16 +5,27 @@ from repositorio.base_sql import RepositorioSQL
 
 def cargar_cuentas_para_actualizar(repo) -> list[dict]:
     """Bloquea cuentas y personas en orden de cuenta hasta terminar la transacción."""
-    return repo.consultar_sql('''SELECT u.id_usuario,u.dni_persona,u.rol,u.estado_cuenta,
+    return repo.consultar_sql('''SELECT u.id_usuario,u.dni_persona,u.nombre_usuario,
+        u.contrasena_hash,u.rol,u.estado_cuenta,
         p.estado AS estado_persona FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona
         ORDER BY u.id_usuario FOR UPDATE''')
 
 
 class RepositorioCuentaSQL(RepositorioSQL):
+    def consultar_cuenta_para_cambiar_clave(self, identificador: int) -> dict | None:
+        return self.consultar_sql(
+            '''SELECT u.id_usuario,u.contrasena_hash,u.estado_cuenta,p.estado AS estado_persona
+            FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona
+            WHERE u.id_usuario=%s FOR UPDATE''',
+            (identificador,),
+            una=True,
+        )
+
     def consultar_cuenta(self, documento: str) -> dict | None:
         return self.consultar_sql(
-            '''SELECT id_usuario,dni_persona,nombre_usuario,rol,estado_cuenta,
-            ultimo_acceso FROM usuario_sistema WHERE dni_persona=%s''',
+            '''SELECT u.id_usuario,u.dni_persona,u.nombre_usuario,u.contrasena_hash,
+            u.rol,u.estado_cuenta,u.ultimo_acceso,p.estado AS estado_persona
+            FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona WHERE u.dni_persona=%s''',
             (documento,),
             una=True,
         )

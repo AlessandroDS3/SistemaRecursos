@@ -1,6 +1,7 @@
 from flask import Blueprint, Response, render_template, request
 from presentacion.seguridad import requiere_permiso
-from dominio.gestion_control.catalogo_reportes import ETIQUETAS_VALORES, OPCIONES_FILTROS, REPORTES
+from dominio.gestion_control.catalogo_reportes import OPCIONES_FILTROS, REPORTES
+from presentacion.formatos_reportes import ETIQUETAS_VALORES, presentar_reporte
 
 
 def etiqueta_reporte(valor):
@@ -45,6 +46,7 @@ class ControladorReporte:
     @requiere_permiso('REPORTES_CONSULTAR')
     def consultar_reportes(self):
         resultado = self.servicio.consultar_reportes(request.args)
+        resultado['reporte'] = presentar_reporte(resultado['filtro'].tipo)
         return render_template(
             'vista_reporte.html',
             **resultado,

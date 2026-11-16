@@ -80,10 +80,11 @@
                 <td>{{ p.tipo|capitalize }}</td>
                 <td>{{ estado(p.estado) }}</td>
                 <td>
-                  {{ estado('CON_ACCESO' if p.id_usuario and p.estado_cuenta=='ACTIVA' else 'SIN_CUENTA' if not p.id_usuario else p.estado_cuenta) }}
+                  {{ estado('SIN_CUENTA' if not p.id_usuario else 'INACTIVA' if p.estado=='INACTIVA' else 'CON_ACCESO' if p.estado_cuenta=='ACTIVA' else p.estado_cuenta) }}
                   {% if g.usuario.permite("USUARIOS_GESTIONAR") %}
-                    <a href="{{ url_for('cuentas.actualizar_cuenta' if p.id_usuario else 'cuentas.registrar_cuenta',documento=p.dni) }}">{{ 'Ver cuenta' if p.id_usuario else 'Crear acceso' }}
-                    </a>
+                    {% if p.id_usuario or p.estado=="ACTIVA" %}
+                      <a href="{{ url_for('cuentas.actualizar_cuenta' if p.id_usuario else 'cuentas.registrar_cuenta',documento=p.dni) }}">{{ 'Ver cuenta' if p.id_usuario else 'Crear acceso' }}</a>
+                    {% endif %}
                   {% endif %}
                 </td>
               </tr>
@@ -138,8 +139,11 @@
         </form>
       {% endif %}
       {% if g.usuario.permite("USUARIOS_GESTIONAR") %}
-        <a href="{{ url_for('cuentas.registrar_cuenta',documento=persona.dni) }}">Crear cuenta</a>
-        <a href="{{ url_for('cuentas.actualizar_cuenta',documento=persona.dni) }}">Editar cuenta</a>
+        {% if tiene_cuenta %}
+          <a href="{{ url_for('cuentas.actualizar_cuenta',documento=persona.dni) }}">Editar cuenta</a>
+        {% elif persona.estado=="ACTIVA" %}
+          <a href="{{ url_for('cuentas.registrar_cuenta',documento=persona.dni) }}">Crear cuenta</a>
+        {% endif %}
       {% endif %}
     </div>
   {% else %}

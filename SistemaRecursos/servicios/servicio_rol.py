@@ -18,4 +18,5 @@ class ServicioAplicacionRol:
             exigir_permiso(operacion.consultar_cuenta_actor(actor), 'ROLES_GESTIONAR')
             actual = operacion.consultar_matriz_permisos(bloquear=True)
             comprobar_version(version_recibida, version(actual))
-            operacion.guardar_matriz_permisos(matriz)
+            if matriz != actual:
+                operacion.guardar_matriz_permisos(matriz)

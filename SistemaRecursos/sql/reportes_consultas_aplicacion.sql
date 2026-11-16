@@ -11,44 +11,25 @@ SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 
 -- 01. Préstamos: filas sin paginar.
-
-SELECT
-    p.id_prestamo,
-    p.dni_persona,
-    CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
-    p.tipo_prestamo,
-    p.fecha_entrega,
-    b.codigo_inventario,
-    r.nombre AS recurso,
-    c.nombre AS categoria,
-    d.fecha_limite_devolucion,
-    d.fecha_devolucion,
-    CASE
-        WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
-        WHEN d.fecha_limite_devolucion < UTC_TIMESTAMP() THEN 'VENCIDO'
-        ELSE 'PENDIENTE'
-    END AS situacion
-FROM prestamo p
-JOIN persona per ON per.dni = p.dni_persona
-JOIN detalle_prestamo d ON d.id_prestamo = p.id_prestamo
-JOIN bien_material b ON b.id_bien = d.id_bien
-JOIN recurso r ON r.id_recurso = b.id_recurso
-JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
-ORDER BY p.fecha_entrega DESC, p.id_prestamo DESC, d.id_detalle;
+SELECT p.id_prestamo,p.dni_persona,CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
+            p.tipo_prestamo,p.fecha_entrega,b.codigo_inventario,r.nombre AS recurso,
+            c.nombre AS categoria,d.fecha_limite_devolucion,d.fecha_devolucion,
+            CASE WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
+                WHEN d.fecha_limite_devolucion<UTC_TIMESTAMP() THEN 'VENCIDO' ELSE 'PENDIENTE' END AS situacion FROM prestamo p JOIN persona per ON per.dni=p.dni_persona
+    JOIN detalle_prestamo d ON d.id_prestamo=p.id_prestamo
+    JOIN bien_material b ON b.id_bien=d.id_bien JOIN recurso r ON r.id_recurso=b.id_recurso
+    JOIN categoria_recurso c ON c.id_categoria=r.id_categoria WHERE 1=1 ORDER BY p.fecha_entrega DESC,p.id_prestamo DESC,d.id_detalle;
 
 
 -- 02. Préstamos: resumen de indicadores.
+SELECT COUNT(*) AS detalles,COUNT(DISTINCT p.id_prestamo) AS prestamos,
+            COALESCE(SUM(d.fecha_devolucion IS NOT NULL),0) AS devueltos,
+            COALESCE(SUM(d.fecha_devolucion IS NULL),0) AS pendientes,
+            COALESCE(SUM(d.fecha_devolucion IS NULL AND d.fecha_limite_devolucion<UTC_TIMESTAMP()),0) AS vencidos FROM prestamo p JOIN persona per ON per.dni=p.dni_persona
+    JOIN detalle_prestamo d ON d.id_prestamo=p.id_prestamo
+    JOIN bien_material b ON b.id_bien=d.id_bien JOIN recurso r ON r.id_recurso=b.id_recurso
+    JOIN categoria_recurso c ON c.id_categoria=r.id_categoria WHERE 1=1;
 
-SELECT
-    COUNT(*) AS detalles,
-    COUNT(DISTINCT id_prestamo) AS prestamos,
-    COALESCE(SUM(fecha_devolucion IS NOT NULL), 0) AS devueltos,
-    COALESCE(SUM(fecha_devolucion IS NULL), 0) AS pendientes,
-    COALESCE(SUM(
-        fecha_devolucion IS NULL
-        AND fecha_limite_devolucion < UTC_TIMESTAMP()
-    ), 0) AS vencidos
-FROM detalle_prestamo;
 
 -- 03. Devoluciones y cumplimiento: filas sin paginar.
 SELECT p.id_prestamo,p.dni_persona,CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
@@ -176,7 +157,7 @@ SELECT COUNT(*) AS detalles,COUNT(DISTINCT b.id_bien) AS bienes,
             LEFT JOIN persona reg ON reg.dni=h.dni_responsable WHERE 1=1 AND h.entidad='BIEN_MATERIAL' AND h.estado_nuevo IN ('DANADO','PERDIDO');
 
 -- 17. Integrantes: se reutiliza para prestamos, devoluciones y sanciones.
--- Sustituir (1, 2, 3) por los id_prestamo presentes en las filas recuperadas.
+-- Sustituir (1, 2, 3) por los id_prestamo GRUPALES presentes en las filas recuperadas.
 SELECT pp.id_prestamo, pp.dni_persona, CONCAT(p.nombres, ' ', p.apellidos) AS nombre
 FROM participante_prestamo pp
 JOIN persona p ON p.dni = pp.dni_persona

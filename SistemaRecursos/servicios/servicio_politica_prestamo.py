@@ -1,4 +1,5 @@
-from dominio.compartido.validacion import NoEncontrado
+from dataclasses import asdict
+from dominio.compartido.validacion import Conflicto, NoEncontrado
 from dominio.compartido.validacion import comprobar_version, entero, version
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
@@ -21,7 +22,10 @@ class ServicioAplicacionPoliticaPrestamo:
         return fila, version(fila)
 
     def consultar_politicas_prestamo(self):
-        return self.repositorio.consultar_politicas_prestamo()
+        return [
+            dict(fila, version=version({k: v for k, v in fila.items() if k != 'categoria'}))
+            for fila in self.repositorio.consultar_politicas_prestamo()
+        ]
 
     def consultar_configuracion_general(self):
         return self.repositorio.consultar_configuracion_general() or {}
@@ -30,20 +34,31 @@ class ServicioAplicacionPoliticaPrestamo:
         return self.repositorio.consultar_limites_articulos()
 
     def guardar_politica_prestamo(self, datos, actor, identificador=None):
+        identificador = entero(identificador) if identificador is not None else None
         politica = PoliticaPrestamo.desde_datos(datos)
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'POLITICAS_GESTIONAR')
-            if identificador:
-                anterior = operacion.consultar_politica_prestamo(
-                    entero(identificador), bloquear=True
-                )
-                if anterior is None or not anterior['vigente']:
-                    raise ValueError('La política ya no está vigente.')
+            if identificador is not None:
+                anterior = operacion.consultar_politica_prestamo(identificador, bloquear=True)
+                if anterior is None:
+                    raise NoEncontrado('Política inexistente.')
+                if not anterior['vigente']:
+                    raise Conflicto('La política ya no está vigente.')
                 comprobar_version(datos.get('version'), version(anterior))
+                vigente = PoliticaPrestamo.desde_datos(anterior)
+                if all(
+                    valor == getattr(vigente, campo)
+                    for campo, valor in asdict(politica).items()
+                    if campo != 'id_politica'
+                ):
+                    return identificador
                 operacion.desactivar_politica_prestamo(anterior['id_politica'])
             return operacion.guardar_politica_prestamo(politica)
 
     def guardar_configuracion_general(self, datos, actor):
+        requeridos = ('hora_apertura', 'hora_cierre', *ConfiguracionReservas.__dataclass_fields__)
+        if any(campo not in datos for campo in requeridos):
+            raise ValueError('Envía el horario y los cuatro campos de vencimiento juntos.')
         horario = HorarioAtencion(
             hora_apertura=datos.get('hora_apertura'), hora_cierre=datos.get('hora_cierre')
         )

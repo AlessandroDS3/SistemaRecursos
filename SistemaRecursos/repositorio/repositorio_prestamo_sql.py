@@ -2,6 +2,7 @@
 
 from dominio.compartido.validacion import Conflicto
 from dominio.gestion_control.politica_prestamo import HorarioAtencion
+from dominio.gestion_prestamos.prestamo import ContextoEntrega
 from repositorio.base_sql import RepositorioSQL
 from repositorio.repositorio_persona_sql import CONSULTA as PERSONAS
 from repositorio.repositorio_sancion_sql import RepositorioSancionSQL
@@ -86,6 +87,36 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             sql + ' ORDER BY p.fecha_entrega DESC,p.id_prestamo DESC', parametros
         )
 
+    def consultar_resumen_prestamos(self, documento=None):
+        sql = '''SELECT COALESCE(SUM(d.pendientes>0),0) AS prestamos_pendientes,
+            COALESCE(SUM(d.vencidos>0),0) AS prestamos_vencidos FROM prestamo p JOIN (
+                SELECT id_prestamo,SUM(fecha_devolucion IS NULL) AS pendientes,
+                SUM(fecha_devolucion IS NULL AND fecha_limite_devolucion<UTC_TIMESTAMP()) AS vencidos
+                FROM detalle_prestamo GROUP BY id_prestamo
+            ) d ON d.id_prestamo=p.id_prestamo'''
+        parametros: tuple = ()
+        if documento is not None:
+            sql += ''' WHERE p.dni_persona=%s OR EXISTS(SELECT 1 FROM participante_prestamo pp
+                WHERE pp.id_prestamo=p.id_prestamo AND pp.dni_persona=%s)'''
+            parametros = (documento, documento)
+        return self.consultar_sql(sql, parametros, una=True)
+
+    def consultar_prestamo_para_actualizar(self, identificador):
+        prestamo = self.consultar_sql(
+            'SELECT id_prestamo,estado FROM prestamo WHERE id_prestamo=%s FOR UPDATE',
+            (identificador,),
+            una=True,
+        )
+        if prestamo is not None:
+            prestamo['detalles'] = self.consultar_sql(
+                '''SELECT d.id_detalle,d.id_prestamo,d.id_bien,d.fecha_limite_devolucion,
+                d.fecha_devolucion,b.estado AS estado_bien FROM detalle_prestamo d
+                JOIN bien_material b ON b.id_bien=d.id_bien
+                WHERE d.id_prestamo=%s ORDER BY b.id_bien FOR UPDATE''',
+                (identificador,),
+            )
+        return prestamo
+
     def consultar_prestamo(self, identificador, bloquear=False):
         fila = self.consultar_sql(
             f'''SELECT p.*,CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
@@ -114,7 +145,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         return fila
 
-    def consultar_contexto_entrega_prestamo(self, solicitud):
+    def consultar_contexto_entrega_prestamo(self, solicitud) -> ContextoEntrega:
         documentos = tuple(sorted(set([*solicitud.solicitantes, solicitud.dni_encargado])))
         marcas = ','.join(['%s'] * len(documentos))
         personas = {

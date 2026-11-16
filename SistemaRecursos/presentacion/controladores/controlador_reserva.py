@@ -48,7 +48,7 @@ class ControladorReserva:
             identificador = self.servicio.registrar_reserva(
                 request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Solicitud registrada. Consulta su estado para recoger el bien.')
+            flash('Reserva registrada. Consulta su estado antes de recoger el bien.')
             return redirect(url_for('reservas.consultar_reserva', identificador=identificador))
         return render_template(
             'vista_reserva.html',

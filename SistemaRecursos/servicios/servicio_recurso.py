@@ -19,7 +19,7 @@ class ServicioAplicacionRecurso:
 
     def consultar_administracion_recursos(self, filtros) -> dict:
         filtros = validar_filtros_inventario(filtros)
-        recursos = self.repositorio.consultar_recursos(filtros)
+        recursos = self.repositorio.consultar_recursos(filtros, contar_bienes=False)
         bienes = self.repositorio.consultar_bienes_materiales(filtros)
         por_recurso: dict[int, list[dict]] = {}
         for bien in bienes:
@@ -38,6 +38,9 @@ class ServicioAplicacionRecurso:
                 disponibles=sum(bien['estado'] == 'DISPONIBLE' for bien in visibles),
             ),
         )
+
+    def consultar_disponibilidad(self) -> int:
+        return self.repositorio.consultar_disponibilidad()
 
     def consultar_recurso(self, identificador: int) -> dict:
         fila = self.repositorio.consultar_recurso(entero(identificador))

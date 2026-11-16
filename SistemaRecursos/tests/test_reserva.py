@@ -35,8 +35,15 @@ class OperacionesReserva(CasoMySQL):
     def test_reserva_no_saltea_cola_y_cancelar_recalcula_posicion(self):
         primera = self.reservar()
         self.servicios['cuentas'].registrar_cuenta('99000001', 'segundo', 'UsuarioPrueba2026!', 1)
+        fecha = (self.consultar_fecha_actual + timedelta(days=1, hours=-5)).isoformat(
+            timespec='minutes'
+        )
         segunda = self.servicios['reservas'].registrar_reserva(
-            dict(id_recurso=1, tipo_gestion='PRESTAMO', acepta_condiciones='1'), 4
+            dict(id_recurso=1, fecha_requerida=fecha, acepta_condiciones='1'), 4
+        )
+        self.ejecutar(
+            'UPDATE reserva SET fecha_requerida=%s WHERE id_reserva=%s',
+            (self.consultar_fecha_actual, segunda),
         )
         reservas = self.servicios['reservas']
         with self.assertRaises(Conflicto):
@@ -156,6 +163,51 @@ class OperacionesReserva(CasoMySQL):
             self.servicios['reservas'].consultar_reserva(identificador, '99000001')
         with self.assertRaises(PermissionError):
             self.servicios['reservas'].preparar_reserva(identificador, {}, 3)
+
+    def test_solo_admite_fechas_futuras_y_rechaza_prestamo_inmediato(self):
+        ahora_lima = self.consultar_fecha_actual - timedelta(hours=5)
+        for fecha in (
+            '',
+            None,
+            (ahora_lima - timedelta(days=1)).isoformat(),
+            ahora_lima.isoformat(),
+        ):
+            with self.subTest(fecha=fecha), self.assertRaises(ValueError):
+                self.reservar(fecha_requerida=fecha)
+        with self.assertRaisesRegex(ValueError, 'presencialmente'):
+            self.reservar(tipo_gestion='PRESTAMO')
+        self.assertEqual(self.fila('SELECT COUNT(*) FROM reserva'), (0,))
+        self.assertEqual(self.fila('SELECT COUNT(*) FROM prestamo'), (0,))
+
+    def test_reservar_no_entrega_bien_y_toma_el_titular_de_la_sesion(self):
+        fecha = (self.consultar_fecha_actual + timedelta(days=1, hours=-5)).isoformat(
+            timespec='minutes'
+        )
+        identificador = self.reservar(fecha_requerida=fecha, dni_persona='99000001')
+        self.assertEqual(
+            self.fila(
+                'SELECT tipo_gestion,dni_persona,id_bien FROM reserva WHERE id_reserva=%s',
+                (identificador,),
+            ),
+            ('RESERVA', '02167885', None),
+        )
+        self.assertEqual(self.fila('SELECT COUNT(*) FROM prestamo'), (0,))
+        self.assertEqual(
+            self.fila("SELECT COUNT(*) FROM bien_material WHERE estado='DISPONIBLE'"), (2,)
+        )
+
+    def test_solicitud_anterior_se_conserva_y_puede_atenderse(self):
+        identificador = self.reservar()
+        self.ejecutar(
+            "UPDATE reserva SET tipo_gestion='PRESTAMO' WHERE id_reserva=%s", (identificador,)
+        )
+        reservas = self.servicios['reservas']
+        self.assertEqual(reservas.consultar_reservas('02167885')[0]['tipo_gestion'], 'PRESTAMO')
+        reservas.preparar_reserva(identificador, {}, 2)
+        prestamo = reservas.entregar_reserva(identificador, {'acepta_condiciones': '1'}, 2)
+        self.assertEqual(
+            reservas.consultar_reserva(identificador, '02167885')['id_prestamo_ref'], prestamo
+        )
 
     def test_no_entregar_bien_ajeno_al_recurso_reservado(self):
         identificador = self.reservar()

@@ -14,11 +14,11 @@
     <div class="acciones enlaces-seccion">
       {% if gestionar or g.usuario.permite("RESERVAS_PROPIAS_GESTIONAR") %}
         <a class="boton secundario"
-           href="{{ url_for('reservas.consultar_reservas') }}">Solicitudes y reservas</a>
+           href="{{ url_for('reservas.consultar_reservas') }}">Reservas</a>
       {% endif %}
       {% if g.usuario.permite("CATALOGO_CONSULTAR") %}
         <a class="boton secundario"
-           href="{{ url_for('recursos.consultar_recursos') }}">Solicitar un recurso desde el catálogo</a>
+           href="{{ url_for('recursos.consultar_recursos') }}">Reservar un recurso desde el catálogo</a>
       {% endif %}
     </div>
     <form class="filtros filtros-bloque">
@@ -27,7 +27,7 @@
         <label>
           Estado o seguimiento<select name="estado">
           <option value="">Todos</option>
-          {% for codigo,etiqueta in (('ACTIVO','Activos'),('VENCIDO','Vencidos'),('DEVUELTO','Devueltos'),('PARCIALMENTE_DEVUELTO','Parcialmente devueltos'),('PENDIENTES','Con bienes pendientes'),('PERDIDOS','Con bienes perdidos pendientes')) %}
+          {% for codigo,etiqueta in estados.items() %}
             <option value="{{ codigo }}"
                     {% if request.args.get('estado')==codigo %}selected{% endif %}>{{ etiqueta }}</option>
           {% endfor %}

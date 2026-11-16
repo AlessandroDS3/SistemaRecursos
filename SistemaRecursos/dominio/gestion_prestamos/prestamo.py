@@ -1,12 +1,38 @@
 """Reglas puras de entrega y cálculo de estado. Los datos se cargan bajo bloqueo."""
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, TypedDict
+from datetime import datetime
 from dominio.compartido.contratos import IRepositorioTransaccional
 from dominio.gestion_control.sancion import IRepositorioSancion
 from dominio.compartido.validacion import Conflicto, NoEncontrado, dni, ids, texto
 from dominio.gestion_personas_usuarios.persona import validar_elegibilidad
-from dominio.gestion_control.politica_prestamo import PoliticaPrestamo
+from dominio.gestion_control.politica_prestamo import HorarioAtencion, PoliticaPrestamo
+
+ESTADOS_PRESTAMO = {
+    'ACTIVO': 'Activos',
+    'VENCIDO': 'Vencidos',
+    'DEVUELTO': 'Devueltos',
+    'PARCIALMENTE_DEVUELTO': 'Parcialmente devueltos',
+}
+FILTROS_ESTADO_PRESTAMO = {
+    **ESTADOS_PRESTAMO,
+    'PENDIENTES': 'Con bienes pendientes',
+    'PERDIDOS': 'Con bienes perdidos pendientes',
+}
+
+
+class ContextoEntrega(TypedDict):
+    personas: dict[str, dict]
+    sancion: bool
+    vencido: bool
+    limite: int | None
+    pendientes: int
+    bienes: list[dict]
+    entregas_pendientes: bool
+    politicas: dict[int, dict]
+    horario: HorarioAtencion | None
+    ahora: datetime
 
 
 @dataclass(kw_only=True)
@@ -51,7 +77,7 @@ class SolicitudPrestamo:
         )
         return uso + self.observaciones
 
-    def planificar(self, contexto, bien_reservado=None):
+    def planificar(self, contexto: ContextoEntrega, bien_reservado=None):
         for documento in self.solicitantes:
             validar_elegibilidad(contexto['personas'].get(documento))
         if contexto['sancion']:
@@ -105,12 +131,16 @@ def estado_prestamo(detalles, ahora):
 
 
 class IRepositorioPrestamo(IRepositorioTransaccional, Protocol):
+    def consultar_resumen_prestamos(self, documento: str | None = None) -> dict: ...
+    def consultar_prestamo_para_actualizar(self, identificador: int) -> dict | None: ...
     def consultar_condiciones_prestamo(self, documento: str) -> dict: ...
     @property
     def sanciones(self) -> IRepositorioSancion: ...
     def consultar_prestamo(self, identificador: int, bloquear=False) -> dict | None: ...
     def consultar_prestamos(self, filtros: dict, documento: str | None = None) -> list[dict]: ...
-    def consultar_contexto_entrega_prestamo(self, solicitud: SolicitudPrestamo) -> dict: ...
+    def consultar_contexto_entrega_prestamo(
+        self, solicitud: SolicitudPrestamo
+    ) -> ContextoEntrega: ...
     def registrar_entrega_prestamo(self, solicitud: SolicitudPrestamo, plan: list[dict], fecha): ...
     def registrar_devolucion(self, detalle: dict, devolucion, fecha, actor: str): ...
     def actualizar_estado_prestamo(self, prestamo: dict, nuevo: str, actor: str, motivo: str): ...

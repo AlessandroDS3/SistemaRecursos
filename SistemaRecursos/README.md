@@ -30,6 +30,14 @@ Abre **http://127.0.0.1:5001**. `PORT` permite cambiar el puerto.
 
 La clave de firma se toma de `FLASK_SECRET_KEY`. En desarrollo, si no se define, se conserva en `datos_locales/clave_sesion.txt` entre reinicios. El entorno virtual y los archivos locales quedan fuera del repositorio.
 
+## Cambiar la contraseña propia
+
+Todos los usuarios con sesión activa pueden abrir **Cambiar mi contraseña** en la
+parte inferior del menú. Se solicita la contraseña actual, una nueva de 12 a 256
+caracteres y su confirmación. Al guardar se cierra la sesión y se vuelve al login;
+las otras sesiones de esa cuenta también dejan de ser válidas. Esta opción modifica
+únicamente la contraseña de la cuenta conectada.
+
 ## Usuarios de demostración
 
 | Usuario | Contraseña | Rol |
@@ -136,13 +144,17 @@ Las devoluciones son una operación del préstamo: `ControladorPrestamo.registra
 ## Reglas y transacciones
 
 - **Acceso:** consulta una cuenta mínima y sus permisos. Cuenta y persona deben estar activas. Usa una cookie de sesión del navegador, sin temporizador propio de ocho horas. El cierre de sesión borra la sesión y el cambio de contraseña invalida las credenciales de las cookies anteriores. Cada petición vuelve a cargar permisos y estados. Los formularios de escritura usan CSRF.
-- **Personas y cuentas:** los datos institucionales pertenecen a persona; contraseña y acceso pertenecen a cuenta. Las ediciones de persona y la matriz de permisos detectan formularios desactualizados. Se protege la propia cuenta y la existencia de un administrador activo.
+- **Personas y cuentas:** los datos institucionales pertenecen a persona; contraseña y acceso pertenecen a cuenta. Las ediciones de persona, cuenta y matriz de permisos detectan formularios desactualizados. Un cambio de contraseña, rol o estado también invalida un formulario anterior de cuenta; iniciar sesión no lo invalida. La ficha ofrece crear cuenta solo para personas activas sin cuenta, y editarla cuando ya existe. «Con acceso» exige que persona y cuenta estén activas. Los duplicados de DNI, correo, CUI, códigos institucionales y usuario se notifican como conflictos y revierten la transacción. Se protege la propia cuenta y la existencia de un administrador activo.
 - **Entrega:** el formulario consulta cupo, plazos y permiso de salida antes de confirmar. `SolicitudPrestamo.planificar` comprueba a los integrantes, sanciones, vencimientos, cupo total del responsable, inventario, política y horario. El repositorio carga esos hechos bajo bloqueo. Préstamo, detalles, integrantes, inventario e historial se confirman juntos.
-- **Reservas:** la persona solicita un recurso; el personal prepara un ejemplar y confirma la entrega al recogerlo. Se comprueban solicitudes duplicadas, elegibilidad y turno. La posición se calcula al consultar. Entregar una reserva reutiliza `ServicioAplicacionPrestamo.registrar_prestamo_en_operacion` con la misma conexión y transacción.
+- **Reservas:** por la web se reserva un recurso para una fecha y hora futuras de retiro (hora de Lima). No se admiten nuevas solicitudes de préstamo inmediato por esa vía: si la persona necesita el bien en ese momento, acude al encargado, quien registra la entrega en Préstamos. Al llegar la fecha de una reserva, el personal prepara un ejemplar y confirma la entrega al recogerlo. Se comprueban duplicados, elegibilidad y turno. La posición se calcula al consultar. Entregar una reserva reutiliza `ServicioAplicacionPrestamo.registrar_prestamo_en_operacion` con la misma conexión y transacción. Las solicitudes antiguas se conservan y pueden consultarse y atenderse; no se modifica su historial ni el esquema SQL.
 - **Devolución y pérdida:** se pueden recibir bienes parcialmente. Un daño requiere observación. La pérdida deja el detalle pendiente y el inventario en `PERDIDO`; recuperarlo se registra como devolución `BUENO` o `DANADO`.
 - **Ampliación:** la petición es presencial. El personal añade horas o días a un detalle pendiente y no vencido. Cada ampliación admite como máximo otro plazo de la política aplicada y respeta el cierre cuando corresponde. La fecha anterior evita aplicar dos veces un formulario. Se actualizan detalle e historial juntos.
 - **Sanciones:** el retraso genera una incidencia y una sanción por detalle; afecta al responsable y a todos los integrantes. Una sanción levantada no se reactiva automáticamente. Daño y pérdida mantienen el registro de inventario e historial; no se añadieron reglas nuevas de sanción para esos casos.
 - **Reportes:** consultas sin escrituras, filtros por fechas de Lima, estado, modalidad, persona, integrantes, recurso o inventario. Cada bien ocupa una fila aunque el préstamo sea grupal. La pantalla pagina de 50 en 50 y el CSV incluye todos los resultados, usa UTF-8 con BOM y protege las celdas que podrían interpretarse como fórmulas.
+
+Validación del flujo de reserva futura (16/11/2026): **143 pruebas correctas, sin omisiones**, sobre MySQL temporal aislado. Se comprueban el rechazo de fechas ausentes o no futuras y de solicitudes inmediatas, la titularidad de la reserva, la atención al llegar la fecha y la compatibilidad con solicitudes anteriores. Registro local: `datos_locales/verificacion_reserva_futura.log`.
+
+Validación de las correcciones de personas y cuentas (16/11/2026): **150 pruebas correctas, sin omisiones**, sobre MySQL temporal aislado. Incluye siete pruebas nuevas de versiones de cuenta, acceso efectivo, enlaces y formularios de creación, duplicados y reversión para estudiantes, docentes y administrativos. Análisis de tipos sin errores en los cuatro módulos comprobados. Registro local: `datos_locales/correccion_personas_cuentas.log`.
 
 `RepositorioSQL.transaccion()` entrega una instancia de operación con un cursor propio. Los repositorios relacionados reutilizan ese cursor internamente. Los servicios no reciben conexiones ni cursores y no coordinan escrituras mediante conexiones independientes.
 

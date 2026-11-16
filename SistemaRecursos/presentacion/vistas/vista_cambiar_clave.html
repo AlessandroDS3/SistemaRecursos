@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from 'formularios.html' import csrf %}
+{% block contenido %}
+  <h1>Cambiar mi contraseña</h1>
+  <form method="post" class="formulario panel estrecho">
+    {{ csrf() }}
+    <label>
+      Contraseña actual
+      <input name="clave_actual"
+             type="password"
+             required
+             maxlength="256"
+             autocomplete="current-password">
+    </label>
+    <label>
+      Nueva contraseña
+      <input name="clave_nueva"
+             type="password"
+             required
+             minlength="12"
+             maxlength="256"
+             autocomplete="new-password">
+    </label>
+    <label>
+      Confirmar nueva contraseña
+      <input name="confirmacion"
+             type="password"
+             required
+             minlength="12"
+             maxlength="256"
+             autocomplete="new-password">
+    </label>
+    <p class="suave">Usa entre 12 y 256 caracteres. Al guardar tendrás que iniciar sesión de nuevo.</p>
+    <div class="acciones">
+      <button>Cambiar contraseña</button>
+      <a href="{{ url_for('inicio') }}">Cancelar</a>
+    </div>
+  </form>
+{% endblock %}

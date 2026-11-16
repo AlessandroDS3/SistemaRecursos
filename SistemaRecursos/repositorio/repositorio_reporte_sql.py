@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from repositorio.base_sql import RepositorioSQL
 from repositorio.repositorio_prestamo_sql import ESTADO_SQL
-from dominio.gestion_control.reporte import FILAS_POR_PAGINA
+from dominio.gestion_control.reporte import FILAS_POR_PAGINA, paginas_reporte
+from repositorio.repositorio_persona_sql import TABLAS_TIPO
 from dominio.gestion_prestamos.reserva import ESTADOS_PENDIENTES
 
 SQL_SELECT = 'SELECT '
@@ -27,7 +28,7 @@ class ConsultaReporte:
 
 
 class RepositorioReporteSQL(RepositorioSQL):
-    def consultar_reportes(self, filtro, paginar=True):
+    def _consulta_reporte(self, filtro):
         consultas = {
             'prestamos': self._consulta_prestamos,
             'devoluciones': self._consulta_devoluciones,
@@ -38,13 +39,23 @@ class RepositorioReporteSQL(RepositorioSQL):
             'sanciones': self._consulta_sanciones,
             'danos_perdidas': self._consulta_danos_perdidas,
         }
-        consulta = consultas[filtro.tipo](filtro)
+        return consultas[filtro.tipo](filtro)
+
+    def consultar_filas_reporte(self, filtro):
+        consulta = self._consulta_reporte(filtro)
+        filas = self.consultar_sql(consulta.filas, consulta.parametros)
+        if filtro.tipo in ('prestamos', 'devoluciones', 'sanciones'):
+            self._consultar_integrantes_prestamos(filas)
+        return filas
+
+    def consultar_reportes(self, filtro, paginar=True):
+        consulta = self._consulta_reporte(filtro)
         resumen = self.consultar_sql(consulta.resumen, consulta.parametros, una=True)
         resumen = {k: (v if v is not None else 0) for k, v in resumen.items()}
         resumen['detalles'] = int(resumen['detalles'])
         sql, parametros = consulta.filas, list(consulta.parametros)
         if paginar:
-            paginas = max(1, (resumen['detalles'] + FILAS_POR_PAGINA - 1) // FILAS_POR_PAGINA)
+            paginas = paginas_reporte(resumen['detalles'])
             filtro.pagina = min(filtro.pagina, paginas)
             sql += f' LIMIT {FILAS_POR_PAGINA} OFFSET %s'
             parametros.append((filtro.pagina - 1) * FILAS_POR_PAGINA)
@@ -76,11 +87,7 @@ class RepositorioReporteSQL(RepositorioSQL):
             condiciones.append('p.tipo_prestamo=%s')
             parametros.append(filtro.modalidad)
         if filtro.tipo_persona:
-            tabla = {
-                'ESTUDIANTE': 'estudiante',
-                'DOCENTE': 'docente',
-                'ADMINISTRATIVO': 'administrativo',
-            }[filtro.tipo_persona]
+            tabla = TABLAS_TIPO[filtro.tipo_persona]
             condiciones.append(f'EXISTS(SELECT 1 FROM {tabla} t WHERE t.dni=p.dni_persona)')
 
     def _consulta_prestamos(self, filtro):
@@ -316,7 +323,11 @@ class RepositorioReporteSQL(RepositorioSQL):
         )
 
     def _consultar_integrantes_prestamos(self, filas):
-        identificadores = sorted({fila['id_prestamo'] for fila in filas})
+        for fila in filas:
+            fila['integrantes'] = ''
+        identificadores = sorted(
+            {fila['id_prestamo'] for fila in filas if fila['tipo_prestamo'] == 'GRUPAL'}
+        )
         if not identificadores:
             return
         marcas = ','.join(['%s'] * len(identificadores))
@@ -333,4 +344,4 @@ class RepositorioReporteSQL(RepositorioSQL):
                 f'{persona["nombre"]} ({persona["dni_persona"]})'
             )
         for fila in filas:
-            fila['integrantes'] = '; '.join(por_prestamo[fila['id_prestamo']])
+            fila['integrantes'] = '; '.join(por_prestamo.get(fila['id_prestamo'], []))

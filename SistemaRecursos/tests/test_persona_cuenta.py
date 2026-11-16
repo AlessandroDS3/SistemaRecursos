@@ -70,7 +70,12 @@ class PersonasYCuentas(CasoMySQL):
         )
 
     def test_cambio_solo_de_clave_y_clave_vacia_conserva_la_actual(self):
-        self.servicios['cuentas'].actualizar_cuenta('02167885', dict(clave='NuevaClave2026!'), 1)
+        cuentas = self.servicios['cuentas']
+        cuentas.actualizar_cuenta(
+            '02167885',
+            dict(version=cuentas.consultar_cuenta('02167885')['version'], clave='NuevaClave2026!'),
+            1,
+        )
         self.assertIsNotNone(
             self.servicios['acceso'].autenticar_cuenta('usuario1', 'NuevaClave2026!')
         )
@@ -78,7 +83,9 @@ class PersonasYCuentas(CasoMySQL):
             self.servicios['acceso'].autenticar_cuenta('usuario1', 'UsuarioPrueba2026!')
         )
         anterior = self.fila('SELECT contrasena_hash FROM usuario_sistema WHERE id_usuario=3')
-        self.servicios['cuentas'].actualizar_cuenta('02167885', dict(clave=''), 1)
+        cuentas.actualizar_cuenta(
+            '02167885', dict(version=cuentas.consultar_cuenta('02167885')['version'], clave=''), 1
+        )
         self.assertEqual(
             self.fila('SELECT contrasena_hash FROM usuario_sistema WHERE id_usuario=3'), anterior
         )
@@ -118,12 +125,10 @@ class PersonasYCuentas(CasoMySQL):
         )
 
     def test_alta_con_dato_duplicado_revierte_persona_entera(self):
-        from mysql.connector import IntegrityError
-
         datos = dict(
             self.datos_persona(), dni='77777777', cui='02167885', correo='nuevo@ejemplo.com'
         )
-        with self.assertRaises(IntegrityError):
+        with self.assertRaises(Conflicto):
             self.servicios['personas'].guardar_persona(datos, 1)
         self.assertEqual(self.fila("SELECT COUNT(*) FROM persona WHERE dni='77777777'"), (0,))
 
@@ -245,7 +250,12 @@ class PersonasYCuentas(CasoMySQL):
         self.assertIsNotNone(self.servicios['acceso'].autenticar_cuenta('nuevo', 'NuevaClave2026!'))
         cuentas.actualizar_cuenta(
             '99000011',
-            dict(nombre_usuario='nuevo', clave='OtraClave2026!', estado_cuenta='ACTIVA'),
+            dict(
+                nombre_usuario='nuevo',
+                clave='OtraClave2026!',
+                estado_cuenta='ACTIVA',
+                version=cuentas.consultar_cuenta('99000011')['version'],
+            ),
             1,
         )
         self.assertIsNone(self.servicios['acceso'].autenticar_cuenta('nuevo', 'NuevaClave2026!'))

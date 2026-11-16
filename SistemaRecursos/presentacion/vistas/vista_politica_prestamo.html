@@ -102,11 +102,11 @@
       <p class="suave">Los cambios se aplican a nuevas entregas. Los préstamos registrados conservan sus condiciones.</p>
     </section>
     <section class="panel">
-      <h2>Vencimiento de solicitudes y reservas</h2>
+      <h2>Vencimiento de reservas</h2>
       <p class="suave">Cada plazo admite hasta 30 días o 720 horas.</p>
       <div class="rejilla dos-columnas">
         <fieldset>
-          <legend>Solicitudes pendientes</legend>
+          <legend>Reservas en espera</legend>
           <div class="rejilla dos-columnas">
             {{ campo('plazo_espera','Plazo',configuracion.plazo_espera|default(2),tipo='number',requerido=true,formulario='configuracion-general') }}
             {{ opciones('unidad_espera','Unidad',('HORAS','DIAS'),configuracion.unidad_espera|default('DIAS'),formulario='configuracion-general') }}

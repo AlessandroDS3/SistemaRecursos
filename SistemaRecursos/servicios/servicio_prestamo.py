@@ -5,6 +5,7 @@ from dominio.gestion_personas_usuarios.persona import validar_elegibilidad
 from dominio.gestion_prestamos.prestamo import (
     IRepositorioPrestamo,
     SolicitudPrestamo,
+    FILTROS_ESTADO_PRESTAMO,
     estado_prestamo,
 )
 from dominio.gestion_prestamos.devolucion import Devolucion
@@ -23,17 +24,15 @@ class ServicioAplicacionPrestamo:
 
     def consultar_prestamos(self, filtros, documento=None):
         estado = filtros.get('estado', '')
-        if estado and estado not in (
-            'ACTIVO',
-            'DEVUELTO',
-            'VENCIDO',
-            'PARCIALMENTE_DEVUELTO',
-            'PENDIENTES',
-            'PERDIDOS',
-        ):
+        if estado and estado not in FILTROS_ESTADO_PRESTAMO:
             raise ValueError('Estado de préstamo inválido.')
         return self.repositorio.consultar_prestamos(
             dict(q=texto(filtros.get('q'), 'Búsqueda', 120), estado=estado), documento
+        )
+
+    def consultar_resumen_prestamos(self, documento=None):
+        return self.repositorio.consultar_resumen_prestamos(
+            dni(documento) if documento is not None else None
         )
 
     def consultar_prestamo(self, identificador, documento, gestionar=False):
@@ -99,7 +98,7 @@ class ServicioAplicacionPrestamo:
             cuenta = exigir_permiso(
                 operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
             )
-            prestamo = operacion.consultar_prestamo(entero(identificador), bloquear=True)
+            prestamo = operacion.consultar_prestamo_para_actualizar(entero(identificador))
             if prestamo is None:
                 raise NoEncontrado('Préstamo inexistente.')
             por_id = {d['id_detalle']: d for d in prestamo['detalles']}
@@ -126,7 +125,7 @@ class ServicioAplicacionPrestamo:
             cuenta = exigir_permiso(
                 operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
             )
-            prestamo = operacion.consultar_prestamo(entero(identificador), bloquear=True)
+            prestamo = operacion.consultar_prestamo_para_actualizar(entero(identificador))
             if prestamo is None:
                 raise NoEncontrado('Préstamo inexistente.')
             detalle = next(
@@ -146,7 +145,7 @@ class ServicioAplicacionPrestamo:
                 operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
             )
             for fila in operacion.consultar_prestamos({'estado': 'VENCIDO'}):
-                prestamo = operacion.consultar_prestamo(fila['id_prestamo'], bloquear=True)
+                prestamo = operacion.consultar_prestamo_para_actualizar(fila['id_prestamo'])
                 nuevo = estado_prestamo(prestamo['detalles'], operacion.consultar_fecha_actual())
                 if nuevo != prestamo['estado']:
                     operacion.actualizar_estado_prestamo(

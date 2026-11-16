@@ -7,11 +7,15 @@ from dominio.gestion_control.catalogo_reportes import OPCIONES_FILTROS, REPORTES
 FILAS_POR_PAGINA = 50
 
 
+def paginas_reporte(total: int) -> int:
+    return max(1, (total + FILAS_POR_PAGINA - 1) // FILAS_POR_PAGINA)
+
+
 @dataclass(kw_only=True)
 class FiltroReporte:
     tipo: str = 'prestamos'
-    desde: str = ''
-    hasta: str = ''
+    desde: str | date | None = ''
+    hasta: str | date | None = ''
     estado: str = ''
     modalidad: str = ''
     tipo_persona: str = ''
@@ -21,6 +25,10 @@ class FiltroReporte:
     cumplimiento: str = ''
     tipo_gestion: str = ''
     pagina: int = 1
+
+    @classmethod
+    def desde_datos(cls, datos):
+        return cls(**{k: datos[k] for k in cls.__dataclass_fields__ if k in datos})
 
     def __post_init__(self):
         if not isinstance(self.tipo, str) or self.tipo not in REPORTES:
@@ -45,7 +53,11 @@ class FiltroReporte:
                 setattr(self, campo, date.fromisoformat(valor) if valor else None)
             except (ValueError, TypeError):
                 raise ValueError('Las fechas deben usar el formato AAAA-MM-DD.') from None
-        if self.desde and self.hasta and self.desde > self.hasta:
+        if (
+            isinstance(self.desde, date)
+            and isinstance(self.hasta, date)
+            and self.desde > self.hasta
+        ):
             raise ValueError('La fecha inicial no puede ser posterior a la final.')
         if self.hasta == date.max:
             raise ValueError('Fecha final fuera de rango.')
@@ -73,7 +85,7 @@ class FiltroReporte:
 
     @property
     def fin(self):
-        return self._utc(self.hasta + timedelta(days=1)) if self.hasta else None
+        return self._utc(self.hasta + timedelta(days=1)) if isinstance(self.hasta, date) else None
 
 
 def celda_csv(valor):
@@ -85,6 +97,7 @@ def celda_csv(valor):
 
 
 class IRepositorioReporte(Protocol):
+    def consultar_filas_reporte(self, filtro: FiltroReporte) -> list[dict]: ...
     def consultar_reportes(
         self, filtro: FiltroReporte, paginar=True
     ) -> tuple[list[dict], dict]: ...

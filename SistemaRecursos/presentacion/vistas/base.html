@@ -22,7 +22,7 @@
         "roles": "Roles y permisos",
         "recursos": "Catálogo de recursos",
         "prestamos": "Préstamos",
-        "reservas": "Solicitudes y reservas",
+        "reservas": "Reservas",
         "politicas": "Políticas de préstamo",
         "reportes": "Reportes",
         "sanciones": "Sanciones"
@@ -36,7 +36,7 @@
         ('recursos.consultar_recursos', 'Catálogo de recursos', g.usuario.permite('CATALOGO_CONSULTAR'), 'recursos'),
         ('recursos.consultar_administracion_recursos', 'Administrar recursos', g.usuario.permite('RECURSOS_GESTIONAR'), 'administracion_recursos'),
         ('prestamos.consultar_prestamos', 'Préstamos' if gestiona_prestamos else 'Mis préstamos', gestiona_prestamos or g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'), 'prestamos'),
-        ('reservas.consultar_reservas', 'Solicitudes y reservas' if gestiona_prestamos else 'Mis solicitudes y reservas', gestiona_prestamos or g.usuario.permite('RESERVAS_PROPIAS_GESTIONAR'), 'reservas'),
+        ('reservas.consultar_reservas', 'Reservas' if gestiona_prestamos else 'Mis reservas', gestiona_prestamos or g.usuario.permite('RESERVAS_PROPIAS_GESTIONAR'), 'reservas'),
         ('politicas.consultar_politicas_prestamo', 'Políticas de préstamo', g.usuario.permite('POLITICAS_GESTIONAR'), 'politicas'),
         ('reportes.consultar_reportes', 'Reportes', g.usuario.permite('REPORTES_CONSULTAR'), 'reportes'),
         ('sanciones.consultar_sanciones', 'Sanciones', gestiona_prestamos, 'sanciones')
@@ -70,6 +70,8 @@
                   aria-hidden="true">{{ g.usuario.nombres[:1] }}{{ g.usuario.apellidos[:1] }}</span>
             <div><strong>{{ g.usuario.nombre_completo }}</strong><small>{{ g.usuario.rol|replace('_', ' ')|title }}</small></div>
           </div>
+          <a class="enlace-menu"
+             href="{{ url_for('cuentas.cambiar_clave_propia') }}">Cambiar mi contraseña</a>
           <form action="{{ url_for('auth.cerrar_sesion') }}"
                 method="post"
                 class="formulario-cierre-sesion">

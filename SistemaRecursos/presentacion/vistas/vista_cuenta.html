@@ -11,15 +11,11 @@
   </p>
   <form method="post" class="formulario panel estrecho">
     {{ csrf() }}
+    {% if not nueva %}<input type="hidden" name="version" value="{{ cuenta.version }}">{% endif %}
     {{ campo('nombre_usuario','Nombre de usuario',cuenta.nombre_usuario,requerido=true,maximo=50) }}
     <label>
       {{ 'Contraseña' if nueva else 'Nueva contraseña (deja vacío para conservar)' }}
-      <input name="clave"
-             type="password"
-             minlength="12"
-             maxlength="256"
-             autocomplete="new-password"
-             {% if nueva %}required{% endif %}>
+      <input name="clave" type="password" minlength="12"maxlength="256" autocomplete="new-password" {% if nueva %}required{% endif %}>
     </label>
     {% if not nueva %}
       {{ opciones('estado_cuenta','Estado',estados,cuenta.estado_cuenta) }}

@@ -1,4 +1,4 @@
-from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 from dominio.gestion_personas_usuarios.cuenta import ESTADOS_CUENTA
 from presentacion.seguridad import requiere_permiso
 
@@ -8,6 +8,12 @@ class ControladorCuenta:
         self.servicio = servicio
         self.blueprint = Blueprint('cuentas', __name__, url_prefix='/cuentas')
         self.blueprint.add_url_rule(
+            '/mi-contrasena',
+            'cambiar_clave_propia',
+            self.cambiar_clave_propia,
+            methods=['GET', 'POST'],
+        )
+        self.blueprint.add_url_rule(
             '/<documento>/nueva', 'registrar_cuenta', self.registrar_cuenta, methods=['GET', 'POST']
         )
         self.blueprint.add_url_rule(
@@ -16,6 +22,19 @@ class ControladorCuenta:
             self.actualizar_cuenta,
             methods=['GET', 'POST'],
         )
+
+    def cambiar_clave_propia(self):
+        if request.method == 'POST':
+            self.servicio.cambiar_clave_propia(
+                g.usuario.id_usuario,
+                request.form.get('clave_actual', ''),
+                request.form.get('clave_nueva', ''),
+                request.form.get('confirmacion', ''),
+            )
+            session.clear()
+            flash('Contraseña actualizada. Inicia sesión con tu nueva contraseña.')
+            return redirect(url_for('auth.iniciar_sesion'))
+        return render_template('vista_cambiar_clave.html')
 
     @requiere_permiso('USUARIOS_GESTIONAR')
     def registrar_cuenta(self, documento):
@@ -28,6 +47,7 @@ class ControladorCuenta:
             )
             flash('Cuenta creada con el rol Usuario.')
             return redirect(url_for('personas.consultar_persona', documento=documento))
+        self.servicio.validar_creacion_cuenta(documento)
         return render_template('vista_cuenta.html', documento=documento, cuenta={}, nueva=True)
 
     @requiere_permiso('USUARIOS_GESTIONAR')

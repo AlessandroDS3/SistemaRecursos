@@ -1,6 +1,5 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
-from dominio.compartido.validacion import version
 from presentacion.seguridad import requiere_permiso
 
 RUTA_POLITICAS = 'politicas.consultar_politicas_prestamo'
@@ -43,9 +42,7 @@ class ControladorPoliticaPrestamo:
     @requiere_permiso('POLITICAS_GESTIONAR')
     def consultar_politicas_prestamo(self):
         politicas = self.servicio.consultar_politicas_prestamo()
-        matriz = {(p['id_categoria'], p['tipo_persona']): dict(p, version=version({k: v for k, v in p.items() if k != 'categoria'}))
-            for p in politicas
-        }
+        matriz = {(p['id_categoria'], p['tipo_persona']): p for p in politicas}
         return render_template(
             'vista_politica_prestamo.html',
             modo='lista',
@@ -59,15 +56,17 @@ class ControladorPoliticaPrestamo:
 
     @requiere_permiso('POLITICAS_GESTIONAR')
     def gestionar_formulario_politica_prestamo(self, identificador=None):
-        politica, version = (
-            self.servicio.consultar_politica_prestamo(identificador) if identificador else ({}, '')
-        )
         if request.method == 'POST':
             self.servicio.guardar_politica_prestamo(
                 request.form.to_dict(), g.usuario.id_usuario, identificador
             )
             flash('Política guardada. Los préstamos anteriores conservan sus condiciones.')
             return redirect(url_for(RUTA_POLITICAS))
+        politica, version = (
+            self.servicio.consultar_politica_prestamo(identificador)
+            if identificador is not None
+            else ({}, '')
+        )
         return render_template(
             'vista_politica_prestamo.html',
             modo='formulario',

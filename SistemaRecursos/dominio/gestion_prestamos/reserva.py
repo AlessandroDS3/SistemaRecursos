@@ -80,20 +80,19 @@ class CambiosReserva(TypedDict, total=False):
 
 
 def nueva_reserva(datos: Mapping[str, str], documento: str, ahora: datetime) -> NuevaReserva:
-    tipo = datos.get('tipo_gestion', 'PRESTAMO')
-    if tipo not in ('PRESTAMO', 'RESERVA'):
-        raise ValueError('Tipo de gestión inválido.')
+    if datos.get('tipo_gestion', 'RESERVA') != 'RESERVA':
+        raise ValueError('El préstamo inmediato se registra presencialmente con el encargado.')
     if datos.get('acepta_condiciones') != '1':
         raise ValueError('Confirma que revisaste el plazo y el permiso de salida del recurso.')
-    requerida = ahora if tipo == 'PRESTAMO' else fecha_local(datos.get('fecha_requerida'))
-    if tipo == 'RESERVA' and requerida <= ahora:
+    requerida = fecha_local(datos.get('fecha_requerida'))
+    if requerida <= ahora:
         raise ValueError('La reserva debe indicar una fecha futura.')
     return {
         'dni_persona': documento,
         'id_recurso': entero(datos.get('id_recurso'), 'Recurso'),
         'fecha_solicitud': ahora,
         'fecha_requerida': requerida,
-        'tipo_gestion': tipo,
+        'tipo_gestion': 'RESERVA',
         'observaciones': texto(datos.get('observaciones'), 'Observaciones', 220),
         'salida_solicitada': datos.get('salida_solicitada') == '1',
         'fecha_limite_vencimiento': None,

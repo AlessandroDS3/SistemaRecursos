@@ -85,7 +85,7 @@ def registrar_controladores(app, servicios):
     controladores = [
         ControladorAcceso(servicios['acceso']),
         ControladorCuenta(servicios['cuentas']),
-        ControladorPersona(servicios['personas']),
+        ControladorPersona(servicios['personas'], servicios['cuentas']),
         ControladorRol(servicios['roles'], servicios['cuentas']),
         ControladorRecurso(servicios['recursos'], servicios['bienes']),
         ControladorBienMaterial(servicios['bienes'], servicios['recursos']),
@@ -109,15 +109,10 @@ def registrar_inicio(app, servicios):
 
         if gestionar or usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'):
             dni = None if gestionar else usuario.dni
-            prestamos = servicios['prestamos'].consultar_prestamos({}, dni)
-            pendientes = [p for p in prestamos if p['estado_actual'] != 'DEVUELTO']
-            vencidos = [p for p in prestamos if p['estado_actual'] == 'VENCIDO']
-            resumen['prestamos_pendientes'] = len(pendientes)
-            resumen['prestamos_vencidos'] = len(vencidos)
+            resumen.update(servicios['prestamos'].consultar_resumen_prestamos(dni))
 
         if usuario.permite('CATALOGO_CONSULTAR'):
-            recursos = servicios['recursos'].consultar_recursos({})
-            resumen['bienes_disponibles'] = sum(r['disponibles'] for r in recursos)
+            resumen['bienes_disponibles'] = servicios['recursos'].consultar_disponibilidad()
 
         return render_template('inicio.html', resumen=resumen)
 

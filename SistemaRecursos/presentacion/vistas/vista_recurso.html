@@ -77,7 +77,7 @@
     <div class="acciones">
       {% if g.usuario.permite("RESERVAS_PROPIAS_GESTIONAR") %}
         <a class="boton"
-           href="{{ url_for('reservas.registrar_reserva',id_recurso=recurso.id_recurso) }}">Solicitar o reservar</a>
+           href="{{ url_for('reservas.registrar_reserva',id_recurso=recurso.id_recurso) }}">Reservar recurso</a>
       {% endif %}
       {% if g.usuario.permite("RECURSOS_GESTIONAR") %}
         <a href="{{ url_for('recursos.gestionar_formulario_recurso',identificador=recurso.id_recurso) }}">Editar recurso</a>

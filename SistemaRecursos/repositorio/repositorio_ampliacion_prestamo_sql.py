@@ -1,23 +1,27 @@
-from dominio.compartido.validacion import NoEncontrado
 from dominio.compartido.validacion import Conflicto
+from dominio.gestion_prestamos.ampliacion_prestamo import ContextoAmpliacion
 from repositorio.base_sql import RepositorioSQL
 
 
 class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
-    def consultar_contexto_ampliacion_prestamo(self, prestamo, detalle):
+    def consultar_contexto_ampliacion_prestamo(self, prestamo, detalle) -> ContextoAmpliacion:
         cabecera = self.consultar_sql(
             'SELECT * FROM prestamo WHERE id_prestamo=%s FOR UPDATE', (prestamo,), una=True
         )
+        contexto: ContextoAmpliacion = dict(
+            prestamo=cabecera, detalle=None, politica=None, horario=None
+        )
         if cabecera is None:
-            raise NoEncontrado('Préstamo inexistente.')
+            return contexto
         fila = self.consultar_sql(
             '''SELECT d.*,b.estado AS estado_bien FROM detalle_prestamo d
             JOIN bien_material b ON b.id_bien=d.id_bien WHERE d.id_prestamo=%s AND d.id_detalle=%s FOR UPDATE''',
             (prestamo, detalle),
             una=True,
         )
+        contexto['detalle'] = fila
         if fila is None:
-            raise NoEncontrado('El detalle no pertenece a este préstamo.')
+            return contexto
         politica = self.consultar_sql(
             'SELECT * FROM politica_prestamo WHERE id_politica=%s FOR UPDATE',
             (fila['id_politica'],),
@@ -27,7 +31,9 @@ class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
             'SELECT hora_apertura,hora_cierre FROM configuracion_general WHERE id_configuracion=1 FOR UPDATE',
             una=True,
         )
-        return cabecera, fila, politica, horario
+        contexto['politica'] = politica
+        contexto['horario'] = horario
+        return contexto
 
     def actualizar_plazo_prestamo(self, detalle, anterior, nueva):
         self.ejecutar(

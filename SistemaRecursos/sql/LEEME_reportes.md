@@ -3,10 +3,8 @@
 Abre [reportes_consultas_aplicacion.sql](reportes_consultas_aplicacion.sql).
 Contiene las consultas para comprobar los reportes sin filtros y sin paginación,
 como al descargar todo un reporte.
-La consulta 02 tiene una simplificación manual: obtiene los totales directamente de
-`detalle_prestamo`. Da los mismos totales sin filtros con las relaciones actuales,
-pero el repositorio todavía utiliza los `JOIN` de su consulta filtrable. Por tanto,
-esa consulta 02 es equivalente para este caso y no es una copia literal del código.
+Las consultas 01-16 corresponden al SQL actual del repositorio, incluidos los JOIN
+del resumen 02. Los parámetros de filtros no están incluidos en estos ejemplos.
 Se eliminó `reportes_csv_mysql.sql`: imitaba en SQL pasos que el programa hace en Python.
 
 ## Cómo comprobarlo ante el profesor
@@ -31,8 +29,9 @@ Se eliminó `reportes_csv_mysql.sql`: imitaba en SQL pasos que el programa hace 
 | Sanciones | 13 | 14 |
 | Daños y pérdidas | 15 | 16 |
 
-Los indicadores son otro resultado: no son las filas que se exportan. El sistema
-también consulta el resumen durante la descarga, aunque no lo escribe en el CSV.
+Los indicadores son otro resultado: no son las filas que se exportan. La pantalla
+consulta filas y resumen; la descarga consulta solo filas y, si hay préstamos
+grupales, sus integrantes. No consulta indicadores ni calcula páginas.
 Las consultas 18-20 documentan la cuenta, sus permisos y las categorías del selector;
 no generan las filas del reporte.
 
@@ -47,7 +46,8 @@ son idénticas en todas sus columnas ni en su representación:
 - La consulta 17 devuelve una fila por integrante. Python reúne esos nombres como
   `Nombre (DNI); Nombre (DNI)` en la columna `integrantes` de cada préstamo.
 - Cada consulta selecciona las columnas de su propio reporte. Préstamos, devoluciones
-  y sanciones agregan `integrantes` al final del CSV con el resultado de la consulta 17.
+  y sanciones agregan `integrantes` al final del CSV con el resultado de la consulta 17,
+  únicamente para los préstamos grupales; en individuales la celda queda vacía.
   Atrasados devuelve únicamente las ocho columnas de su consulta, sin integrantes.
 - Python escribe los `NULL` como celdas vacías y protege los valores que podrían
   interpretarse como fórmulas. También escribe los separadores y las comillas del CSV.

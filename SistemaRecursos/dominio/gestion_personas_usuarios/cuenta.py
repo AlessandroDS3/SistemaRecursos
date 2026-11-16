@@ -2,9 +2,27 @@
 
 from typing import Protocol
 from dominio.compartido.contratos import IRepositorioTransaccional
-from dominio.compartido.validacion import texto
+from dominio.compartido.validacion import texto, version
 
 ESTADOS_CUENTA = ('ACTIVA', 'INACTIVA', 'BLOQUEADA')
+
+
+def version_cuenta(cuenta: dict) -> str:
+    # El último acceso cambia al iniciar sesión, no al editar la cuenta.
+    return version(
+        {
+            campo: cuenta[campo]
+            for campo in (
+                'id_usuario',
+                'dni_persona',
+                'nombre_usuario',
+                'contrasena_hash',
+                'rol',
+                'estado_cuenta',
+                'estado_persona',
+            )
+        }
+    )
 
 
 def validar_nombre_usuario(nombre: str) -> str:
@@ -35,6 +53,7 @@ def proteger_administradores(cuentas: list[dict], actual: dict, nueva: dict, act
 
 
 class IRepositorioCuenta(IRepositorioTransaccional, Protocol):
+    def consultar_cuenta_para_cambiar_clave(self, identificador: int) -> dict | None: ...
     def consultar_cuenta(self, documento: str) -> dict | None: ...
     def consultar_cuentas_para_actualizar(self) -> list[dict]: ...
     def consultar_estado_persona(self, documento: str) -> str | None: ...

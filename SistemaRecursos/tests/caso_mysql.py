@@ -1,6 +1,6 @@
 """Escenarios sobre bases desechables. Nunca utiliza DB_NAME de la aplicación."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 import unittest
 from unittest.mock import patch
@@ -55,6 +55,16 @@ class CasoMySQL(unittest.TestCase):
         return self.servicios['prestamos'].consultar_prestamo(identificador, '02167885', True)
 
     def reservar(self, **cambios):
-        datos = dict(id_recurso=1, tipo_gestion='PRESTAMO', acepta_condiciones='1')
+        fecha = (self.consultar_fecha_actual + timedelta(days=1, hours=-5)).isoformat(
+            timespec='minutes'
+        )
+        datos = dict(id_recurso=1, fecha_requerida=fecha, acepta_condiciones='1')
         datos.update(cambios)
-        return self.servicios['reservas'].registrar_reserva(datos, 3)
+        identificador = self.servicios['reservas'].registrar_reserva(datos, 3)
+        if 'fecha_requerida' not in cambios:
+            # Los escenarios de atención simulan que ya llegó la fecha de retiro.
+            self.ejecutar(
+                'UPDATE reserva SET fecha_requerida=%s WHERE id_reserva=%s',
+                (self.consultar_fecha_actual, identificador),
+            )
+        return identificador

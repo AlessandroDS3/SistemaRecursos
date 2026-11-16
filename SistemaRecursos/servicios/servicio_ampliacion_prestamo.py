@@ -1,4 +1,4 @@
-from dominio.compartido.validacion import entero
+from dominio.compartido.validacion import NoEncontrado, entero
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 from dominio.gestion_control.politica_prestamo import HorarioAtencion, PoliticaPrestamo
 from dominio.gestion_prestamos.ampliacion_prestamo import (
@@ -23,9 +23,13 @@ class ServicioAplicacionAmpliacionPrestamo:
             cuenta = exigir_permiso(
                 operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
             )
-            prestamo, detalle, fila, horario = operacion.consultar_contexto_ampliacion_prestamo(
-                prestamo_id, detalle_id
-            )
+            contexto = operacion.consultar_contexto_ampliacion_prestamo(prestamo_id, detalle_id)
+            prestamo, detalle = contexto['prestamo'], contexto['detalle']
+            if prestamo is None:
+                raise NoEncontrado('Préstamo inexistente.')
+            if detalle is None:
+                raise NoEncontrado('El detalle no pertenece a este préstamo.')
+            fila, horario = contexto['politica'], contexto['horario']
             if fila is None:
                 raise ValueError('No se encontró la política aplicada al bien.')
             nueva = ampliacion.calcular(

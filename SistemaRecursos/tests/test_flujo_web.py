@@ -1,4 +1,5 @@
 import re
+from datetime import timedelta
 from unittest.mock import patch
 from mysql.connector import DatabaseError
 from dominio.gestion_prestamos.reserva import ESTADOS_RESERVA
@@ -150,19 +151,38 @@ class RecorridosWeb(CasoMySQL):
 
     def test_reserva_del_usuario_y_atencion_del_encargado(self):
         self.login('usuario1', 'UsuarioPrueba2026!')
+        pagina = self.cliente.get('/reservas/nueva').get_data(as_text=True)
+        self.assertNotIn('name="tipo_gestion"', pagina)
+        self.assertRegex(pagina, r'name="fecha_requerida"[^>]*required')
+        fecha = (self.consultar_fecha_actual + timedelta(days=1, hours=-5)).isoformat(
+            timespec='minutes'
+        )
         respuesta = self.post(
-            '/reservas/nueva', dict(id_recurso='1', tipo_gestion='PRESTAMO', acepta_condiciones='1')
+            '/reservas/nueva', dict(id_recurso='1', fecha_requerida=fecha, acepta_condiciones='1')
         )
         self.assertEqual(respuesta.status_code, 302)
         url_reserva = respuesta.location
         self.assertEqual(self.cliente.get(url_reserva).status_code, 200)
         self.post('/logout')
         self.login('encargado1', 'EncargadoPrueba2026!')
+        self.assertEqual(self.post(url_reserva + '/preparar').status_code, 409)
+        # Llega la fecha de retiro; recién entonces se prepara y entrega presencialmente.
+        self.ejecutar('UPDATE reserva SET fecha_requerida=%s', (self.consultar_fecha_actual,))
         self.assertEqual(self.post(url_reserva + '/preparar').status_code, 302)
         respuesta = self.post(url_reserva + '/entregar', dict(acepta_condiciones='1'))
         self.assertEqual(respuesta.status_code, 302)
         self.assertIn('/prestamos/', respuesta.location)
         self.assertEqual(self.cliente.get(respuesta.location).status_code, 200)
+
+    def test_formulario_rechaza_solicitud_inmediata_y_fecha_ausente(self):
+        self.login('usuario1', 'UsuarioPrueba2026!')
+        for datos in (
+            dict(id_recurso='1', acepta_condiciones='1'),
+            dict(id_recurso='1', acepta_condiciones='1', tipo_gestion='PRESTAMO'),
+        ):
+            with self.subTest(datos=datos):
+                self.assertEqual(self.post('/reservas/nueva', datos).status_code, 400)
+        self.assertEqual(self.fila('SELECT COUNT(*) FROM reserva'), (0,))
 
     def test_altas_persona_cuenta_recurso_y_bien(self):
         self.login()

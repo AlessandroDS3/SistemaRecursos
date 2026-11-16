@@ -12,8 +12,8 @@ VISTA_PERSONA = 'vista_persona.html'
 
 
 class ControladorPersona:
-    def __init__(self, servicio):
-        self.servicio = servicio
+    def __init__(self, servicio, cuentas):
+        self.servicio, self.cuentas = servicio, cuentas
         self.blueprint = Blueprint('personas', __name__, url_prefix='/personas')
         for ruta, nombre, funcion, metodos in (
             ('', 'consultar_personas', self.consultar_personas, ['GET']),
@@ -53,7 +53,13 @@ class ControladorPersona:
     @requiere_permiso('PERSONAS_CONSULTAR')
     def consultar_persona(self, documento):
         persona, _ = self.servicio.consultar_persona(documento)
-        return render_template(VISTA_PERSONA, modo='detalle', persona=persona)
+        return render_template(
+            VISTA_PERSONA,
+            modo='detalle',
+            persona=persona,
+            tiene_cuenta=g.usuario.permite('USUARIOS_GESTIONAR')
+            and self.cuentas.tiene_cuenta(documento),
+        )
 
     @requiere_permiso('PERSONAS_GESTIONAR')
     def gestionar_formulario_persona(self, documento=None):

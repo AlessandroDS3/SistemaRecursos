@@ -4,11 +4,14 @@ from repositorio.repositorio_bien_material_sql import RepositorioBienMaterialSQL
 
 
 class RepositorioRecursoSQL(RepositorioSQL):
-    def consultar_recursos(self, filtros: dict) -> list[dict]:
-        sql = '''SELECT r.*,c.nombre AS categoria,
+    def consultar_recursos(self, filtros: dict, contar_bienes=True) -> list[dict]:
+        columnas = '''r.*,c.nombre AS categoria'''
+        if contar_bienes:
+            columnas += ''',
             (SELECT COUNT(*) FROM bien_material b WHERE b.id_recurso=r.id_recurso) AS total,
-            (SELECT COUNT(*) FROM bien_material b WHERE b.id_recurso=r.id_recurso AND b.estado='DISPONIBLE') AS disponibles
-            FROM recurso r JOIN categoria_recurso c ON c.id_categoria=r.id_categoria WHERE 1=1'''
+            (SELECT COUNT(*) FROM bien_material b WHERE b.id_recurso=r.id_recurso AND b.estado='DISPONIBLE') AS disponibles'''
+        sql = 'SELECT ' + columnas + ''' FROM recurso r
+            JOIN categoria_recurso c ON c.id_categoria=r.id_categoria WHERE 1=1'''
         parametros = []
         condiciones_bien = ['b.id_recurso=r.id_recurso']
         parametros_bien = []
@@ -36,6 +39,11 @@ class RepositorioRecursoSQL(RepositorioSQL):
             sql += ' AND EXISTS(' + subconsulta_bien + ')'
             parametros.extend(parametros_bien)
         return self.consultar_sql(sql + ' ORDER BY r.nombre,r.id_recurso', parametros)
+
+    def consultar_disponibilidad(self) -> int:
+        return self.consultar_sql(
+            "SELECT COUNT(*) AS total FROM bien_material WHERE estado='DISPONIBLE'", una=True
+        )['total']
 
     def consultar_recurso(self, identificador: int, bloquear: bool = False) -> dict | None:
         return self.consultar_sql(
