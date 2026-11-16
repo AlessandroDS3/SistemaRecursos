@@ -1,4 +1,6 @@
 const mostrarClave = document.querySelector('[data-mostrar-clave]');
+const selectorReporte = document.querySelector('[data-seleccionar-reporte]');
+selectorReporte?.addEventListener('change', () => selectorReporte.form.requestSubmit());
 mostrarClave?.addEventListener('change', () => {
   const clave = document.getElementById('clave');
   if (clave) clave.type = mostrarClave.checked ? 'text' : 'password';

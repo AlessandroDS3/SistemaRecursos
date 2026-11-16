@@ -39,12 +39,13 @@ class IRepositorioAcceso(Protocol):
     def registrar_acceso(self, identificador: int) -> None: ...
 
 
-def exigir_permiso(cuenta, permiso):
+def exigir_permiso(cuenta_actor, permiso):
+    """Valida el diccionario de una operación y devuelve el mismo actor autorizado."""
     if (
-        cuenta is None
-        or cuenta['estado_cuenta'] != 'ACTIVA'
-        or cuenta['estado_persona'] != 'ACTIVA'
-        or permiso not in cuenta['permisos']
+        cuenta_actor is None
+        or cuenta_actor['estado_cuenta'] != 'ACTIVA'
+        or cuenta_actor['estado_persona'] != 'ACTIVA'
+        or permiso not in cuenta_actor['permisos']
     ):
         raise PermissionError('La cuenta no tiene permiso para esta operación.')
-    return cuenta
+    return cuenta_actor

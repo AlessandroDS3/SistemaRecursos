@@ -59,45 +59,28 @@ class ControladorRecurso:
 
     @requiere_permiso('RECURSOS_GESTIONAR')
     def consultar_administracion_recursos(self):
-        recursos = self.servicio.consultar_recursos(
-            {'id_categoria': request.args.get('id_categoria')}
-        )
-        bienes = self.bienes.consultar_bienes_materiales(request.args)
-        por_recurso = {}
-        for bien in bienes:
-            por_recurso.setdefault(bien['id_recurso'], []).append(bien)
-        coincidentes = {r['id_recurso'] for r in self.servicio.consultar_recursos(request.args)}
-        grupos = [
-            dict(recurso=r, bienes=por_recurso.get(r['id_recurso'], []))
-            for r in recursos
-            if (not request.args.get('q') and not request.args.get('estado'))
-            or r['id_recurso'] in por_recurso
-            or (not request.args.get('estado') and r['id_recurso'] in coincidentes)
-        ]
-        visibles = [b for grupo in grupos for b in grupo['bienes']]
+        resultado = self.servicio.consultar_administracion_recursos(request.args)
         return render_template(
             'vista_administracion_recursos.html',
-            grupos=grupos,
-            categorias=self.servicio.consultar_categorias(),
+            **resultado,
             estados=ESTADOS_BIEN,
-            resumen={
-                'recursos': len(grupos),
-                'bienes': len(visibles),
-                'disponibles': sum(b['estado'] == 'DISPONIBLE' for b in visibles),
-            },
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
     def gestionar_formulario_recurso(self, identificador=None):
-        recurso = self.servicio.consultar_recurso(identificador) if identificador else {}
         if request.method == 'POST':
-            nuevo = self.servicio.guardar_recurso(
+            id_recurso_guardado = self.servicio.guardar_recurso(
                 request.form.to_dict(), g.usuario.id_usuario, identificador
             )
             flash('Recurso guardado.')
             if request.form.get('volver') == 'administracion':
                 return redirect(url_for('recursos.consultar_administracion_recursos'))
-            return redirect(url_for('recursos.consultar_recurso', identificador=nuevo))
+            return redirect(
+                url_for('recursos.consultar_recurso', identificador=id_recurso_guardado)
+            )
+        recurso = (
+            self.servicio.consultar_recurso(identificador) if identificador is not None else {}
+        )
         return render_template(
             'vista_recurso.html',
             modo='formulario',

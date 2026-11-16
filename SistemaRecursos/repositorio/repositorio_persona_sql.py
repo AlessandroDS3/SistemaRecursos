@@ -1,6 +1,6 @@
 from dominio.gestion_personas_usuarios.persona import CAMPOS_TIPO
 from repositorio.base_sql import RepositorioSQL
-from repositorio.repositorio_cuenta_sql import cargar_cuentas_bloqueadas
+from repositorio.repositorio_cuenta_sql import cargar_cuentas_para_actualizar
 
 TABLAS_TIPO = {'ESTUDIANTE': 'estudiante', 'DOCENTE': 'docente', 'ADMINISTRATIVO': 'administrativo'}
 CONSULTA = '''SELECT p.*,e.cui,e.ciclo,e.estado_matricula,d.codigo_docente,d.departamento_academico,
@@ -12,14 +12,14 @@ CONSULTA = '''SELECT p.*,e.cui,e.ciclo,e.estado_matricula,d.codigo_docente,d.dep
 
 
 class RepositorioPersonaSQL(RepositorioSQL):
-    def consultar_persona(self, documento, bloquear=False):
+    def consultar_persona(self, documento: str, bloquear: bool = False) -> dict | None:
         return self.consultar_sql(
             CONSULTA + ' WHERE p.dni=%s' + (' FOR UPDATE' if bloquear else ''),
             (documento,),
             una=True,
         )
 
-    def consultar_personas(self, filtros):
+    def consultar_personas(self, filtros: dict) -> dict:
         condiciones, parametros = [], []
         if filtros.get('q'):
             condiciones.append(
@@ -54,16 +54,16 @@ class RepositorioPersonaSQL(RepositorioSQL):
             sql + ' ORDER BY listado.apellidos,listado.nombres,listado.dni LIMIT 25 OFFSET %s',
             (*parametros, (pagina - 1) * 25),
         )
-        return dict(
-            personas=filas,
-            total=total,
-            pagina=pagina,
-            paginas=max(1, (total + 24) // 25),
-            activas=int(resumen['activas']),
-            inactivas=int(resumen['inactivas']),
-        )
+        return {
+            'personas': filas,
+            'total': total,
+            'pagina': pagina,
+            'paginas': max(1, (total + 24) // 25),
+            'activas': int(resumen['activas']),
+            'inactivas': int(resumen['inactivas']),
+        }
 
-    def guardar_persona(self, persona, documento_anterior=None):
+    def guardar_persona(self, persona, documento_anterior: str | None = None) -> None:
         datos = persona.datos()
         comunes = {
             k: datos[k] for k in ('dni', 'nombres', 'apellidos', 'telefono', 'correo', 'estado')
@@ -72,7 +72,7 @@ class RepositorioPersonaSQL(RepositorioSQL):
         tabla = TABLAS_TIPO[persona.tipo]
         if documento_anterior is None:
             self.insertar('persona', comunes)
-            self.insertar(tabla, dict(dni=persona.dni, **especificos))
+            self.insertar(tabla, {'dni': persona.dni, **especificos})
         else:
             self.ejecutar(
                 'UPDATE persona SET ' + ','.join(k + '=%s' for k in comunes) + ' WHERE dni=%s',
@@ -87,13 +87,10 @@ class RepositorioPersonaSQL(RepositorioSQL):
                 (*especificos.values(), persona.dni),
             )
 
-    def consultar_cuentas_bloqueadas(self):
-        return cargar_cuentas_bloqueadas(self)
+    def consultar_cuentas_para_actualizar(self) -> list[dict]:
+        return cargar_cuentas_para_actualizar(self)
 
-    def desactivar_persona(self, documento):
-        self.ejecutar("UPDATE persona SET estado='INACTIVA' WHERE dni=%s", (documento,))
-
-    def buscar_personas(self, termino):
+    def buscar_personas(self, termino: str) -> list[dict]:
         return self.consultar_sql(
             CONSULTA + ' WHERE p.dni LIKE %s OR p.apellidos LIKE %s OR e.cui LIKE %s LIMIT 20',
             (f'%{termino}%',) * 3,

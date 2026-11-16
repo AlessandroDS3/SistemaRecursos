@@ -8,7 +8,7 @@
   </article>
 {% endmacro %}
 
-{% macro estado(valor) %}
-  {% set tono = 'positivo' if valor in ('ACTIVA','ACTIVO','DISPONIBLE','DEVUELTO','ATENDIDA','CON_ACCESO') else 'peligro' if valor in ('VENCIDO','PERDIDO','EXPIRADA','INACTIVA','BLOQUEADA','RECHAZADA') else 'neutro' %}
-  <span class="estado estado-{{ tono }}">{{ valor|replace('_', ' ')|capitalize }}</span>
+{% macro estado(valor, texto='') %}
+  {% set tono = 'positivo' if valor in ('ACTIVA','ACTIVO','DISPONIBLE','DEVUELTO','ATENDIDA','CON_ACCESO','A_TIEMPO','CUMPLIDA') else 'peligro' if valor in ('VENCIDO','PERDIDO','EXPIRADA','INACTIVA','BLOQUEADA','RECHAZADA','TARDIA','DANADO') else 'neutro' %}
+  <span class="estado estado-{{ tono }}">{{ texto or valor|replace('_', ' ')|capitalize }}</span>
 {% endmacro %}

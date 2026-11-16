@@ -64,6 +64,14 @@
   <section class="panel permisos-panel">
     <h2>Permisos por rol</h2>
     <p class="suave">Marca los permisos del rol. Se aplican a todas sus cuentas.</p>
+    <details>
+      <summary>Permisos de consulta necesarios</summary>
+      <ul>
+        {% for permiso, requeridos in dependencias.items() %}
+          <li>{{ permisos[permiso] }} requiere: {% for requerido in requeridos %}{{ permisos[requerido] }}{{ ', ' if not loop.last else '.' }}{% endfor %}</li>
+        {% endfor %}
+      </ul>
+    </details>
     <form method="post" action="{{ url_for('roles.guardar_matriz_permisos') }}">
       {{ csrf() }}
       <input type="hidden" name="version" value="{{ version }}">

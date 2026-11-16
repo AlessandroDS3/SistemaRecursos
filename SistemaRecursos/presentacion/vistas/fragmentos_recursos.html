@@ -3,6 +3,9 @@
 {% macro formulario_recurso(datos, categorias, accion, primer_bien=false, volver='') %}
   <form method="post" action="{{ accion }}" class="formulario">
     {{ csrf() }}
+    {% if datos.get("id_recurso") %}
+      <input type="hidden" name="version" value="{{ datos.version }}">
+    {% endif %}
     {% if volver %}
       <input type="hidden" name="volver" value="{{ volver }}">
     {% endif %}
@@ -65,6 +68,7 @@
                 {{ csrf() }}
                 <input type="hidden" name="volver" value="{{ volver }}">
                 <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
+                <input type="hidden" name="version" value="{{ c.version }}">
                 {{ campo('nombre','Nombre',c.nombre,requerido=true,maximo=80) }}
                 {{ campo('descripcion','Descripción',c.descripcion or '') }}
                 <button>Guardar cambios</button>

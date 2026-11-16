@@ -55,7 +55,8 @@ class Reportes(CasoMySQL):
         )
         resultado = self.servicios['reportes'].consultar_reportes(datos)
         self.assertEqual(resultado['resumen']['detalles'], 1)
-        self.assertEqual(resultado['filas'][0]['id_detalle'], detalle)
+        self.assertEqual(resultado['filas'][0]['id_prestamo'], prestamo)
+        self.assertEqual(resultado['filas'][0]['codigo_inventario'], 'INV-2')
 
     def test_exportacion_incluye_todas_las_paginas(self):
         self.prestar()

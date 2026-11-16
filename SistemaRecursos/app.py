@@ -5,10 +5,11 @@ from pathlib import Path
 from secrets import token_hex
 
 from flask import Flask, g, render_template
-from mysql.connector import Error as ErrorMySQL, IntegrityError
+from mysql.connector import Error as ErrorMySQL
 from werkzeug.exceptions import HTTPException
 
 from dominio.compartido.validacion import Conflicto, LIMA, NoEncontrado
+
 from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_acceso_sql import RepositorioAccesoSQL
 from repositorio.repositorio_cuenta_sql import RepositorioCuentaSQL
@@ -22,6 +23,7 @@ from repositorio.repositorio_reserva_sql import RepositorioReservaSQL
 from repositorio.repositorio_ampliacion_prestamo_sql import RepositorioAmpliacionPrestamoSQL
 from repositorio.repositorio_sancion_sql import RepositorioSancionSQL
 from repositorio.repositorio_reporte_sql import RepositorioReporteSQL
+
 from servicios.servicio_acceso import ServicioAplicacionAcceso
 from servicios.servicio_cuenta import ServicioAplicacionCuenta
 from servicios.servicio_persona import ServicioAplicacionPersona
@@ -35,6 +37,7 @@ from servicios.servicio_ampliacion_prestamo import ServicioAplicacionAmpliacionP
 from servicios.servicio_sancion import ServicioAplicacionSancion
 from servicios.servicio_reporte import ServicioAplicacionReporte
 from servicios.procesador_vencimientos import iniciar_procesador_vencimientos
+
 from presentacion.seguridad import configurar_seguridad
 from presentacion.controladores.controlador_acceso import ControladorAcceso
 from presentacion.controladores.controlador_cuenta import ControladorCuenta
@@ -53,17 +56,10 @@ from presentacion.controladores.controlador_reporte import ControladorReporte
 def clave_local():
     if os.getenv('FLASK_SECRET_KEY'):
         return os.environ['FLASK_SECRET_KEY']
-    archivo = Path(__file__).parent / 'datos_locales' / 'clave_sesion.txt'
-    archivo.parent.mkdir(exist_ok=True)
-    try:
-        with archivo.open('x', encoding='utf-8') as salida:
-            salida.write(token_hex(32))
-    except FileExistsError:
-        pass
-    clave = archivo.read_text(encoding='utf-8').strip()
-    if len(clave) < 32:
-        raise ValueError('La clave de sesión local está vacía o incompleta.')
-    return clave
+    archivo = Path(__file__).parent / 'clave_sesion.txt'
+    if not archivo.exists():
+        archivo.write_text(token_hex(32))
+    return archivo.read_text().strip()
 
 
 def crear_servicios(conexion):
@@ -98,7 +94,7 @@ def registrar_controladores(app, servicios):
         ControladorReserva(servicios['reservas']),
         ControladorAmpliacionPrestamo(servicios['ampliaciones']),
         ControladorSancion(servicios['sanciones']),
-        ControladorReporte(servicios['reportes']),
+        ControladorReporte(servicios['reportes'], servicios['recursos']),
     ]
     for controlador in controladores:
         app.register_blueprint(controlador.blueprint)
@@ -108,19 +104,21 @@ def registrar_inicio(app, servicios):
     @app.get('/')
     def inicio():
         resumen = {}
-        gestionar = g.usuario.permite('PRESTAMOS_GESTIONAR')
-        if gestionar or g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'):
-            prestamos = servicios['prestamos'].consultar_prestamos(
-                {}, None if gestionar else g.usuario.dni
-            )
-            resumen['prestamos_pendientes'] = sum(
-                p['estado_actual'] != 'DEVUELTO' for p in prestamos
-            )
-            resumen['prestamos_vencidos'] = sum(p['estado_actual'] == 'VENCIDO' for p in prestamos)
-        if g.usuario.permite('CATALOGO_CONSULTAR'):
-            resumen['bienes_disponibles'] = sum(
-                r['disponibles'] for r in servicios['recursos'].consultar_recursos({})
-            )
+        usuario = g.usuario
+        gestionar = usuario.permite('PRESTAMOS_GESTIONAR')
+
+        if gestionar or usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'):
+            dni = None if gestionar else usuario.dni
+            prestamos = servicios['prestamos'].consultar_prestamos({}, dni)
+            pendientes = [p for p in prestamos if p['estado_actual'] != 'DEVUELTO']
+            vencidos = [p for p in prestamos if p['estado_actual'] == 'VENCIDO']
+            resumen['prestamos_pendientes'] = len(pendientes)
+            resumen['prestamos_vencidos'] = len(vencidos)
+
+        if usuario.permite('CATALOGO_CONSULTAR'):
+            recursos = servicios['recursos'].consultar_recursos({})
+            resumen['bienes_disponibles'] = sum(r['disponibles'] for r in recursos)
+
         return render_template('inicio.html', resumen=resumen)
 
 
@@ -130,7 +128,8 @@ def registrar_filtros(app):
         if not valor:
             return '—'
         if isinstance(valor, datetime):
-            return valor.replace(tzinfo=timezone.utc).astimezone(LIMA).strftime('%d/%m/%Y %H:%M')
+            valor = valor.replace(tzinfo=timezone.utc).astimezone(LIMA)
+            return valor.strftime('%d/%m/%Y %H:%M')
         return str(valor)
 
     @app.template_filter('hora')
@@ -138,40 +137,45 @@ def registrar_filtros(app):
         if not valor:
             return ''
         if isinstance(valor, timedelta):
-            segundos = int(valor.total_seconds())
-            return f'{segundos // 3600:02d}:{segundos % 3600 // 60:02d}'
-        return valor.strftime('%H:%M') if hasattr(valor, 'strftime') else str(valor)[:5]
+            minutos = int(valor.total_seconds()) // 60
+            return f'{minutos // 60:02d}:{minutos % 60:02d}'
+        return str(valor)[:5]
 
 
 def registrar_errores(app):
-    def mostrar_error(error, codigo):
-        return render_template('error.html', mensaje=str(error), codigo=codigo), codigo
+    def mostrar_error(mensaje, codigo):
+        return render_template('error.html', mensaje=mensaje, codigo=codigo), codigo
 
-    app.register_error_handler(Conflicto, lambda e: mostrar_error(e, 409))
-    app.register_error_handler(ValueError, lambda e: mostrar_error(e, 400))
-    app.register_error_handler(NoEncontrado, lambda e: mostrar_error(e, 404))
-    app.register_error_handler(PermissionError, lambda e: mostrar_error(e, 403))
-    app.register_error_handler(HTTPException, lambda e: mostrar_error(e.description, e.code))
+    @app.errorhandler(Conflicto)
+    def conflicto(error):
+        return mostrar_error(str(error), 409)
+
+    @app.errorhandler(ValueError)
+    def valor_invalido(error):
+        return mostrar_error(str(error), 400)
+
+    @app.errorhandler(NoEncontrado)
+    def no_encontrado(error):
+        return mostrar_error(str(error), 404)
+
+    @app.errorhandler(PermissionError)
+    def sin_permiso(error):
+        return mostrar_error(str(error), 403)
+
+    @app.errorhandler(HTTPException)
+    def error_http(error):
+        return mostrar_error(error.description, error.code)
 
     @app.errorhandler(ErrorMySQL)
     def error_base(error):
-        app.logger.exception('Falló una operación de base de datos.')
-        if error.errno in (1205, 1213):
-            return mostrar_error(
-                'Otra operación modificaba estos datos. Recarga e inténtalo otra vez.', 409
-            )
-        if isinstance(error, IntegrityError):
-            return mostrar_error(
-                'Los datos están duplicados o relacionados con otros registros.', 409
-            )
-        return mostrar_error(
-            'No se pudo acceder a la base de datos. Revisa la conexión y vuelve a intentar.', 503
-        )
+        app.logger.exception('Falló la base de datos.')
+        return mostrar_error('No se pudo acceder a la base de datos.', 503)
 
 
 def create_app(config=None):
     app = Flask(
-        __name__, template_folder='presentacion/vistas', static_folder='presentacion/static'
+        __name__, template_folder='presentacion/vistas',
+          static_folder='presentacion/static'
     )
     app.config.update(
         SECRET_KEY=clave_local(),
@@ -179,7 +183,6 @@ def create_app(config=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
         MAX_CONTENT_LENGTH=1024 * 1024,
-        INICIAR_PROCESADOR_VENCIMIENTOS=False,
     )
     app.config.update(config or {})
 
@@ -192,16 +195,12 @@ def create_app(config=None):
     registrar_inicio(app, servicios)
     registrar_filtros(app)
     registrar_errores(app)
-
-    if app.config['INICIAR_PROCESADOR_VENCIMIENTOS']:
-        app.extensions['detener_vencimientos'] = iniciar_procesador_vencimientos(
-            servicios['sanciones'], servicios['reservas']
-        )
     return app
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    create_app({'INICIAR_PROCESADOR_VENCIMIENTOS': True}).run(
-        host='127.0.0.1', port=int(os.getenv('PORT', '5001'))
-    )
+    app = create_app()
+    servicios = app.extensions['servicios']
+    iniciar_procesador_vencimientos(servicios['sanciones'], servicios['reservas'])
+    app.run(host='127.0.0.1', port=int(os.getenv('PORT', '5001')))

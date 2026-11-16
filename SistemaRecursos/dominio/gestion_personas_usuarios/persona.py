@@ -8,6 +8,9 @@ import re
 from dominio.compartido.validacion import dni, entero, texto
 
 TIPOS_PERSONA = ('ESTUDIANTE', 'DOCENTE', 'ADMINISTRATIVO')
+ESTADOS_PERSONA = ('ACTIVA', 'INACTIVA')
+ESTADOS_MATRICULA = ('VIGENTE', 'NO_VIGENTE')
+LONGITUD_CODIGO_INSTITUCIONAL = 20
 CAMPOS_TIPO = {
     'ESTUDIANTE': ('cui', 'ciclo', 'estado_matricula'),
     'DOCENTE': ('codigo_docente', 'departamento_academico', 'facultad', 'escuela_profesional'),
@@ -42,12 +45,12 @@ class Persona:
         self.telefono = texto(self.telefono, 'Teléfono', 20)
         if not re.fullmatch(r'[^\s@]+@[^.\s@]+(?:\.[^.\s@]+)+', self.correo):
             raise ValueError('Introduce un correo válido.')
-        if self.tipo not in TIPOS_PERSONA or self.estado not in ('ACTIVA', 'INACTIVA'):
+        if self.tipo not in TIPOS_PERSONA or self.estado not in ESTADOS_PERSONA:
             raise ValueError('Tipo o estado de persona inválido.')
         if self.tipo == 'ESTUDIANTE':
             self.cui = dni(self.cui)
             self.ciclo = entero(self.ciclo, 'Ciclo') if self.ciclo not in (None, '') else None
-            if self.estado_matricula not in ('VIGENTE', 'NO_VIGENTE'):
+            if self.estado_matricula not in ESTADOS_MATRICULA:
                 raise ValueError('Selecciona una matrícula válida.')
         else:
             for campo in CAMPOS_TIPO[self.tipo]:
@@ -57,13 +60,13 @@ class Persona:
                     texto(
                         getattr(self, campo),
                         campo.replace('_', ' ').capitalize(),
-                        20 if campo.startswith('codigo_') else 100,
+                        LONGITUD_CODIGO_INSTITUCIONAL if campo.startswith('codigo_') else 100,
                         True,
                     ),
                 )
 
     @classmethod
-    def desde_datos(cls, datos):
+    def desde_datos(cls, datos: dict) -> 'Persona':
         permitidos = {campo.name for campo in fields(cls)}
         valores = {k: v for k, v in datos.items() if k in permitidos and v is not None}
         for campo in ('dni', 'nombres', 'apellidos', 'correo', 'tipo'):
@@ -71,10 +74,10 @@ class Persona:
         return cls(**valores)
 
     @property
-    def nombre_completo(self):
+    def nombre_completo(self) -> str:
         return f'{self.nombres} {self.apellidos}'
 
-    def datos(self):
+    def datos(self) -> dict:
         return asdict(self)
 
 
@@ -90,7 +93,6 @@ def validar_elegibilidad(persona):
 class IRepositorioPersona(IRepositorioTransaccional, Protocol):
     def consultar_persona(self, documento: str, bloquear=False) -> dict | None: ...
     def consultar_personas(self, filtros: dict) -> dict: ...
-    def guardar_persona(self, persona: Persona, documento_anterior: str | None = None): ...
-    def consultar_cuentas_bloqueadas(self) -> list[dict]: ...
-    def desactivar_persona(self, documento: str): ...
+    def guardar_persona(self, persona: Persona, documento_anterior: str | None = None) -> None: ...
+    def consultar_cuentas_para_actualizar(self) -> list[dict]: ...
     def buscar_personas(self, termino: str) -> list[dict]: ...

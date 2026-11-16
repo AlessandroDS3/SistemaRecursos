@@ -12,7 +12,7 @@ class MySQLConnection:
             port=int(os.getenv('DB_PORT', '3306')),
             user=os.getenv('DB_USER', 'root'),
             password=os.getenv('DB_PASSWORD', ''),
-            database=os.getenv('DB_NAME', 'prestamos_escuela_rehecho'),
+            database=os.getenv('DB_NAME', 'prestamos_escuela_pruebas'),
             connection_timeout=5,
             use_pure=True,
         )

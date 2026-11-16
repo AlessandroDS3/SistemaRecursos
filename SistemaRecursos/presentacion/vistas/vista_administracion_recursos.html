@@ -28,7 +28,7 @@
   </div>
   <form class="filtros filtros-bloque">
     <div class="rejilla filtros-tres">
-      {{ campo('q','Nombre o código de inventario',request.args.get('q',''),maximo=120) }}
+      {{ campo('q','Nombre, marca, modelo o inventario',request.args.get('q',''),maximo=120) }}
       <label>
         Categoría<select name="id_categoria">
         <option value="">Todas las categorías</option>

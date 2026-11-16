@@ -3,7 +3,12 @@ import unittest
 from dominio.compartido.validacion import Conflicto, entero, fecha_local
 from dominio.gestion_personas_usuarios.persona import Persona
 from dominio.gestion_personas_usuarios.cuenta import proteger_administradores
-from dominio.gestion_personas_usuarios.rol import validar_matriz
+from dominio.gestion_personas_usuarios.rol import (
+    DEPENDENCIAS_PERMISOS,
+    PERMISOS,
+    ROLES,
+    validar_matriz,
+)
 from dominio.gestion_recursos.bien_material import BienMaterial, validar_cambio_estado
 from dominio.gestion_control.politica_prestamo import (
     ConfiguracionReservas,
@@ -278,3 +283,17 @@ class ReglasDominio(unittest.TestCase):
             proteger_administradores([actual], actual, dict(actual, rol='USUARIO'), 1)
         with self.assertRaises(ValueError):
             validar_matriz(dict(USUARIO=[], ENCARGADO_PRESTAMOS=[], ADMINISTRADOR=[]))
+
+    def test_gestion_y_administracion_requieren_sus_permisos_de_consulta(self):
+        for rol in ('USUARIO', 'ENCARGADO_PRESTAMOS'):
+            for permiso, requeridos in DEPENDENCIAS_PERMISOS.items():
+                with self.subTest(rol=rol, permiso=permiso):
+                    matriz = {r: [] for r in ROLES}
+                    matriz['ADMINISTRADOR'] = list(PERMISOS)
+                    matriz[rol] = [permiso]
+                    with self.assertRaises(ValueError) as error:
+                        validar_matriz(matriz)
+                    self.assertIn(rol, str(error.exception))
+                    self.assertIn(PERMISOS[requeridos[0]], str(error.exception))
+                    matriz[rol].extend(requeridos)
+                    validar_matriz(matriz)

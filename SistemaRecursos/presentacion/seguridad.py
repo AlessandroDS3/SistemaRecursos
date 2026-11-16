@@ -12,11 +12,12 @@ def csrf_token():
     return session['csrf']
 
 
-def iniciar_sesion(cuenta):
+def establecer_sesion(cuenta_acceso):
+    """Guarda la identidad y renueva el token CSRF después de autenticar la cuenta."""
     session.clear()
     session.update(
-        id_usuario=cuenta.id_usuario,
-        credenciales=cuenta.version_credenciales,
+        id_usuario=cuenta_acceso.id_usuario,
+        credenciales=cuenta_acceso.version_credenciales,
         csrf=token_urlsafe(32),
     )
 
@@ -35,6 +36,7 @@ def requiere_permiso(*permisos):
 
 
 def configurar_seguridad(app, acceso):
+    """Instala sesión, permisos y validación CSRF global para POST, PUT, PATCH y DELETE."""
     app.jinja_env.globals['csrf_token'] = csrf_token
 
     @app.before_request
@@ -42,13 +44,11 @@ def configurar_seguridad(app, acceso):
         g.usuario = None
         identificador = session.get('id_usuario')
         if identificador is not None:
-            cuenta = acceso.consultar_cuenta_activa(identificador)
-            if (
-                cuenta
-                and cuenta.puede_acceder()
-                and compare_digest(cuenta.version_credenciales, session.get('credenciales', ''))
+            cuenta_acceso = acceso.consultar_cuenta_activa(identificador)
+            if cuenta_acceso and compare_digest(
+                cuenta_acceso.version_credenciales, session.get('credenciales', '')
             ):
-                g.usuario = cuenta
+                g.usuario = cuenta_acceso
             else:
                 session.clear()
         if request.endpoint not in ('auth.iniciar_sesion', 'static') and g.usuario is None:

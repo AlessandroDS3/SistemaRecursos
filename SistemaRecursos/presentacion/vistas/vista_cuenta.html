@@ -22,7 +22,7 @@
              {% if nueva %}required{% endif %}>
     </label>
     {% if not nueva %}
-      {{ opciones('estado_cuenta','Estado',('ACTIVA','INACTIVA','BLOQUEADA'),cuenta.estado_cuenta) }}
+      {{ opciones('estado_cuenta','Estado',estados,cuenta.estado_cuenta) }}
       <p>
         Rol:
         {{ cuenta.rol }}

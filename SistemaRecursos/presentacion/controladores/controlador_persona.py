@@ -1,6 +1,14 @@
 from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, url_for
-from dominio.gestion_personas_usuarios.persona import CAMPOS_TIPO, TIPOS_PERSONA
+from dominio.gestion_personas_usuarios.persona import (
+    CAMPOS_TIPO,
+    ESTADOS_MATRICULA,
+    ESTADOS_PERSONA,
+    LONGITUD_CODIGO_INSTITUCIONAL,
+    TIPOS_PERSONA,
+)
 from presentacion.seguridad import requiere_permiso
+
+VISTA_PERSONA = 'vista_persona.html'
 
 
 class ControladorPersona:
@@ -30,7 +38,13 @@ class ControladorPersona:
     @requiere_permiso('PERSONAS_CONSULTAR')
     def consultar_personas(self):
         resultado = self.servicio.consultar_personas(request.args)
-        return render_template('vista_persona.html', modo='lista', resultado=resultado, tipos=TIPOS_PERSONA)
+        return render_template(
+            VISTA_PERSONA,
+            modo='lista',
+            resultado=resultado,
+            tipos=TIPOS_PERSONA,
+            estados=ESTADOS_PERSONA,
+        )
 
     @requiere_permiso('PERSONAS_CONSULTAR', 'PRESTAMOS_GESTIONAR')
     def buscar_personas(self):
@@ -39,24 +53,29 @@ class ControladorPersona:
     @requiere_permiso('PERSONAS_CONSULTAR')
     def consultar_persona(self, documento):
         persona, _ = self.servicio.consultar_persona(documento)
-        return render_template('vista_persona.html', modo='detalle', persona=persona)
+        return render_template(VISTA_PERSONA, modo='detalle', persona=persona)
 
     @requiere_permiso('PERSONAS_GESTIONAR')
     def gestionar_formulario_persona(self, documento=None):
-        persona, version = self.servicio.consultar_persona(documento) if documento else ({}, '')
         if request.method == 'POST':
-            nuevo = self.servicio.guardar_persona(
+            dni_guardado = self.servicio.guardar_persona(
                 request.form.to_dict(), g.usuario.id_usuario, documento
             )
             flash('Ficha de persona guardada.')
-            return redirect(url_for('personas.consultar_persona', documento=nuevo))
+            return redirect(url_for('personas.consultar_persona', documento=dni_guardado))
+        persona, version_actual = (
+            self.servicio.consultar_persona(documento) if documento else ({}, '')
+        )
         return render_template(
-            'vista_persona.html',
+            VISTA_PERSONA,
             modo='formulario',
             persona=persona,
-            version=version,
+            version=version_actual,
             tipos=TIPOS_PERSONA,
             campos_tipo=CAMPOS_TIPO,
+            estados=ESTADOS_PERSONA,
+            estados_matricula=ESTADOS_MATRICULA,
+            longitud_codigo=LONGITUD_CODIGO_INSTITUCIONAL,
         )
 
     @requiere_permiso('PERSONAS_GESTIONAR')

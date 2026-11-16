@@ -1,4 +1,5 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from dominio.gestion_personas_usuarios.cuenta import ESTADOS_CUENTA
 from presentacion.seguridad import requiere_permiso
 
 
@@ -31,9 +32,15 @@ class ControladorCuenta:
 
     @requiere_permiso('USUARIOS_GESTIONAR')
     def actualizar_cuenta(self, documento):
-        cuenta = self.servicio.consultar_cuenta(documento)
         if request.method == 'POST':
             self.servicio.actualizar_cuenta(documento, request.form.to_dict(), g.usuario.id_usuario)
             flash('Cuenta actualizada.')
             return redirect(url_for('personas.consultar_persona', documento=documento))
-        return render_template('vista_cuenta.html', documento=documento, cuenta=cuenta, nueva=False)
+        cuenta = self.servicio.consultar_cuenta(documento)
+        return render_template(
+            'vista_cuenta.html',
+            documento=documento,
+            cuenta=cuenta,
+            nueva=False,
+            estados=ESTADOS_CUENTA,
+        )

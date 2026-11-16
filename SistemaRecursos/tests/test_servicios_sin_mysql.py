@@ -27,6 +27,9 @@ class CuentaEnMemoria:
     def consultar_cuenta_por_usuario(self, nombre):
         return self.cuenta if nombre == 'prueba' else None
 
+    def consultar_cuenta_por_id(self, identificador):
+        return self.cuenta if identificador == self.cuenta.id_usuario else None
+
     def registrar_acceso(self, identificador):
         self.accesos.append(identificador)
 
@@ -78,6 +81,16 @@ class EntregaEnMemoria:
 
 
 class ServiciosSinMySQL(unittest.TestCase):
+    def test_recuperar_sesion_solo_devuelve_cuentas_activas_y_no_registra_otro_login(self):
+        for activa in (True, False):
+            with self.subTest(activa=activa):
+                repo = CuentaEnMemoria(activa=activa)
+                acceso = ServicioAplicacionAcceso(repo)
+                self.assertIs(acceso.consultar_cuenta_activa(1), repo.cuenta if activa else None)
+                for identificador in (2, 0, -1, None, True, 'incorrecto'):
+                    self.assertIsNone(acceso.consultar_cuenta_activa(identificador))
+                self.assertEqual(repo.accesos, [])
+
     def test_autenticacion_se_prueba_sin_flask_ni_base(self):
         repo = CuentaEnMemoria()
         acceso = ServicioAplicacionAcceso(repo)

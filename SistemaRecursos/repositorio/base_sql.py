@@ -50,21 +50,22 @@ class RepositorioSQL:
         return self.consultar_sql('SELECT UTC_TIMESTAMP() AS fecha', una=True)['fecha']
 
     def consultar_cuenta_actor(self, identificador):
-        cuenta = self.consultar_sql(
+        """Devuelve el diccionario del actor con sus permisos, o None si no existe."""
+        cuenta_actor = self.consultar_sql(
             '''SELECT u.id_usuario,u.dni_persona,u.rol,u.estado_cuenta,
             p.estado AS estado_persona FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona
             WHERE u.id_usuario=%s''',
             (identificador,),
             una=True,
         )
-        if cuenta:
-            cuenta['permisos'] = {
+        if cuenta_actor:
+            cuenta_actor['permisos'] = {
                 p['permiso']
                 for p in self.consultar_sql(
-                    'SELECT permiso FROM rol_permiso WHERE rol=%s', (cuenta['rol'],)
+                    'SELECT permiso FROM rol_permiso WHERE rol=%s', (cuenta_actor['rol'],)
                 )
             }
-        return cuenta
+        return cuenta_actor
 
     def registrar_historial_estado(
         self, entidad, identificador, anterior, nuevo, actor, observacion

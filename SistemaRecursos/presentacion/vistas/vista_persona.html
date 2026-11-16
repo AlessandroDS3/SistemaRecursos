@@ -31,7 +31,7 @@
         <label>
           Estado<select name="estado">
           <option value="">Todos</option>
-          {% for e in ('ACTIVA','INACTIVA') %}
+          {% for e in estados %}
             <option value="{{ e }}"
                     {% if request.args.get('estado')==e %}selected{% endif %}>{{ e|capitalize }}</option>
           {% endfor %}
@@ -162,7 +162,7 @@
             Tipo:
             {{ persona.tipo }}
           </p>
-          {{ opciones('estado','Estado',('ACTIVA','INACTIVA'),persona.estado) }}
+          {{ opciones('estado','Estado',estados,persona.estado) }}
         {% else %}
           {{ opciones('tipo','Tipo',tipos,'ESTUDIANTE') }}
         {% endif %}
@@ -173,9 +173,9 @@
           <div class="rejilla">
             {% for nombre in campos %}
               {% if nombre=="estado_matricula" %}
-                {{ opciones(nombre,'Matrícula',('VIGENTE','NO_VIGENTE'),persona[nombre]|default('VIGENTE')) }}
+                {{ opciones(nombre,'Matrícula',estados_matricula,persona[nombre]|default('VIGENTE')) }}
               {% else %}
-                {{ campo(nombre,nombre|replace('_',' ')|title,persona[nombre],tipo='number' if nombre=='ciclo' else 'text',requerido=nombre!='ciclo',maximo=8 if nombre=='cui' else 100) }}
+                {{ campo(nombre,nombre|replace('_',' ')|title,persona[nombre],tipo='number' if nombre=='ciclo' else 'text',requerido=nombre!='ciclo',maximo=8 if nombre=='cui' else longitud_codigo if nombre.startswith('codigo_') else 100) }}
               {% endif %}
             {% endfor %}
           </div>

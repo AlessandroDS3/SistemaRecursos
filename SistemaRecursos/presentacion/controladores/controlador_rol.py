@@ -1,5 +1,5 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
-from dominio.gestion_personas_usuarios.rol import PERMISOS, ROLES
+from dominio.gestion_personas_usuarios.rol import DEPENDENCIAS_PERMISOS, PERMISOS, ROLES
 from presentacion.seguridad import requiere_permiso
 
 
@@ -25,6 +25,7 @@ class ControladorRol:
             version=version,
             roles=ROLES,
             permisos=PERMISOS,
+            dependencias=DEPENDENCIAS_PERMISOS,
             cuentas=self.cuentas.buscar_cuentas(busqueda) if len(busqueda) >= 2 else [],
         )
 

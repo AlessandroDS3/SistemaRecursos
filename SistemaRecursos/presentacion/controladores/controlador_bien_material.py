@@ -63,22 +63,24 @@ class ControladorBienMaterial:
 
     @requiere_permiso('RECURSOS_GESTIONAR')
     def gestionar_formulario_bien_material(self, identificador=None):
-        bien = (
-            self.servicio.consultar_bien_material(identificador)
-            if identificador
-            else {'id_recurso': request.args.get('id_recurso')}
-        )
         if request.method == 'POST':
-            nuevo = self.servicio.guardar_bien_material(
+            id_bien_guardado = self.servicio.guardar_bien_material(
                 request.form.to_dict(), g.usuario.id_usuario, identificador
             )
             flash('Bien guardado.')
-            return redirect(url_for('bienes.consultar_bien_material', identificador=nuevo))
+            return redirect(
+                url_for('bienes.consultar_bien_material', identificador=id_bien_guardado)
+            )
+        bien = (
+            self.servicio.consultar_bien_material(identificador)
+            if identificador is not None
+            else {'id_recurso': request.args.get('id_recurso')}
+        )
         return render_template(
             'vista_bien_material.html',
             modo='formulario',
             bien=bien,
-            recursos=self.recursos.consultar_recursos({}),
+            recursos=self.recursos.consultar_recursos({}) if identificador is None else [],
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')

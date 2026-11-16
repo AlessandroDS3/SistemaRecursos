@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Protocol
 from dominio.compartido.validacion import LIMA, entero, texto
-from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
+from dominio.gestion_control.catalogo_reportes import OPCIONES_FILTROS, REPORTES
 
 FILAS_POR_PAGINA = 50
 
@@ -16,19 +16,28 @@ class FiltroReporte:
     modalidad: str = ''
     tipo_persona: str = ''
     q: str = ''
+    id_categoria: str | int = ''
+    ubicacion: str = ''
+    cumplimiento: str = ''
+    tipo_gestion: str = ''
     pagina: int = 1
 
     def __post_init__(self):
-        if self.tipo not in ('prestamos', 'devoluciones'):
+        if not isinstance(self.tipo, str) or self.tipo not in REPORTES:
             raise ValueError('Tipo de reporte inválido.')
-        if self.estado not in ('', 'ACTIVO', 'VENCIDO', 'DEVUELTO', 'PARCIALMENTE_DEVUELTO'):
+        # Los filtros de otro reporte no alteran esta consulta ni sus enlaces de exportación.
+        for campo in self.__dataclass_fields__:
+            if campo not in ('tipo', 'pagina') and campo not in self.definicion.filtros:
+                setattr(self, campo, '')
+        if self.estado not in ('', *self.definicion.estados):
             raise ValueError('Estado de reporte inválido.')
-        if self.modalidad not in ('', 'INDIVIDUAL', 'GRUPAL') or self.tipo_persona not in (
-            '',
-            *TIPOS_PERSONA,
-        ):
-            raise ValueError('Modalidad o tipo de persona inválidos.')
+        for campo, opciones in OPCIONES_FILTROS.items():
+            if getattr(self, campo) not in ('', *opciones):
+                raise ValueError(f'Filtro {campo.replace("_", " ")} inválido.')
         self.q = texto(self.q, 'Búsqueda', 120)
+        self.ubicacion = texto(self.ubicacion, 'Ubicación', 120)
+        if self.id_categoria:
+            self.id_categoria = entero(self.id_categoria, 'Categoría')
         self.pagina = entero(self.pagina, 'Página', maximo=1000000)
         for campo in ('desde', 'hasta'):
             valor = getattr(self, campo)
@@ -40,6 +49,19 @@ class FiltroReporte:
             raise ValueError('La fecha inicial no puede ser posterior a la final.')
         if self.hasta == date.max:
             raise ValueError('Fecha final fuera de rango.')
+
+    @property
+    def definicion(self):
+        return REPORTES[self.tipo]
+
+    @property
+    def parametros(self):
+        parametros = {'tipo': self.tipo}
+        for campo in self.definicion.filtros:
+            valor = getattr(self, campo)
+            if valor not in ('', None):
+                parametros[campo] = valor.isoformat() if isinstance(valor, date) else valor
+        return parametros
 
     @staticmethod
     def _utc(dia):

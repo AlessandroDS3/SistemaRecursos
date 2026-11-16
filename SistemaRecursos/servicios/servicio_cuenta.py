@@ -3,9 +3,10 @@ from werkzeug.security import generate_password_hash
 from dominio.compartido.validacion import dni, entero
 from dominio.gestion_personas_usuarios.cuenta import (
     IRepositorioCuenta,
+    ESTADOS_CUENTA,
     proteger_administradores,
     validar_clave,
-    validar_credenciales_nuevas,
+    validar_nombre_usuario,
 )
 from dominio.gestion_personas_usuarios.rol import ROLES
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
@@ -15,59 +16,62 @@ class ServicioAplicacionCuenta:
     def __init__(self, repositorio: IRepositorioCuenta):
         self.repositorio = repositorio
 
-    def consultar_cuenta(self, documento):
+    def consultar_cuenta(self, documento: str) -> dict:
         cuenta = self.repositorio.consultar_cuenta(dni(documento))
         if cuenta is None:
             raise NoEncontrado('La persona no tiene una cuenta de acceso.')
         return cuenta
 
-    def registrar_cuenta(self, documento, nombre, clave, actor):
+    def registrar_cuenta(self, documento: str, nombre: str, clave: str, actor: int) -> int:
         documento = dni(documento)
-        nombre = validar_credenciales_nuevas(nombre, clave)
-        hash_clave = generate_password_hash(clave, method='scrypt')
+        actor = entero(actor)
+        nombre = validar_nombre_usuario(nombre)
+        hash_clave = generate_password_hash(validar_clave(clave), method='scrypt')
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'USUARIOS_GESTIONAR')
+            exigir_permiso(operacion.consultar_cuenta_actor(actor), 'USUARIOS_GESTIONAR')
             if operacion.consultar_estado_persona(documento) != 'ACTIVA':
                 raise ValueError('La persona debe estar activa para crear su cuenta.')
             return operacion.registrar_cuenta(documento, nombre, hash_clave)
 
-    def actualizar_cuenta(self, documento, datos, actor):
+    def actualizar_cuenta(self, documento: str, datos: dict, actor: int) -> None:
         if 'rol' in datos:
             raise ValueError('Cambia el rol desde la sección Roles y permisos.')
-        return self._actualizar_cuenta(documento, datos, actor, 'USUARIOS_GESTIONAR')
+        self._actualizar_cuenta(documento, datos, actor, 'USUARIOS_GESTIONAR')
 
-    def asignar_rol_cuenta(self, documento, rol, actor):
-        return self._actualizar_cuenta(documento, dict(rol=rol), actor, 'ROLES_GESTIONAR')
+    def asignar_rol_cuenta(self, documento: str, rol: str, actor: int) -> None:
+        self._actualizar_cuenta(documento, dict(rol=rol), actor, 'ROLES_GESTIONAR')
 
-    def _actualizar_cuenta(self, documento, datos, actor, permiso):
-        documento, actor = dni(documento), entero(actor)
+    def _preparar_cambios_cuenta(self, datos: dict) -> dict:
         clave = validar_clave(datos.get('clave', ''), permitir_vacia=True)
         cambios = {}
         if 'nombre_usuario' in datos:
-            cambios['nombre_usuario'] = validar_credenciales_nuevas(
-                datos['nombre_usuario'], '', True
-            )
+            cambios['nombre_usuario'] = validar_nombre_usuario(datos['nombre_usuario'])
         if clave:
             cambios['contrasena_hash'] = generate_password_hash(clave, method='scrypt')
         if 'estado_cuenta' in datos:
-            if datos['estado_cuenta'] not in ('ACTIVA', 'INACTIVA', 'BLOQUEADA'):
+            if datos['estado_cuenta'] not in ESTADOS_CUENTA:
                 raise ValueError('Estado de cuenta inválido.')
             cambios['estado_cuenta'] = datos['estado_cuenta']
         if 'rol' in datos:
             if datos['rol'] not in ROLES:
                 raise ValueError('Rol inexistente.')
             cambios['rol'] = datos['rol']
+        return cambios
+
+    def _actualizar_cuenta(self, documento: str, datos: dict, actor: int, permiso: str) -> None:
+        documento, actor = dni(documento), entero(actor)
+        cambios = self._preparar_cambios_cuenta(datos)
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(actor), permiso)
-            cuentas = operacion.consultar_cuentas_bloqueadas()
+            cuentas = operacion.consultar_cuentas_para_actualizar()
             actual = next((c for c in cuentas if c['dni_persona'] == documento), None)
             if actual is None:
                 raise NoEncontrado('Cuenta inexistente.')
             cuenta_actor = next((c for c in cuentas if c['id_usuario'] == actor), None)
             administrador = (
-                cuenta_actor
+                cuenta_actor is not None
                 and cuenta_actor['rol'] == 'ADMINISTRADOR'
-                and (cuenta_actor['estado_cuenta'] == cuenta_actor['estado_persona'] == 'ACTIVA')
+                and cuenta_actor['estado_cuenta'] == cuenta_actor['estado_persona'] == 'ACTIVA'
             )
             if (
                 actual['rol'] == 'ADMINISTRADOR'
@@ -83,5 +87,5 @@ class ServicioAplicacionCuenta:
             proteger_administradores(cuentas, actual, nueva, actor)
             operacion.actualizar_cuenta(actual['id_usuario'], cambios)
 
-    def buscar_cuentas(self, termino=''):
+    def buscar_cuentas(self, termino: str = '') -> list[dict]:
         return self.repositorio.buscar_cuentas(termino.strip())

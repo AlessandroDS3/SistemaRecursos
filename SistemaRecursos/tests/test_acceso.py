@@ -107,6 +107,32 @@ class AccesoWeb(CasoMySQL):
         self.ejecutar("UPDATE usuario_sistema SET estado_cuenta='BLOQUEADA' WHERE id_usuario=1")
         self.assertEqual(self.login().status_code, 200)
 
+    def test_csrf_rechaza_tokens_ausentes_anteriores_al_login_y_de_otra_sesion(self):
+        self.cliente.get('/login')
+        token_anterior = self.token()
+        self.assertEqual(self.login().status_code, 302)
+        self.assertNotEqual(self.token(), token_anterior)
+        otro_cliente = self.app.test_client()
+        otro_cliente.get('/login')
+        with otro_cliente.session_transaction() as sesion:
+            token_ajeno = sesion['csrf']
+        url = '/personas/99000011/desactivar'
+        for datos in (
+            {},
+            {'csrf_token': 'incorrecto'},
+            {'csrf_token': token_anterior},
+            {'csrf_token': token_ajeno},
+        ):
+            with self.subTest(datos=datos):
+                self.assertEqual(self.cliente.post(url, data=datos).status_code, 400)
+                self.assertEqual(
+                    self.fila("SELECT estado FROM persona WHERE dni='99000011'"), ('ACTIVA',)
+                )
+        self.assertEqual(self.post(url).status_code, 302)
+        self.assertEqual(
+            self.fila("SELECT estado FROM persona WHERE dni='99000011'"), ('INACTIVA',)
+        )
+
     def test_cambio_password_invalida_cookie_vigente(self):
         self.login()
         self.ejecutar(

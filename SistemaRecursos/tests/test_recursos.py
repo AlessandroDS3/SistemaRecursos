@@ -22,7 +22,14 @@ class RecursosYPoliticas(CasoMySQL):
 
     def test_actualizar_bien_con_fecha_y_descripcion_vacias(self):
         self.servicios['bienes'].guardar_bien_material(
-            dict(codigo_inventario='INV-2', fecha_adquisicion='', descripcion_bien=''), 1, 2
+            dict(
+                codigo_inventario='INV-2',
+                fecha_adquisicion='',
+                descripcion_bien='',
+                version=self.servicios['bienes'].consultar_bien_material(2)['version'],
+            ),
+            1,
+            2,
         )
         self.assertEqual(
             self.fila(
@@ -52,7 +59,7 @@ class RecursosYPoliticas(CasoMySQL):
             self.servicios['bienes'].cambiar_estado_bien_material(
                 2, dict(estado='DISPONIBLE', estado_esperado='PERDIDO', motivo='Hallado'), 1
             )
-        with self.assertRaises(IntegrityError):
+        with self.assertRaises(Conflicto):
             self.servicios['bienes'].eliminar_bien_material(2, 1)
 
     def test_editar_politica_conserva_version_aplicada(self):

@@ -21,6 +21,8 @@ class ServicioAplicacionReporte:
         filas, resumen = self.repositorio.consultar_reportes(filtro, paginar)
         return dict(
             filtro=filtro,
+            reporte=filtro.definicion,
+            parametros=filtro.parametros,
             filas=filas,
             resumen=resumen,
             paginas=max(1, (resumen['detalles'] + FILAS_POR_PAGINA - 1) // FILAS_POR_PAGINA),
@@ -28,23 +30,7 @@ class ServicioAplicacionReporte:
 
     def exportar_reportes_csv(self, datos):
         resultado = self.consultar_reportes(datos, paginar=False)
-        campos = (
-            'id_prestamo',
-            'dni_persona',
-            'solicitante',
-            'tipo_prestamo',
-            'fecha_entrega',
-            'estado',
-            'id_detalle',
-            'codigo_inventario',
-            'recurso',
-            'fecha_limite_devolucion',
-            'fecha_devolucion',
-            'condicion_devolucion',
-            'tipo_persona',
-            'situacion',
-            'integrantes',
-        )
+        campos = [c.nombre for c in resultado['reporte'].columnas]
         salida = StringIO(newline='')
         salida.write('\ufeff')
         escritor = csv.writer(salida, delimiter=';', lineterminator='\r\n')

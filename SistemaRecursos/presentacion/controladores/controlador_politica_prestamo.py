@@ -3,6 +3,8 @@ from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
 from dominio.compartido.validacion import version
 from presentacion.seguridad import requiere_permiso
 
+RUTA_POLITICAS = 'politicas.consultar_politicas_prestamo'
+
 
 class ControladorPoliticaPrestamo:
     def __init__(self, servicio, recursos):
@@ -65,7 +67,7 @@ class ControladorPoliticaPrestamo:
                 request.form.to_dict(), g.usuario.id_usuario, identificador
             )
             flash('Política guardada. Los préstamos anteriores conservan sus condiciones.')
-            return redirect(url_for('politicas.consultar_politicas_prestamo'))
+            return redirect(url_for(RUTA_POLITICAS))
         return render_template(
             'vista_politica_prestamo.html',
             modo='formulario',
@@ -79,7 +81,7 @@ class ControladorPoliticaPrestamo:
     def guardar_configuracion_general(self):
         self.servicio.guardar_configuracion_general(request.form.to_dict(), g.usuario.id_usuario)
         flash('Horario y plazos de reserva guardados.')
-        return redirect(url_for('politicas.consultar_politicas_prestamo'))
+        return redirect(url_for(RUTA_POLITICAS))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
     def guardar_limite_articulos(self):
@@ -89,10 +91,10 @@ class ControladorPoliticaPrestamo:
             g.usuario.id_usuario,
         )
         flash('Límite guardado.')
-        return redirect(url_for('politicas.consultar_politicas_prestamo'))
+        return redirect(url_for(RUTA_POLITICAS))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
     def eliminar_politica_prestamo(self, identificador):
         self.servicio.eliminar_politica_prestamo(identificador, g.usuario.id_usuario)
         flash('Política sin préstamos asociados eliminada.')
-        return redirect(url_for('politicas.consultar_politicas_prestamo'))
+        return redirect(url_for(RUTA_POLITICAS))

@@ -4,3 +4,4 @@ __pycache__/
 .env
 config.local.*
 datos_locales/
+clave_sesion.txt

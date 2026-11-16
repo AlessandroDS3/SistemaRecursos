@@ -13,7 +13,7 @@
     </div>
     <h2>Bienes materiales</h2>
     <form class="filtros">
-      {{ campo('q','Inventario o recurso',request.args.get('q',''),maximo=120) }}
+      {{ campo('q','Inventario, recurso, marca o modelo',request.args.get('q',''),maximo=120) }}
       <label>
         Estado
         <select name="estado">
@@ -98,6 +98,9 @@
     </h1>
     <form method="post" class="formulario panel">
       {{ csrf() }}
+      {% if bien.id_bien %}
+        <input type="hidden" name="version" value="{{ bien.version }}">
+      {% endif %}
       <div class="rejilla">
         {% if bien.id_bien %}
           <p>Recurso: {{ bien.recurso }}</p>
