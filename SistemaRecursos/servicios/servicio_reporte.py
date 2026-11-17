@@ -24,9 +24,13 @@ class ServicioAplicacionReporte:
             resumen=resumen,
         )
 
-    def exportar_reportes_csv(self, datos):
+    def consultar_exportacion_reporte(self, datos):
         filtro = FiltroReporte.desde_datos(datos)
         filas = self.repositorio.consultar_filas_reporte(filtro)
+        return filtro, filas
+
+    def exportar_reportes_csv(self, datos):
+        filtro, filas = self.consultar_exportacion_reporte(datos)
         campos = [c.nombre for c in filtro.definicion.columnas]
         salida = StringIO(newline='')
         salida.write('\ufeff')

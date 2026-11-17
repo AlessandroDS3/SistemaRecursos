@@ -229,7 +229,7 @@ class ReportesAmpliados(CasoMySQL):
         self.assertTrue(all(f['registrador'] == 'Administrador Prueba' for f in resultado['filas']))
         self.assertEqual(self.reporte('danos_perdidas', estado='PERDIDO')['resumen']['detalles'], 1)
 
-    def test_pantallas_y_csv_de_los_siete_reportes_son_solo_lectura(self):
+    def test_pantallas_y_exportaciones_de_los_siete_reportes_son_solo_lectura(self):
         self.prestar()
         self.login()
         antes = self.fila('SELECT COUNT(*) FROM historial_estado')
@@ -249,6 +249,10 @@ class ReportesAmpliados(CasoMySQL):
                 )
                 resultado = self.reporte(tipo)
                 self.assertEqual(len(filas), resultado['resumen']['detalles'])
+                pdf_http = self.cliente.get('/reportes/exportar.pdf', query_string={'tipo': tipo})
+                self.assertEqual(pdf_http.status_code, 200)
+                self.assertEqual(pdf_http.mimetype, 'application/pdf')
+                self.assertTrue(pdf_http.data.startswith(b'%PDF-'))
         self.assertEqual(self.fila('SELECT COUNT(*) FROM historial_estado'), antes)
         pagina = self.cliente.get('/reportes?tipo=inventario').get_data(as_text=True)
         selector = re.search(r'<select name="tipo"[^>]*>(.*?)</select>', pagina, re.S).group(1)
@@ -284,7 +288,7 @@ class ReportesAmpliados(CasoMySQL):
     def test_reportes_rechazan_usuario_sin_permiso_y_filtros_invalidos(self):
         self.login('usuario1', 'UsuarioPrueba2026!')
         for tipo in REPORTES:
-            for ruta in ('/reportes', '/reportes/exportar.csv'):
+            for ruta in ('/reportes', '/reportes/exportar.csv', '/reportes/exportar.pdf'):
                 with self.subTest(tipo=tipo, ruta=ruta):
                     self.assertEqual(
                         self.cliente.get(ruta, query_string={'tipo': tipo}).status_code, 403
@@ -298,7 +302,7 @@ class ReportesAmpliados(CasoMySQL):
             {'tipo': 'inventario', 'id_categoria': '1 OR 1=1'},
             {'tipo': 'reservas', 'desde': 'mal'},
         ):
-            for ruta in ('/reportes', '/reportes/exportar.csv'):
+            for ruta in ('/reportes', '/reportes/exportar.csv', '/reportes/exportar.pdf'):
                 with self.subTest(filtros=filtros, ruta=ruta):
                     self.assertEqual(
                         self.cliente.get(ruta, query_string=filtros).status_code, 400

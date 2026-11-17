@@ -1,47 +1,52 @@
--- CONSULTAS DEL REPOSITORIO, MATERIALIZADAS SIN FILTROS NI PAGINACION.
--- Las consultas 01 a 14 son el SQL actual de filas y resumen, sin reformular los JOIN.
--- Corresponden a la pantalla y al CSV con los filtros limpios.
--- Ejecuta USE y SET NAMES; despues selecciona solo la consulta que quieras comprobar.
--- Las impares 01-13 devuelven las filas; las pares 02-14 devuelven los indicadores.
--- La 15 obtiene integrantes; Python los reune y convierte fechas UTC a Lima para el CSV.
--- Por eso el SELECT de filas y el CSV no son identicos celda por celda. Ver LEEME_reportes.md.
--- Las consultas 16-18 son de acceso y del selector, no contienen las filas del CSV.
+-- CONSULTAS ACTUALES DE LOS SIETE REPORTES, SIN FILTROS NI PAGINACION.
+-- Las consultas 01-14 reproducen el SQL del repositorio: siete de filas y siete de resumen.
+-- PANTALLA: filas + resumen; CSV y PDF: solo filas, con los mismos filtros seleccionados.
+-- Las impares 01-13 devuelven filas; las pares 02-14, indicadores exclusivos de pantalla.
+-- La consulta 15 agrega integrantes si hay préstamos grupales en préstamos, devoluciones o sanciones.
+-- Las consultas 16-17 corresponden a la sesión y sus permisos; la 18, a las categorías de pantalla.
+-- PDF no tiene consultas adicionales: Python prepara título, fecha de generación y tabla.
+-- CSV usa las columnas del catálogo; PDF usa las columnas visibles y combina algunos datos.
+-- Las fechas SQL están en UTC; Python las presenta en Lima en ambos formatos.
+-- Ejecuta USE y SET NAMES y después únicamente la consulta que quieras comprobar.
+-- Para comparar, limpia los filtros del reporte y utiliza la misma base de datos.
+-- Si eliges filtros, el repositorio construye el WHERE y envía valores mediante parámetros %s.
+-- Ver LEEME_reportes.md para ejemplos de filtros y diferencias entre SQL, CSV y PDF.
 USE prestamos_escuela_pruebas;
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 
--- 01. Préstamos: todas las filas filtradas.
+-- 01. Préstamos: filas para pantalla, CSV y PDF.
 SELECT
-            p.id_prestamo, p.dni_persona,
-            CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
-            p.tipo_prestamo, p.fecha_entrega,
-            b.codigo_inventario, r.nombre AS recurso,
-            c.nombre AS categoria,
-            d.fecha_limite_devolucion, d.fecha_devolucion,
-            CASE
-                WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
-                WHEN d.fecha_limite_devolucion < UTC_TIMESTAMP() THEN 'VENCIDO'
-                ELSE 'PENDIENTE'
-            END AS situacion
+    p.id_prestamo, p.dni_persona,
+    CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
+    p.tipo_prestamo, p.fecha_entrega,
+    b.codigo_inventario, r.nombre AS recurso,
+    c.nombre AS categoria,
+    d.fecha_limite_devolucion, d.fecha_devolucion,
+    CASE
+        WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
+        WHEN d.fecha_limite_devolucion < UTC_TIMESTAMP() THEN 'VENCIDO'
+        ELSE 'PENDIENTE'
+    END AS situacion
 FROM prestamo p
 JOIN persona per ON per.dni = p.dni_persona
 JOIN detalle_prestamo d ON d.id_prestamo = p.id_prestamo
 JOIN bien_material b ON b.id_bien = d.id_bien
 JOIN recurso r ON r.id_recurso = b.id_recurso
 JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
-        ORDER BY p.fecha_entrega DESC, p.id_prestamo DESC, d.id_detalle;
+ORDER BY p.fecha_entrega DESC, p.id_prestamo DESC, d.id_detalle;
 
 
--- 02. Préstamos: resumen de indicadores.
+-- 02. Préstamos: resumen de indicadores para pantalla.
 SELECT
-            COUNT(*) AS detalles,
-            COUNT(DISTINCT p.id_prestamo) AS prestamos,
-            COALESCE(SUM(d.fecha_devolucion IS NOT NULL), 0) AS devueltos,
-            COALESCE(SUM(d.fecha_devolucion IS NULL), 0) AS pendientes,
-            COALESCE(SUM(
-                d.fecha_devolucion IS NULL
-                AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
-            ), 0) AS vencidos
+    COUNT(*) AS detalles,
+    COUNT(DISTINCT p.id_prestamo) AS prestamos,
+    COALESCE(SUM(d.fecha_devolucion IS NOT NULL), 0) AS devueltos,
+    COALESCE(SUM(d.fecha_devolucion IS NULL), 0) AS pendientes,
+    COALESCE(SUM(
+        d.fecha_devolucion IS NULL
+        AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
+    ), 0) AS vencidos
 FROM prestamo p
 JOIN persona per ON per.dni = p.dni_persona
 JOIN detalle_prestamo d ON d.id_prestamo = p.id_prestamo
@@ -50,52 +55,52 @@ JOIN recurso r ON r.id_recurso = b.id_recurso
 JOIN categoria_recurso c ON c.id_categoria = r.id_categoria;
 
 
--- 03. Devoluciones y cumplimiento: todas las filas filtradas.
+-- 03. Devoluciones y cumplimiento: filas para pantalla, CSV y PDF.
 SELECT
-            p.id_prestamo, p.dni_persona,
-            CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
-            p.tipo_prestamo, b.codigo_inventario,
-            r.nombre AS recurso, c.nombre AS categoria,
-            p.fecha_entrega, d.fecha_limite_devolucion,
-            d.fecha_devolucion, d.condicion_devolucion,
-            CASE
-                WHEN d.fecha_devolucion <= d.fecha_limite_devolucion THEN 'A_TIEMPO'
-                ELSE 'TARDIA'
-            END AS cumplimiento,
-            GREATEST(TIMESTAMPDIFF(MINUTE, d.fecha_limite_devolucion, d.fecha_devolucion), 0) AS retraso_minutos
+    p.id_prestamo, p.dni_persona,
+    CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
+    p.tipo_prestamo, b.codigo_inventario,
+    r.nombre AS recurso, c.nombre AS categoria,
+    p.fecha_entrega, d.fecha_limite_devolucion,
+    d.fecha_devolucion, d.condicion_devolucion,
+    CASE
+        WHEN d.fecha_devolucion <= d.fecha_limite_devolucion THEN 'A_TIEMPO'
+        ELSE 'TARDIA'
+    END AS cumplimiento,
+    GREATEST(TIMESTAMPDIFF(MINUTE, d.fecha_limite_devolucion, d.fecha_devolucion), 0) AS retraso_minutos
 FROM prestamo p
 JOIN persona per ON per.dni = p.dni_persona
 JOIN detalle_prestamo d ON d.id_prestamo = p.id_prestamo
 JOIN bien_material b ON b.id_bien = d.id_bien
 JOIN recurso r ON r.id_recurso = b.id_recurso
 JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
-        WHERE d.fecha_devolucion IS NOT NULL
-        ORDER BY d.fecha_devolucion DESC, p.id_prestamo DESC, d.id_detalle;
+WHERE d.fecha_devolucion IS NOT NULL
+ORDER BY d.fecha_devolucion DESC, p.id_prestamo DESC, d.id_detalle;
 
 
--- 04. Devoluciones y cumplimiento: resumen de indicadores.
+-- 04. Devoluciones y cumplimiento: resumen de indicadores para pantalla.
 SELECT
-            COUNT(*) AS detalles,
-            COALESCE(SUM(d.fecha_devolucion <= d.fecha_limite_devolucion), 0) AS puntuales,
-            COALESCE(SUM(d.fecha_devolucion > d.fecha_limite_devolucion), 0) AS tardias,
-            COALESCE(
-                100.0 * SUM(d.fecha_devolucion <= d.fecha_limite_devolucion)
-                / NULLIF(COUNT(*), 0), 0
-            ) AS porcentaje_puntual,
-            COALESCE(AVG(
-                CASE WHEN d.fecha_devolucion > d.fecha_limite_devolucion
-                     THEN GREATEST(TIMESTAMPDIFF(MINUTE, d.fecha_limite_devolucion, d.fecha_devolucion), 0) END
-            ), 0) AS retraso_promedio
+    COUNT(*) AS detalles,
+    COALESCE(SUM(d.fecha_devolucion <= d.fecha_limite_devolucion), 0) AS puntuales,
+    COALESCE(SUM(d.fecha_devolucion > d.fecha_limite_devolucion), 0) AS tardias,
+    COALESCE(
+        100.0 * SUM(d.fecha_devolucion <= d.fecha_limite_devolucion)
+        / NULLIF(COUNT(*), 0), 0
+    ) AS porcentaje_puntual,
+    COALESCE(AVG(
+        CASE WHEN d.fecha_devolucion > d.fecha_limite_devolucion
+             THEN GREATEST(TIMESTAMPDIFF(MINUTE, d.fecha_limite_devolucion, d.fecha_devolucion), 0) END
+    ), 0) AS retraso_promedio
 FROM prestamo p
 JOIN persona per ON per.dni = p.dni_persona
 JOIN detalle_prestamo d ON d.id_prestamo = p.id_prestamo
 JOIN bien_material b ON b.id_bien = d.id_bien
 JOIN recurso r ON r.id_recurso = b.id_recurso
 JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
-        WHERE d.fecha_devolucion IS NOT NULL;
+WHERE d.fecha_devolucion IS NOT NULL;
 
 
--- 05. Bienes atrasados: todas las filas filtradas.
+-- 05. Bienes atrasados: filas para pantalla, CSV y PDF.
 SELECT
     p.id_prestamo, p.dni_persona,
     CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
@@ -111,7 +116,7 @@ WHERE d.fecha_devolucion IS NULL AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
 ORDER BY d.fecha_limite_devolucion, p.id_prestamo, d.id_detalle;
 
 
--- 06. Bienes atrasados: resumen de indicadores.
+-- 06. Bienes atrasados: resumen de indicadores para pantalla.
 SELECT
     COUNT(*) AS detalles,
     COUNT(DISTINCT p.id_prestamo) AS prestamos,
@@ -125,7 +130,7 @@ JOIN recurso r ON r.id_recurso = b.id_recurso
 WHERE d.fecha_devolucion IS NULL AND d.fecha_limite_devolucion < UTC_TIMESTAMP();
 
 
--- 07. Inventario: todas las filas filtradas.
+-- 07. Inventario: filas para pantalla, CSV y PDF.
 SELECT
     b.id_bien, b.codigo_inventario,
     r.nombre AS recurso, c.nombre AS categoria,
@@ -137,7 +142,7 @@ JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
 ORDER BY r.nombre, b.codigo_inventario, b.id_bien;
 
 
--- 08. Inventario: resumen de indicadores.
+-- 08. Inventario: resumen de indicadores para pantalla.
 SELECT
     COUNT(*) AS detalles,
     COUNT(DISTINCT r.id_recurso) AS recursos,
@@ -152,7 +157,7 @@ JOIN recurso r ON r.id_recurso = b.id_recurso
 JOIN categoria_recurso c ON c.id_categoria = r.id_categoria;
 
 
--- 09. Solicitudes y reservas: todas las filas filtradas.
+-- 09. Solicitudes y reservas: filas para pantalla, CSV y PDF.
 SELECT
     p.id_reserva, p.tipo_gestion, p.dni_persona,
     CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
@@ -166,7 +171,7 @@ JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
 ORDER BY p.fecha_solicitud DESC, p.id_reserva DESC;
 
 
--- 10. Solicitudes y reservas: resumen de indicadores.
+-- 10. Solicitudes y reservas: resumen de indicadores para pantalla.
 SELECT
     COUNT(*) AS detalles,
     COALESCE(SUM(p.estado IN ('EN_ESPERA', 'LISTA_PARA_RETIRO')), 0) AS pendientes,
@@ -180,43 +185,43 @@ JOIN recurso r ON r.id_recurso = p.id_recurso
 JOIN categoria_recurso c ON c.id_categoria = r.id_categoria;
 
 
--- 11. Sanciones: todas las filas filtradas.
+-- 11. Sanciones: filas para pantalla, CSV y PDF.
 SELECT
-            s.id_sancion, p.id_prestamo, p.dni_persona,
-            CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
-            p.tipo_prestamo, b.codigo_inventario,
-            r.nombre AS recurso, c.nombre AS categoria,
-            s.fecha, s.motivo, s.descripcion, s.estado,
-            s.fecha_levantamiento, s.justificacion_levantamiento
+    s.id_sancion, p.id_prestamo, p.dni_persona,
+    CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
+    p.tipo_prestamo, b.codigo_inventario,
+    r.nombre AS recurso, c.nombre AS categoria,
+    s.fecha, s.motivo, s.descripcion, s.estado,
+    s.fecha_levantamiento, s.justificacion_levantamiento
 FROM prestamo p
 JOIN persona per ON per.dni = p.dni_persona
 JOIN detalle_prestamo d ON d.id_prestamo = p.id_prestamo
 JOIN bien_material b ON b.id_bien = d.id_bien
 JOIN recurso r ON r.id_recurso = b.id_recurso
 JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
-        JOIN incidencia i ON i.id_detalle = d.id_detalle
-        JOIN sancion s ON s.id_incidencia_ref = i.id_incidencia
-        ORDER BY s.fecha DESC, s.id_sancion DESC;
+JOIN incidencia i ON i.id_detalle = d.id_detalle
+JOIN sancion s ON s.id_incidencia_ref = i.id_incidencia
+ORDER BY s.fecha DESC, s.id_sancion DESC;
 
 
--- 12. Sanciones: resumen de indicadores.
+-- 12. Sanciones: resumen de indicadores para pantalla.
 SELECT
-            COUNT(*) AS detalles,
-            COALESCE(SUM(s.estado = 'ACTIVA'), 0) AS activas,
-            COALESCE(SUM(s.estado = 'LEVANTADA'), 0) AS levantadas,
-            COALESCE(SUM(s.estado = 'CUMPLIDA'), 0) AS cumplidas,
-            COALESCE(SUM(s.estado = 'ANULADA'), 0) AS anuladas
+    COUNT(*) AS detalles,
+    COALESCE(SUM(s.estado = 'ACTIVA'), 0) AS activas,
+    COALESCE(SUM(s.estado = 'LEVANTADA'), 0) AS levantadas,
+    COALESCE(SUM(s.estado = 'CUMPLIDA'), 0) AS cumplidas,
+    COALESCE(SUM(s.estado = 'ANULADA'), 0) AS anuladas
 FROM prestamo p
 JOIN persona per ON per.dni = p.dni_persona
 JOIN detalle_prestamo d ON d.id_prestamo = p.id_prestamo
 JOIN bien_material b ON b.id_bien = d.id_bien
 JOIN recurso r ON r.id_recurso = b.id_recurso
 JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
-        JOIN incidencia i ON i.id_detalle = d.id_detalle
-        JOIN sancion s ON s.id_incidencia_ref = i.id_incidencia;
+JOIN incidencia i ON i.id_detalle = d.id_detalle
+JOIN sancion s ON s.id_incidencia_ref = i.id_incidencia;
 
 
--- 13. Daños y pérdidas: todas las filas filtradas.
+-- 13. Daños y pérdidas: filas para pantalla, CSV y PDF.
 SELECT
     h.id_historial_estado, h.fecha, b.id_bien,
     b.codigo_inventario, r.nombre AS recurso,
@@ -234,7 +239,7 @@ WHERE h.entidad = 'BIEN_MATERIAL' AND h.estado_nuevo IN ('DANADO', 'PERDIDO')
 ORDER BY h.fecha DESC, h.id_historial_estado DESC;
 
 
--- 14. Daños y pérdidas: resumen de indicadores.
+-- 14. Daños y pérdidas: resumen de indicadores para pantalla.
 SELECT
     COUNT(*) AS detalles,
     COUNT(DISTINCT b.id_bien) AS bienes,
@@ -247,7 +252,7 @@ JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
 LEFT JOIN persona reg ON reg.dni = h.dni_responsable
 WHERE h.entidad = 'BIEN_MATERIAL' AND h.estado_nuevo IN ('DANADO', 'PERDIDO');
 
--- 15. Integrantes: se reutiliza para prestamos, devoluciones y sanciones.
+-- 15. Integrantes: complemento de préstamos, devoluciones y sanciones en pantalla, CSV y PDF.
 -- Sustituir (1, 2, 3) por los id_prestamo GRUPALES presentes en las filas recuperadas.
 SELECT pp.id_prestamo, pp.dni_persona, CONCAT(p.nombres, ' ', p.apellidos) AS nombre
 FROM participante_prestamo pp
@@ -267,5 +272,5 @@ WHERE u.id_usuario = @id_usuario;
 SET @rol = 'ADMINISTRADOR';
 SELECT permiso FROM rol_permiso WHERE rol = @rol;
 
--- 18. Categorias del selector: se ejecuta en pantalla, no al descargar CSV.
+-- 18. Categorías del selector: solo en pantalla; no se consulta al descargar CSV ni PDF.
 SELECT * FROM categoria_recurso ORDER BY nombre;

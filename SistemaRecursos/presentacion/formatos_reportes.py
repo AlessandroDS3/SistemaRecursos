@@ -42,6 +42,34 @@ FORMATOS_INDICADORES = {
 }
 
 
+def etiqueta_reporte(valor):
+    return ETIQUETAS_VALORES.get(valor, str(valor).replace('_', ' ').capitalize())
+
+
+def valor_reporte(valor, formato='texto'):
+    if valor is None or valor == '':
+        return '—'
+    if formato == 'porcentaje':
+        return f'{float(valor):.1f} %'
+    if formato == 'duracion':
+        if 0 < valor < 1:
+            return 'Menos de 1 min'
+        minutos = max(0, int(valor))
+        dias, minutos = divmod(minutos, 1440)
+        horas, minutos = divmod(minutos, 60)
+        partes = [
+            f'{cantidad} {unidad}'
+            for cantidad, unidad in ((dias, 'd'), (horas, 'h'), (minutos, 'min'))
+            if cantidad
+        ]
+        return ' '.join(partes) or '0 min'
+    if formato == 'numero':
+        return str(int(valor))
+    if formato == 'etiqueta':
+        return etiqueta_reporte(valor)
+    return valor
+
+
 def presentar_reporte(tipo):
     reporte = REPORTES[tipo]
     ocultos = {

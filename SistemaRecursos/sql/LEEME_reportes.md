@@ -2,7 +2,7 @@
 
 Abre [reportes_consultas_aplicacion.sql](reportes_consultas_aplicacion.sql).
 Contiene las consultas para comprobar los reportes sin filtros y sin paginación,
-como al descargar todo un reporte.
+como al descargar todo un reporte en CSV o PDF.
 Las consultas 01-14 corresponden al SQL actual del repositorio, incluidos los JOIN
 del resumen 02. Los parámetros de filtros no están incluidos en estos ejemplos.
 Se eliminó `reportes_csv_mysql.sql`: imitaba en SQL pasos que el programa hace en Python.
@@ -10,15 +10,15 @@ Se eliminó `reportes_csv_mysql.sql`: imitaba en SQL pasos que el programa hace 
 ## Cómo comprobarlo ante el profesor
 
 1. En Reportes, elige el tipo de reporte y pulsa **Limpiar filtros**. Comprueba que
-   quedó seleccionado el tipo que quieres comparar y descarga su CSV.
+   quedó seleccionado el tipo que quieres comparar y descarga su CSV o PDF.
 2. En MySQL, ejecuta el `USE` y el `SET NAMES` del principio del archivo.
 3. Selecciona y ejecuta únicamente la consulta de **filas** que corresponde al reporte.
    No agregues `LIMIT`: la descarga incluye todas las filas.
-4. Compara los identificadores, los bienes, las cantidades y los demás datos con el CSV.
+4. Compara los identificadores, los bienes, las cantidades y los demás datos visibles en la descarga.
    Para préstamos, devoluciones y sanciones, ejecuta también la consulta 15
    con los `id_prestamo` que salieron para comprobar sus integrantes.
 
-| Reporte | Filas para comparar con el CSV | Indicadores de la pantalla |
+| Reporte | Filas para CSV y PDF | Indicadores de la pantalla |
 | --- | --- | --- |
 | Préstamos | 01 | 02 |
 | Devoluciones y cumplimiento | 03 | 04 |
@@ -29,10 +29,11 @@ Se eliminó `reportes_csv_mysql.sql`: imitaba en SQL pasos que el programa hace 
 | Daños y pérdidas | 13 | 14 |
 
 Los indicadores son otro resultado: no son las filas que se exportan. La pantalla
-consulta filas y resumen; la descarga consulta solo filas y, si hay préstamos
-grupales, sus integrantes. No consulta indicadores.
+consulta filas y resumen; las descargas CSV y PDF consultan solo filas y, si hay préstamos
+grupales, sus integrantes. No consultan indicadores.
 Las consultas 16-18 documentan la cuenta, sus permisos y las categorías del selector;
 no generan las filas del reporte.
+La consulta de categorías del selector solo se ejecuta en pantalla, no en las descargas.
 
 ## Qué hace Python después del SELECT
 
@@ -54,6 +55,14 @@ son idénticas en todas sus columnas ni en su representación:
 Por eso puedes explicar: **«Esta es la consulta real que obtiene los datos. Python
 prepara sus columnas y su formato para escribir el CSV».** Afirmar que un solo
 SELECT ya devuelve exactamente todas sus celdas no describiría el programa actual.
+
+El PDF reutiliza las mismas filas: no añade otra consulta SQL. Python prepara el
+título, la fecha de generación en Lima y la tabla. El PDF usa las columnas visibles
+de la pantalla, combina el bien con el nombre del recurso y al solicitante con su
+DNI e integrantes cuando corresponda. Por eso puede mostrar menos columnas que
+el CSV, aunque ambos incluyen los mismos registros filtrados. Las fechas se muestran
+como `DD/MM/AAAA HH:MM` y los retrasos como días, horas y minutos. Los encabezados de
+tabla se repiten al continuar en otra página; los indicadores quedan en pantalla.
 
 ## Si comparas un CSV con filtros
 
