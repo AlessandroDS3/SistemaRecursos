@@ -1,17 +1,26 @@
-# Sistema de recursos: implementación reescrita
+# Sistema de préstamos de recursos
 
-Proyecto de trabajo: **`D:\TI_sistema_recursos\SistemaRecursos_rehecho`**.
-Aplicación: **[SistemaRecursos/](SistemaRecursos/README.md)**.
-Rama local: **`sistema-simplificado`**.
+Aplicación en Python, Flask y MySQL. Esta rama contiene los archivos necesarios
+para ejecutar el sistema: código, plantillas, estilos, imágenes de la interfaz,
+dependencias, script de arranque y SQL.
 
-La aplicación tiene una implementación nueva de dominio, casos de uso, persistencia y presentación. Cada función conserva un nombre reconocible entre capas: `acceso`, `persona`, `cuenta`, `bien_material`, `prestamo`, etc. El dominio está separado en cuatro carpetas de negocio.
+## Arranque
 
-Se conservan los dos SQL de 19 tablas y las reglas acordadas: préstamos individuales y grupales, reservas, devoluciones parciales, pérdidas pendientes de recuperación, ampliación presencial por el personal, sanciones por retraso y reportes CSV.
+Requisitos: Python 3.10 o superior y MySQL 8.
 
-La guía de ejecución y el mapa de archivos están en **[SistemaRecursos/README.md](SistemaRecursos/README.md)**. La copia utiliza el puerto **5001** y propone una base propia **`prestamos_escuela_rehecho`**.
+1. Para una instalación nueva, importa `SistemaRecursos/sql/datos_prueba.sql`.
+   La aplicación usa por defecto la base `prestamos_escuela_pruebas`.
+   `schema.sql` contiene el esquema vacío para preparar una base sin datos de demostración.
+2. Abre PowerShell y ejecuta:
 
-La comparación de archivos, métodos y operaciones con `SistemaRecursos_local` está en **[COMPARACION_COPIAS.md](COMPARACION_COPIAS.md)**.
+```powershell
+cd SistemaRecursos
+.\run.ps1
+```
 
-El proyecto anterior permanece en `D:\TI_sistema_recursos\SistemaRecursos_local`, con sus modificaciones pendientes. Ambas carpetas son árboles de trabajo Git con ramas distintas. Esta reescritura se guarda localmente; no se publica en GitHub.
+El script crea el entorno virtual, instala `requirements.txt` y solicita la contraseña
+de MySQL. Puedes definir `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME`
+en el entorno o en `config.local.ps1`, que está excluido de Git.
 
-El commit `438ec36` conserva la copia inmediatamente anterior a la reescritura. Los MDJ, XML/PNG y la auditoría heredados de la raíz son documentos de referencia de la versión anterior; el mapa vigente del código está en el README de la aplicación.
+Abre http://127.0.0.1:5001. Los reportes permiten descargar CSV y PDF respetando los filtros.
+Las consultas de reportes están en `SistemaRecursos/sql/reportes_consultas_aplicacion.sql`.
