@@ -1,134 +1,97 @@
-from __future__ import annotations
-from servicios.servicio_bien_material import ServicioAplicacionBienMaterial
-from servicios.servicio_recurso import ServicioAplicacionRecurso
-from flask import Blueprint, request, redirect, url_for, g
-from mysql.connector import IntegrityError
-from presentacion.formularios import error_formulario
-from presentacion.seguridad import requiere_permiso, redirigir_segun_permiso
-from presentacion.vistas.vista_bien_material import VistaBienMaterial
+from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from dominio.gestion_recursos.bien_material import ESTADOS_BIEN, ESTADOS_MANUALES
+from presentacion.seguridad import requiere_permiso
 
 
 class ControladorBienMaterial:
-    MSG_CODIGO_DUPLICADO = "Ya existe un bien con ese código de inventario."
-
-    def __init__(self, servicio: ServicioAplicacionBienMaterial, recursos: ServicioAplicacionRecurso):
-        self.servicio: ServicioAplicacionBienMaterial = servicio
-        self.recursos: ServicioAplicacionRecurso = recursos
-        self.vista = VistaBienMaterial()
-        self.blueprint = Blueprint("bienes", __name__, url_prefix="/bienes")
-
-        for ruta, nombre, vista, metodos in [
-            ("", "consultar_bienes_materiales", self.consultar_bienes_materiales, ["GET"]),
-            ('/nuevo', "mostrar_formulario_bien_material", self.mostrar_formulario_bien_material, ["GET"]),
-            ('/nuevo', 'registrar_bien_material', self.registrar_bien_material, ["POST"]),
-            ("/<int:id_bien>", "consultar_detalle_bien_material", self.consultar_detalle_bien_material, ["GET"]),
-            ('/<int:id_bien>/editar', "mostrar_edicion_bien_material", self.mostrar_edicion_bien_material, ["GET"]),
-            ('/<int:id_bien>/editar', 'actualizar_bien_material', self.actualizar_bien_material, ["POST"]),
+    def __init__(self, servicio, recursos):
+        self.servicio, self.recursos = servicio, recursos
+        self.blueprint = Blueprint('bienes', __name__, url_prefix='/bienes')
+        for ruta, nombre, funcion, metodos in (
+            ('', 'consultar_bienes_materiales', self.consultar_bienes_materiales, ['GET']),
             (
-                "/<int:id_bien>/eliminar",
-                "eliminar_bien_material",
-                self.eliminar_bien_material,
-                ["POST"],
+                '/nuevo',
+                'gestionar_formulario_bien_material',
+                self.gestionar_formulario_bien_material,
+                ['GET', 'POST'],
             ),
-            ("/<int:id_bien>/estado", "cambiar_estado_bien_material", self.cambiar_estado_bien_material, ["POST"]),
-        ]:
-            self.blueprint.add_url_rule(ruta, nombre, vista, methods=metodos)
+            (
+                '/<int:identificador>',
+                'consultar_bien_material',
+                self.consultar_bien_material,
+                ['GET'],
+            ),
+            (
+                '/<int:identificador>/editar',
+                'gestionar_formulario_bien_material',
+                self.gestionar_formulario_bien_material,
+                ['GET', 'POST'],
+            ),
+            (
+                '/<int:identificador>/estado',
+                'cambiar_estado_bien_material',
+                self.cambiar_estado_bien_material,
+                ['POST'],
+            ),
+            (
+                '/<int:identificador>/eliminar',
+                'eliminar_bien_material',
+                self.eliminar_bien_material,
+                ['POST'],
+            ),
+        ):
+            self.blueprint.add_url_rule(ruta, nombre, funcion, methods=metodos)
 
-    @requiere_permiso("RECURSOS_GESTIONAR")
+    @requiere_permiso('RECURSOS_GESTIONAR', 'PRESTAMOS_GESTIONAR')
     def consultar_bienes_materiales(self):
-        resultado = self.servicio.consultar_bienes_materiales(request.args)
-        return self.vista.mostrar_consulta(
-            resultado["bienes"],
-            resultado["resumen"],
+        return render_template(
+            'vista_bien_material.html',
+            modo='lista',
+            bienes=self.servicio.consultar_bienes_materiales(request.args),
+            estados=ESTADOS_BIEN,
+        )
+
+    @requiere_permiso('RECURSOS_GESTIONAR', 'PRESTAMOS_GESTIONAR')
+    def consultar_bien_material(self, identificador):
+        return render_template(
+            'vista_bien_material.html',
+            modo='detalle',
+            bien=self.servicio.consultar_bien_material(identificador),
+            historial=self.servicio.consultar_historial_bien_material(identificador),
+            estados=ESTADOS_MANUALES,
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    def mostrar_formulario_bien_material(self):
-        recurso = self.recursos.consultar_recurso(request.args.get("recurso"))
-        return self.vista.mostrar_formulario(recurso)
-
-    @requiere_permiso('RECURSOS_GESTIONAR')
-    def registrar_bien_material(self):
-        recurso = self.recursos.consultar_recurso(request.form.get("id_recurso_ref"))
-        try:
-            self.servicio.registrar_bien_material(request.form)
-        except (ValueError, IntegrityError) as error:
-            mensaje = error_formulario(
-                error, self.MSG_CODIGO_DUPLICADO
+    def gestionar_formulario_bien_material(self, identificador=None):
+        if request.method == 'POST':
+            id_bien_guardado = self.servicio.guardar_bien_material(
+                request.form.to_dict(), g.usuario.id_usuario, identificador
             )
-            formulario = self.vista.mostrar_formulario(
-                recurso, error=mensaje
+            flash('Bien guardado.')
+            return redirect(
+                url_for('bienes.consultar_bien_material', identificador=id_bien_guardado)
             )
-            return formulario
-        self.vista.mostrar_mensaje("Ejemplar registrado como disponible.")
-        return redirect(
-            url_for(
-                "recursos.consultar_administracion_recursos",
-                recurso=recurso.id_recurso,
-                _anchor="continuar-registro",
-            )
+        bien = (
+            self.servicio.consultar_bien_material(identificador)
+            if identificador is not None
+            else {'id_recurso': request.args.get('id_recurso')}
         )
-
-    @requiere_permiso("RECURSOS_GESTIONAR")
-    def consultar_detalle_bien_material(self, id_bien):
-        detalle = self.servicio.consultar_detalle_bien_material(id_bien)
-        bien = detalle["bien"]
-
-        return self.vista.mostrar_detalle(
-            bien,
-            self.recursos.consultar_recurso(bien.id_recurso_ref),
-            detalle["historial"],
-            detalle["registros"],
-            detalle["prestamo_pendiente"],
+        return render_template(
+            'vista_bien_material.html',
+            modo='formulario',
+            bien=bien,
+            recursos=self.recursos.consultar_recursos({}) if identificador is None else [],
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    def mostrar_edicion_bien_material(self, id_bien):
-        bien = self.servicio.consultar_bien_material(id_bien)
-        recurso = self.recursos.consultar_recurso(bien.id_recurso_ref)
-        return self.vista.mostrar_formulario(recurso, bien)
+    def cambiar_estado_bien_material(self, identificador):
+        self.servicio.cambiar_estado_bien_material(
+            identificador, request.form.to_dict(), g.usuario.id_usuario
+        )
+        flash('Estado actualizado.')
+        return redirect(url_for('bienes.consultar_bien_material', identificador=identificador))
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    def actualizar_bien_material(self, id_bien):
-        bien = self.servicio.consultar_bien_material(id_bien)
-        recurso = self.recursos.consultar_recurso(bien.id_recurso_ref)
-        try:
-            self.servicio.actualizar_bien_material(
-                dict(request.form, id_bien=id_bien)
-            )
-        except (ValueError, IntegrityError) as error:
-            mensaje = error_formulario(
-                error, self.MSG_CODIGO_DUPLICADO
-            )
-            formulario = self.vista.mostrar_formulario(
-                recurso, bien, error=mensaje
-            )
-            return formulario
-        self.vista.mostrar_mensaje("Datos del bien actualizados.")
-        return redirect(url_for("bienes.consultar_detalle_bien_material", id_bien=id_bien))
-
-    @requiere_permiso("RECURSOS_GESTIONAR")
-    def eliminar_bien_material(self, id_bien):
-        bien = self.servicio.consultar_bien_material(id_bien)
-        self.servicio.eliminar_bien_material(id_bien)
-        self.vista.mostrar_mensaje("Bien sin historial eliminado.")
-
-        return redirigir_segun_permiso(
-            "recursos.consultar_recurso",
-            "CATALOGO_CONSULTAR",
-            id_recurso=bien.id_recurso_ref,
-        )
-
-    def _guardar_estado(self, id_bien, accion):
-        accion(
-            dict(request.form, id_bien=id_bien),
-            g.usuario.persona.dni,
-        )
-        self.vista.mostrar_mensaje(
-            "Estado actualizado."
-        )
-        return redirect(url_for("bienes.consultar_detalle_bien_material", id_bien=id_bien))
-
-    @requiere_permiso("RECURSOS_GESTIONAR")
-    def cambiar_estado_bien_material(self, id_bien):
-        return self._guardar_estado(id_bien, self.servicio.cambiar_estado_bien_material)
+    def eliminar_bien_material(self, identificador):
+        self.servicio.eliminar_bien_material(identificador, g.usuario.id_usuario)
+        return redirect(url_for('bienes.consultar_bienes_materiales'))

@@ -1,35 +1,21 @@
-from dataclasses import dataclass
-from datetime import datetime
-from enum import Enum
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
-from dominio.gestion_recursos.validacion_recurso import texto
+from typing import Protocol
+from dominio.compartido.contratos import IRepositorioTransaccional
+from dominio.compartido.validacion import Conflicto, texto
 
 
-class EstadoSancion(str, Enum):
-    ACTIVA = 'ACTIVA'
-    CUMPLIDA = 'CUMPLIDA'
-    LEVANTADA = 'LEVANTADA'
-    ANULADA = 'ANULADA'
+def validar_levantamiento(sancion, justificacion):
+    if sancion['estado'] != 'ACTIVA':
+        raise Conflicto('La sanción ya no está activa.')
+    return texto(justificacion, 'Justificación', 255, True)
 
 
-@dataclass(kw_only=True)
-class Sancion:
-    dni_persona: str
-    id_sancion: int | None = None
-    id_detalle_vencido_ref: int | None = None
-    estado: EstadoSancion = EstadoSancion.ACTIVA
-    fecha_levantamiento: datetime | None = None
-    dni_levantamiento: str | None = None
-    justificacion_levantamiento: str | None = None
-
-    def __post_init__(self):
-        self.dni_persona = validar_dni(self.dni_persona)
-        self.estado = EstadoSancion(self.estado)
-
-    def levantar(self, justificacion, dni_encargado, fecha):
-        if self.estado != EstadoSancion.ACTIVA:
-            raise ValueError('La sanción por tardanza ya fue retirada.')
-        self.justificacion_levantamiento = texto(justificacion, 'Justificación para quitar la sanción', 255, True)
-        self.dni_levantamiento = validar_dni(dni_encargado)
-        self.fecha_levantamiento = fecha
-        self.estado = EstadoSancion.LEVANTADA
+class IRepositorioSancion(IRepositorioTransaccional, Protocol):
+    def consultar_sancion(self, identificador: int, bloquear=False) -> dict | None: ...
+    def consultar_sanciones(self, filtros: dict | None = None) -> list[dict]: ...
+    def consultar_incidencia_retraso(self, detalle: int) -> dict | None: ...
+    def existen_sanciones_activas(self, documentos: list[str]) -> bool: ...
+    def registrar_incidencia(self, detalle: int, tipo: str, descripcion: str, fecha) -> int: ...
+    def registrar_sancion(self, incidencia: int, motivo: str, descripcion: str, fecha) -> int: ...
+    def consultar_detalles_vencidos(self) -> list[dict]: ...
+    def consultar_detalle_prestamo(self, identificador: int) -> dict | None: ...
+    def levantar_sancion(self, identificador: int, fecha, documento: str, justificacion: str): ...

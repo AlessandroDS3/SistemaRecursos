@@ -1,47 +1,74 @@
-import hmac
-import secrets
+"""Sesión web, CSRF y permisos HTTP. No contiene consultas ni reglas de préstamo."""
+
 from functools import wraps
-from flask import session, request, abort, redirect, url_for, g, current_app
+from hmac import compare_digest
+from secrets import token_urlsafe
+from flask import abort, g, redirect, request, session, url_for
 
 
-def token_csrf():
-    if "csrf_token" not in session:
-        session["csrf_token"] = secrets.token_urlsafe(32)
-    return session["csrf_token"]
+def csrf_token():
+    if 'csrf' not in session:
+        session['csrf'] = token_urlsafe(32)
+    return session['csrf']
 
 
-def validar_csrf():
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-        esperado = session.get("csrf_token", "")
-        recibido = request.form.get("csrf_token", "")
-        if (
-            not isinstance(esperado, str) or not esperado
-            or not hmac.compare_digest(esperado.encode("utf-8"), recibido.encode("utf-8"))
-        ):
-            abort(400, description="El formulario venció. Recarga la página e inténtalo otra vez.")
+def establecer_sesion(cuenta_acceso):
+    """Guarda la identidad y renueva el token CSRF después de autenticar la cuenta."""
+    session.clear()
+    session.update(
+        id_usuario=cuenta_acceso.id_usuario,
+        credenciales=cuenta_acceso.version_credenciales,
+        csrf=token_urlsafe(32),
+    )
 
 
-def requiere_permiso(codigo=None):
-    def decorar(vista):
-        @wraps(vista)
+def requiere_permiso(*permisos):
+    def decorar(funcion):
+        @wraps(funcion)
         def protegida(*args, **kwargs):
-            if not g.usuario:
-                return redirect(url_for("auth.login"))
-            if codigo and not g.usuario.rol.tiene_permiso(codigo):
-                abort(403)
-            return vista(*args, **kwargs)
+            if g.usuario is None or not any(g.usuario.permite(p) for p in permisos):
+                abort(403, description='Tu cuenta no tiene permiso para esta operación.')
+            return funcion(*args, **kwargs)
 
         return protegida
 
     return decorar
 
 
-def redirigir_segun_permiso(destino, permiso, **valores):
-    # Una operación puede haber cambiado el rol o sus permisos en esta petición.
-    usuario = current_app.extensions["acceso"].consultar_usuario_activo(session.get("id_usuario"))
-    if usuario is None:
-        session.clear()
-        return redirect(url_for("auth.login"))
-    if usuario.rol.tiene_permiso(permiso):
-        return redirect(url_for(destino, **valores))
-    return redirect(url_for("inicio"))
+def configurar_seguridad(app, acceso):
+    """Instala sesión, permisos y validación CSRF global para POST, PUT, PATCH y DELETE."""
+    app.jinja_env.globals['csrf_token'] = csrf_token
+
+    @app.before_request
+    def recuperar_sesion():
+        g.usuario = None
+        identificador = session.get('id_usuario')
+        if identificador is not None:
+            cuenta_acceso = acceso.consultar_cuenta_activa(identificador)
+            if cuenta_acceso and compare_digest(
+                cuenta_acceso.version_credenciales, session.get('credenciales', '')
+            ):
+                g.usuario = cuenta_acceso
+            else:
+                session.clear()
+        if request.endpoint not in ('auth.iniciar_sesion', 'static') and g.usuario is None:
+            return redirect(url_for('auth.iniciar_sesion'))
+        if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+            recibido = request.form.get('csrf_token', '')
+            esperado = session.get('csrf', '')
+            if not recibido or not esperado or not compare_digest(recibido, esperado):
+                abort(
+                    400, description='El formulario caducó. Recarga la página e inténtalo otra vez.'
+                )
+        if (
+            g.usuario is not None
+            and g.usuario.debe_cambiar_clave
+            and request.endpoint
+            not in (
+                'cuentas.cambiar_clave_propia',
+                'auth.cerrar_sesion',
+                'auth.iniciar_sesion',
+                'static',
+            )
+        ):
+            return redirect(url_for('cuentas.cambiar_clave_propia'))

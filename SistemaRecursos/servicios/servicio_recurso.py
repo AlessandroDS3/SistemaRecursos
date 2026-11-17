@@ -1,132 +1,135 @@
-from __future__ import annotations
-from dominio.gestion_recursos.recurso import Recurso
-from dominio.resultados_consulta import ResultadoRecursos
-from dominio.gestion_recursos.i_repositorio_bien_material import IRepositorioBienMaterial
-from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
-from dominio.gestion_recursos.fabrica_recurso import FabricaRecurso
-from dominio.gestion_recursos.categoria_recurso import CategoriaRecurso
-from dominio.gestion_recursos.bien_material import EstadoBienMaterial
-from dominio.gestion_recursos.validacion_recurso import texto, ConflictoRecursoError
-from servicios.validacion_identificadores import identificador
+from dominio.compartido.validacion import Conflicto, NoEncontrado, comprobar_version, entero, texto
+from dominio.gestion_personas_usuarios.acceso import exigir_permiso
+from dominio.gestion_recursos.recurso import (
+    CAMPOS_RECURSO,
+    IRepositorioRecurso,
+    Recurso,
+    version_categoria,
+    version_recurso,
+)
+from dominio.gestion_recursos.bien_material import BienMaterial, validar_filtros_inventario
 
 
 class ServicioAplicacionRecurso:
-    def __init__(self, repositorio_recursos: IRepositorioRecurso, repositorio_bienes: IRepositorioBienMaterial):
-        self.repositorio: IRepositorioRecurso = repositorio_recursos
-        self.bienes: IRepositorioBienMaterial = repositorio_bienes
+    def __init__(self, repositorio: IRepositorioRecurso):
+        self.repositorio = repositorio
 
-    def consultar_administracion_recursos(self, filtros=None):
-        valores = self._validar_filtros(filtros)
-        recursos = self.repositorio.consultar_recursos(valores)
+    def consultar_recursos(self, filtros) -> list[dict]:
+        return self.repositorio.consultar_recursos(validar_filtros_inventario(filtros))
+
+    def consultar_administracion_recursos(self, filtros) -> dict:
+        filtros = validar_filtros_inventario(filtros)
+        recursos = self.repositorio.consultar_recursos(filtros, contar_bienes=False)
+        bienes = self.repositorio.consultar_bienes_materiales(filtros)
+        por_recurso: dict[int, list[dict]] = {}
+        for bien in bienes:
+            por_recurso.setdefault(bien['id_recurso'], []).append(bien)
+        grupos = [
+            dict(recurso=recurso, bienes=por_recurso.get(recurso['id_recurso'], []))
+            for recurso in recursos
+        ]
+        visibles = [bien for grupo in grupos for bien in grupo['bienes']]
         return dict(
-            recursos=recursos,
+            grupos=grupos,
             categorias=self.consultar_categorias(),
-            filtros=valores,
-            estados=EstadoBienMaterial,
+            resumen=dict(
+                recursos=len(grupos),
+                bienes=len(visibles),
+                disponibles=sum(bien['estado'] == 'DISPONIBLE' for bien in visibles),
+            ),
         )
 
-    def registrar_recurso(self, datos) -> Recurso:
-        datos = dict(datos)
-        datos.pop("id_recurso", None)
-        recurso = FabricaRecurso.construir(datos)
-        self.consultar_categoria(recurso.id_categoria_ref)
-        datos_bien = {
-            campo: datos.get(campo, "")
-            for campo in ("codigo_inventario", "numero_serie", "fecha_adquisicion", "ubicacion", "descripcion_bien")
-        }
-        if not datos.get("codigo_inventario", "").strip():
-            if any(str(datos_bien[k] or "").strip() for k in ("numero_serie", "ubicacion", "descripcion_bien")):
-                raise ValueError("Introduce un código para registrar el primer bien físico.")
-            return self.repositorio.registrar_recurso(recurso)
-        return self.repositorio.registrar_recurso_con_bien(recurso, datos_bien)
+    def consultar_disponibilidad(self) -> int:
+        return self.repositorio.consultar_disponibilidad()
 
-    def consultar_recurso(self, id_recurso) -> Recurso:
-        recurso = self.repositorio.consultar_recurso(identificador(id_recurso))
-        if not recurso:
-            raise LookupError("No se encontró el recurso.")
-        return recurso
+    def consultar_recurso(self, identificador: int) -> dict:
+        fila = self.repositorio.consultar_recurso(entero(identificador))
+        if fila is None:
+            raise NoEncontrado('Recurso inexistente.')
+        return dict(fila, version=version_recurso(fila))
 
-    def actualizar_recurso(self, datos) -> Recurso:
-        actual = self.consultar_recurso(datos.get("id_recurso"))
-        datos = dict(datos, id_recurso=actual.id_recurso)
-        recurso = FabricaRecurso.construir(datos)
-        self.consultar_categoria(recurso.id_categoria_ref)
-        return self.repositorio.actualizar_recurso(recurso)
+    def guardar_recurso(self, datos: dict, actor: int, identificador: int | None = None) -> int:
+        actor = entero(actor)
+        identificador = entero(identificador) if identificador is not None else None
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
+            actual = None
+            if identificador is not None:
+                actual = operacion.consultar_recurso(identificador, bloquear=True)
+                if actual is None:
+                    raise NoEncontrado('Recurso inexistente.')
+                comprobar_version(datos.get('version'), version_recurso(actual))
+            valores = dict(actual or {})
+            valores.update(datos)
+            campos_recurso: dict = {campo: valores.get(campo) for campo in CAMPOS_RECURSO}
+            recurso = Recurso(**campos_recurso, id_recurso=identificador)
+            if operacion.consultar_categoria(recurso.id_categoria) is None:
+                raise ValueError('Categoría inexistente.')
+            id_recurso_guardado = operacion.guardar_recurso(recurso)
+            if identificador is None and texto(
+                datos.get('codigo_inventario'), 'Código de inventario', 40
+            ):
+                bien = BienMaterial.desde_datos(datos, id_recurso=id_recurso_guardado)
+                operacion.guardar_bien_material(bien)
+        return id_recurso_guardado
 
-    def eliminar_recurso(self, id_recurso) -> None:
-        recurso = self.consultar_recurso(id_recurso)
-        if self.bienes.existen_por_recurso(recurso.id_recurso):
-            raise ConflictoRecursoError("El recurso tiene bienes asociados y debe conservarse.")
-        self.repositorio.eliminar_recurso(recurso.id_recurso)
+    def eliminar_recurso(self, identificador: int, actor: int) -> None:
+        identificador, actor = entero(identificador), entero(actor)
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
+            if operacion.consultar_recurso(identificador, bloquear=True) is None:
+                raise NoEncontrado('Recurso inexistente.')
+            relaciones = operacion.consultar_relaciones_recurso(identificador)
+            if relaciones['bienes']:
+                raise Conflicto('No puedes eliminar el recurso porque tiene bienes registrados.')
+            if relaciones['reservas']:
+                raise Conflicto(
+                    'No puedes eliminar el recurso porque tiene solicitudes o reservas.'
+                )
+            operacion.eliminar_recurso(identificador)
 
-    def consultar_recursos(self, filtros=None) -> ResultadoRecursos:
-        valores = self._validar_filtros(filtros)
-        return {"recursos": self.repositorio.consultar_recursos(valores)}
+    def consultar_categorias(self) -> list[dict]:
+        return [
+            dict(fila, version=version_categoria(fila))
+            for fila in self.repositorio.consultar_categorias()
+        ]
 
-    @staticmethod
-    def _validar_filtros(filtros):
-        filtros = filtros or {}
-        valores = {
-            "q": texto(filtros.get("q", ""), "Búsqueda", 120),
-            "solo_disponibles": filtros.get("solo_disponibles") == "1",
-        }
-        if filtros.get("id_categoria_ref"):
-            valores["id_categoria_ref"] = identificador(filtros["id_categoria_ref"])
-        for campo in ('id_recurso', 'id_bien'):
-            if filtros.get(campo):
-                valores[campo] = identificador(filtros[campo])
-        if filtros.get("estado"):
-            try:
-                valores["estado"] = EstadoBienMaterial(filtros["estado"]).value
-            except (ValueError, TypeError):
-                raise ValueError("El estado del ejemplar del filtro no es válido.") from None
-        return valores
+    def consultar_categoria(self, identificador: int) -> dict:
+        fila = self.repositorio.consultar_categoria(entero(identificador))
+        if fila is None:
+            raise NoEncontrado('Categoría inexistente.')
+        return dict(fila, version=version_categoria(fila))
 
-    def opciones_catalogo(self, filtros):
-        valores = self._validar_filtros(filtros)
-        recursos = []
-        bienes = []
-        if valores.get('id_categoria_ref'):
-            recursos = self.repositorio.consultar_recursos({'id_categoria_ref': valores['id_categoria_ref']})
-            if valores.get('id_recurso') and any(r['id_recurso'] == valores['id_recurso'] for r in recursos):
-                bienes = self.bienes.consultar_bienes_por_recurso(valores['id_recurso'])
-        return {'recursos': recursos, 'bienes': bienes}
+    def guardar_categoria(self, datos: dict, actor: int, identificador: int | None = None) -> int:
+        actor = entero(actor)
+        identificador = entero(identificador) if identificador is not None else None
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
+            actual = None
+            if identificador is not None:
+                actual = operacion.consultar_categoria(identificador, bloquear=True)
+                if actual is None:
+                    raise NoEncontrado('Categoría inexistente.')
+                comprobar_version(datos.get('version'), version_categoria(actual))
+            valores = dict(actual or {})
+            valores.update(datos)
+            nombre = texto(valores.get('nombre'), 'Nombre de categoría', 80, True)
+            descripcion = texto(valores.get('descripcion'), 'Descripción', 255)
+            return operacion.guardar_categoria(nombre, descripcion, identificador)
 
-    def consultar_disponibilidad_recurso(self, id_recurso):
-        recurso = self.consultar_recurso(id_recurso)
-        resultado = self.bienes.consultar_bienes_materiales(
-            {"id_recurso": recurso.id_recurso}
-        )
-        return {
-            "recurso": recurso,
-            "bienes": resultado["bienes"],
-            "total": resultado["resumen"]["total"],
-            "disponibles": resultado["resumen"]["disponibles"],
-        }
-
-    def consultar_categorias(self) -> list[CategoriaRecurso]:
-        return self.repositorio.consultar_categorias()
-
-    def consultar_categoria(self, id_categoria) -> CategoriaRecurso:
-        categoria = self.repositorio.consultar_categoria(identificador(id_categoria))
-        if not categoria:
-            raise LookupError("No se encontró la categoría.")
-        return categoria
-
-    def registrar_categoria(self, datos) -> CategoriaRecurso:
-        categoria = CategoriaRecurso(
-            nombre=datos.get("nombre"), descripcion=datos.get("descripcion", "")
-        )
-        return self.repositorio.registrar_categoria(categoria)
-
-    def actualizar_categoria(self, datos) -> CategoriaRecurso:
-        actual = self.consultar_categoria(datos.get("id_categoria"))
-        categoria = CategoriaRecurso(
-            id_categoria=actual.id_categoria,
-            nombre=datos.get("nombre"), descripcion=datos.get("descripcion", ""),
-        )
-        return self.repositorio.actualizar_categoria(categoria)
-
-    def eliminar_categoria(self, id_categoria) -> None:
-        categoria = self.consultar_categoria(id_categoria)
-        self.repositorio.eliminar_categoria(categoria.id_categoria)
+    def eliminar_categoria(self, identificador: int, actor: int) -> None:
+        identificador, actor = entero(identificador), entero(actor)
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
+            if operacion.consultar_categoria(identificador, bloquear=True) is None:
+                raise NoEncontrado('Categoría inexistente.')
+            relaciones = operacion.consultar_relaciones_categoria(identificador)
+            if relaciones['recursos']:
+                raise Conflicto(
+                    'No puedes eliminar la categoría porque tiene recursos registrados.'
+                )
+            if relaciones['politicas']:
+                raise Conflicto(
+                    'No puedes eliminar la categoría porque tiene políticas de préstamo.'
+                )
+            operacion.eliminar_categoria(identificador)

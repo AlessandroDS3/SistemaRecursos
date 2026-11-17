@@ -1,106 +1,149 @@
-from enum import Enum
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
+"""Reglas puras de entrega y cálculo de estado. Los datos se cargan bajo bloqueo."""
+
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from dominio.gestion_prestamos.tipo_prestamo import TipoPrestamo
-from dominio.gestion_recursos.bien_material import EstadoBienMaterial, ESTADOS_RECEPCION
-from dominio.gestion_recursos.validacion_recurso import entero, texto
+from typing import Protocol, TypedDict
+from datetime import datetime
+from dominio.compartido.contratos import IRepositorioTransaccional
+from dominio.gestion_control.sancion import IRepositorioSancion
+from dominio.compartido.validacion import Conflicto, NoEncontrado, dni, ids, texto
+from dominio.gestion_personas_usuarios.persona import validar_elegibilidad
+from dominio.gestion_control.politica_prestamo import HorarioAtencion, PoliticaPrestamo
+
+ESTADOS_PRESTAMO = {
+    'ACTIVO': 'Activos',
+    'VENCIDO': 'Vencidos',
+    'DEVUELTO': 'Devueltos',
+    'PARCIALMENTE_DEVUELTO': 'Parcialmente devueltos',
+}
+FILTROS_ESTADO_PRESTAMO = {
+    **ESTADOS_PRESTAMO,
+    'PENDIENTES': 'Con bienes pendientes',
+    'PERDIDOS': 'Con bienes perdidos pendientes',
+}
 
 
-class EstadoPrestamo(str, Enum):
-    ACTIVO = "ACTIVO"
-    VENCIDO = "VENCIDO"
-    DEVUELTO = "DEVUELTO"
-    PARCIALMENTE_DEVUELTO = "PARCIALMENTE_DEVUELTO"
+class ContextoEntrega(TypedDict):
+    personas: dict[str, dict]
+    sancion: bool
+    vencido: bool
+    limite: int | None
+    pendientes: int
+    bienes: list[dict]
+    entregas_pendientes: bool
+    politicas: dict[int, dict]
+    horario: HorarioAtencion | None
+    ahora: datetime
 
 
 @dataclass(kw_only=True)
-class Prestamo:
+class SolicitudPrestamo:
     dni_persona: str
     dni_encargado: str
-    tipo_prestamo: TipoPrestamo = TipoPrestamo.INDIVIDUAL
-    observaciones: str = ""
-    id_prestamo: int | None = None
-    fecha_solicitud: datetime | None = None
-    fecha_entrega: datetime | None = None
-    estado: EstadoPrestamo = EstadoPrestamo.ACTIVO
-    detalles: list = field(default_factory=list)
-    participantes: list = field(default_factory=list)
+    bienes: list[int]
+    participantes: list[str] = field(default_factory=list)
+    tipo_prestamo: str = 'INDIVIDUAL'
     salida_solicitada: bool = False
+    observaciones: str = ''
 
     def __post_init__(self):
-        self.dni_persona = validar_dni(self.dni_persona)
-        self.dni_encargado = validar_dni(self.dni_encargado)
-        try:
-            self.tipo_prestamo = TipoPrestamo(self.tipo_prestamo)
-            self.estado = EstadoPrestamo(self.estado)
-        except (ValueError, TypeError):
-            raise ValueError("El tipo o estado del préstamo no es válido.") from None
-        self.observaciones = texto(self.observaciones, "Observaciones", 255)
+        self.dni_persona, self.dni_encargado = dni(self.dni_persona), dni(self.dni_encargado)
+        self.bienes = ids(self.bienes)
+        if not isinstance(self.participantes, (list, tuple)) or len(self.participantes) > 100:
+            raise ValueError('Participantes inválidos.')
+        self.participantes = [dni(d) for d in self.participantes]
+        if (
+            len(set(self.participantes)) != len(self.participantes)
+            or self.dni_persona in self.participantes
+        ):
+            raise ValueError('No repitas al responsable ni a los integrantes.')
+        if self.tipo_prestamo not in ('INDIVIDUAL', 'GRUPAL') or (
+            (self.tipo_prestamo == 'GRUPAL') != bool(self.participantes)
+        ):
+            raise ValueError(
+                'El préstamo grupal requiere otros integrantes; el individual no los admite.'
+            )
+        self.observaciones = texto(self.observaciones, 'Observaciones', 220)
 
-    def agregar_detalle(self, detalle):
-        for detalle_registrado in self.detalles:
-            if detalle_registrado.id_bien_ref == detalle.id_bien_ref:
-                raise ValueError("No se puede incluir el mismo bien dos veces.")
-        self.detalles.append(detalle)
+    @property
+    def solicitantes(self):
+        return [self.dni_persona, *self.participantes]
 
-    def validar(self):
-        if not self.detalles:
-            raise ValueError("Selecciona al menos un bien para el préstamo.")
-        ids_bienes = []
-        for detalle in self.detalles:
-            ids_bienes.append(detalle.id_bien_ref)
-        if len(set(ids_bienes)) != len(ids_bienes):
-            raise ValueError("No se puede incluir el mismo bien dos veces.")
-        dnis_participantes = []
-        for participante in self.participantes:
-            dnis_participantes.append(participante.dni_persona)
-        if len(set(dnis_participantes)) != len(dnis_participantes):
-            raise ValueError("Un participante no puede repetirse.")
-        if self.tipo_prestamo == TipoPrestamo.INDIVIDUAL and self.participantes:
-            raise ValueError("Los préstamos individuales no tienen participantes adicionales.")
-        if self.tipo_prestamo == TipoPrestamo.GRUPAL:
-            responsables = []
-            for participante in self.participantes:
-                if participante.responsable:
-                    responsables.append(participante)
-            if (
-                len(dnis_participantes) < 2
-                or len(responsables) != 1
-                or responsables[0].dni_persona != self.dni_persona
-            ):
-                raise ValueError(
-                    "El préstamo grupal necesita al solicitante como responsable y al menos otro participante."
-                )
+    @property
+    def observaciones_registro(self):
+        uso = (
+            'Salida externa autorizada. '
+            if self.salida_solicitada
+            else 'Uso dentro de la institución. '
+        )
+        return uso + self.observaciones
 
-    def estado_actual(self, ahora=None):
-        ahora = ahora or datetime.now(timezone.utc).replace(tzinfo=None)
-        pendientes = []
-        for detalle in self.detalles:
-            if detalle.pendiente():
-                pendientes.append(detalle)
-        if not pendientes:
-            return EstadoPrestamo.DEVUELTO
-        for detalle in pendientes:
-            if detalle.fecha_limite_devolucion < ahora:
-                return EstadoPrestamo.VENCIDO
-        if len(pendientes) < len(self.detalles):
-            return EstadoPrestamo.PARCIALMENTE_DEVUELTO
-        return EstadoPrestamo.ACTIVO
+    def planificar(self, contexto: ContextoEntrega, bien_reservado=None):
+        for documento in self.solicitantes:
+            validar_elegibilidad(contexto['personas'].get(documento))
+        if contexto['sancion']:
+            raise Conflicto('El solicitante o un integrante tiene una sanción activa.')
+        if contexto['vencido']:
+            raise Conflicto('El solicitante o un integrante tiene bienes vencidos pendientes.')
+        limite = contexto['limite']
+        if limite is None:
+            raise ValueError('Configura el límite de artículos de este tipo de persona.')
+        if contexto['pendientes'] + len(self.bienes) > limite:
+            raise Conflicto(
+                'La entrega supera el máximo total de artículos pendientes del solicitante.'
+            )
+        bienes = contexto['bienes']
+        if {b['id_bien'] for b in bienes} != set(self.bienes):
+            raise NoEncontrado('Uno de los bienes no existe.')
+        if contexto['entregas_pendientes']:
+            raise Conflicto('Uno de los bienes ya tiene una entrega pendiente.')
+        horario = contexto['horario']
+        if horario is None:
+            raise ValueError('Configura el horario de atención.')
+        horario.cierre(contexto['ahora'])
+        return [self._planificar_bien(bien, contexto, bien_reservado) for bien in bienes]
 
-    def marcar_vencido(self, ahora=None):
-        self.estado = self.estado_actual(ahora)
-        return self.estado
+    def _planificar_bien(self, bien, contexto, bien_reservado):
+        esperado = 'RESERVADO' if bien['id_bien'] == bien_reservado else 'DISPONIBLE'
+        if bien['estado'] != esperado:
+            raise Conflicto('Uno de los bienes dejó de estar disponible.')
+        fila = contexto['politicas'].get(bien['id_categoria'])
+        if fila is None:
+            raise ValueError('Falta una política para una categoría seleccionada.')
+        politica = PoliticaPrestamo.desde_datos(fila)
+        if self.salida_solicitada and not politica.permite_salida:
+            raise ValueError('La política de un bien no permite la salida externa.')
+        return {
+            'id_bien': bien['id_bien'],
+            'id_politica': politica.id_politica,
+            'fecha_limite_devolucion': politica.vencimiento(contexto['ahora'], contexto['horario']),
+            'condicion_entrega': 'BUENO',
+            'estado_anterior': bien['estado'],
+        }
 
-    def registrar_devolucion(self, id_detalle, estado, ahora=None):
-        detalle = None
-        for detalle_prestamo in self.detalles:
-            if detalle_prestamo.id_detalle == id_detalle:
-                detalle = detalle_prestamo
-                break
-        if not detalle or not detalle.pendiente():
-            raise ValueError("El bien no pertenece al préstamo o ya fue devuelto.")
-        if estado not in ESTADOS_RECEPCION:
-            raise ValueError("Selecciona la condición de recepción del bien.")
-        detalle.estado_devolucion = EstadoBienMaterial(estado)
-        self.estado = self.estado_actual(ahora)
+
+def estado_prestamo(detalles, ahora):
+    pendientes = [d for d in detalles if d['fecha_devolucion'] is None]
+    if not pendientes:
+        return 'DEVUELTO'
+    if any(d['fecha_limite_devolucion'] < ahora for d in pendientes):
+        return 'VENCIDO'
+    return 'PARCIALMENTE_DEVUELTO' if len(pendientes) < len(detalles) else 'ACTIVO'
+
+
+class IRepositorioPrestamo(IRepositorioTransaccional, Protocol):
+    def consultar_resumen_prestamos(self, documento: str | None = None) -> dict: ...
+    def consultar_prestamo_para_actualizar(self, identificador: int) -> dict | None: ...
+    def consultar_condiciones_prestamo(self, documento: str) -> dict: ...
+    @property
+    def sanciones(self) -> IRepositorioSancion: ...
+    def consultar_prestamo(self, identificador: int, bloquear=False) -> dict | None: ...
+    def consultar_prestamos(self, filtros: dict, documento: str | None = None) -> list[dict]: ...
+    def consultar_contexto_entrega_prestamo(
+        self, solicitud: SolicitudPrestamo
+    ) -> ContextoEntrega: ...
+    def registrar_entrega_prestamo(self, solicitud: SolicitudPrestamo, plan: list[dict], fecha): ...
+    def registrar_devolucion(self, detalle: dict, devolucion, fecha, actor: str): ...
+    def actualizar_estado_prestamo(self, prestamo: dict, nuevo: str, actor: str, motivo: str): ...
+    def registrar_perdida_bien_material(
+        self, prestamo: dict, detalle: dict, actor: str, motivo: str
+    ): ...

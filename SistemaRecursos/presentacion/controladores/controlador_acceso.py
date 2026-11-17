@@ -1,36 +1,36 @@
-from __future__ import annotations
-from servicios.servicio_acceso import ServicioAplicacionAcceso
-from flask import Blueprint, render_template, request, redirect, url_for, session, g, current_app
+from flask import Blueprint, g, redirect, render_template, request, session, url_for
+from presentacion.seguridad import establecer_sesion
 
 
 class ControladorAcceso:
-    def __init__(self, servicio: ServicioAplicacionAcceso):
-        self.servicio: ServicioAplicacionAcceso = servicio
-        self.blueprint = Blueprint("auth", __name__)
-        self.blueprint.add_url_rule("/login", "login", self.login, methods=["GET", "POST"])
-        self.blueprint.add_url_rule("/logout", "logout", self.logout, methods=["POST"])
+    def __init__(self, servicio):
+        self.servicio = servicio
+        self.blueprint = Blueprint('auth', __name__)
+        self.blueprint.add_url_rule(
+            '/login', 'iniciar_sesion', self.iniciar_sesion, methods=['GET', 'POST']
+        )
+        self.blueprint.add_url_rule(
+            '/logout', 'cerrar_sesion', self.cerrar_sesion, methods=['POST']
+        )
 
-    def login(self):
-        if g.get("usuario") is not None:
-            return redirect(url_for("inicio"))
-        if request.method == "POST":
-            cuenta = self.servicio.autenticar(
-                request.form.get("usuario", ""), request.form.get("clave", ""), request.remote_addr or "local"
+    def iniciar_sesion(self):
+        if g.usuario:
+            destino = 'cuentas.cambiar_clave_propia' if g.usuario.debe_cambiar_clave else 'inicio'
+            return redirect(url_for(destino))
+        error = None
+        if request.method == 'POST':
+            cuenta_acceso = self.servicio.autenticar_cuenta(
+                request.form.get('usuario', ''), request.form.get('clave', '')
             )
-            if cuenta is None:
-                mensaje = "Credenciales incorrectas o cuenta sin acceso."
-                formulario = render_template("vista_acceso.html", error=mensaje)
-                return formulario
-            session.clear()
-            session["token_acceso"] = self.servicio.abrir_sesion(
-                cuenta, int(current_app.permanent_session_lifetime.total_seconds())
-            )
-            session["id_usuario"] = cuenta.id_usuario
-            session["version_credenciales"] = self.servicio.version_credenciales(cuenta)
-            return redirect(url_for("inicio"))
-        return render_template("vista_acceso.html")
+            if cuenta_acceso:
+                establecer_sesion(cuenta_acceso)
+                destino = (
+                    'cuentas.cambiar_clave_propia' if cuenta_acceso.debe_cambiar_clave else 'inicio'
+                )
+                return redirect(url_for(destino))
+            error = 'Credenciales incorrectas o cuenta sin acceso.'
+        return render_template('vista_acceso.html', error=error)
 
-    def logout(self):
-        self.servicio.cerrar_sesion(session.get("token_acceso"))
+    def cerrar_sesion(self):
         session.clear()
-        return redirect(url_for("auth.login"))
+        return redirect(url_for('auth.iniciar_sesion'))

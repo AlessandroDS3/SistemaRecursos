@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block contenido %}
+  <h1>Cuenta creada</h1>
+  <section class="panel estrecho" aria-label="Credenciales iniciales">
+    <p>Persona: {{ documento }} · Rol: Usuario</p>
+    <dl>
+      <dt>Nombre de usuario</dt>
+      <dd><strong>{{ creada.nombre_usuario }}</strong></dd>
+      <dt>Contraseña temporal</dt>
+      <dd><code>{{ creada.clave_temporal }}</code></dd>
+    </dl>
+    <p>Entrega estas credenciales a la persona. La contraseña temporal se muestra solo en esta respuesta y deberá cambiarse en el primer ingreso.</p>
+    <a class="boton" href="{{ url_for('personas.consultar_persona', documento=documento) }}">Volver a la persona</a>
+  </section>
+{% endblock %}

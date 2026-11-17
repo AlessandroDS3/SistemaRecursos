@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from 'formularios.html' import csrf %}
+{% from 'componentes.html' import estado %}
+{% block titulo %}Sanciones · UNSA{% endblock %}
+{% block contenido %}
+  <div class="sanciones-administracion">
+    <h1>Sanciones</h1>
+    <nav class="pestanas-recursos" aria-label="Estado de las sanciones">
+      {% for codigo, etiqueta in (('ACTIVA','Activas'),('LEVANTADA','Levantadas')) %}
+        <a href="{{ url_for('sanciones.consultar_sanciones', estado=codigo, q=consulta) }}"
+           {% if estado_actual == codigo %}aria-current="page"{% endif %}>{{ etiqueta }}</a>
+      {% endfor %}
+    </nav>
+    <form method="get" class="busqueda-sanciones">
+      <input type="hidden" name="estado" value="{{ estado_actual }}">
+      <label>Buscar
+        <input name="q" type="search" value="{{ consulta }}" maxlength="120" placeholder="Persona o n.º de préstamo">
+      </label>
+      <button class="secundario">Buscar</button>
+      {% if consulta %}<a href="{{ url_for('sanciones.consultar_sanciones', estado=estado_actual) }}">Limpiar</a>{% endif %}
+    </form>
+    <div class="tabla tabla-sanciones">
+      <table>
+        <thead>
+          <tr><th scope="col">Sanción</th><th scope="col">Préstamo</th><th scope="col">Responsable</th><th scope="col">Motivo</th><th scope="col">Estado</th>
+            <th scope="col">{{ 'Levantamiento' if estado_actual == 'ACTIVA' else 'Motivo de levantamiento' }}</th></tr>
+        </thead>
+        <tbody>
+          {% for s in sanciones %}
+            <tr>
+              <th scope="row">#{{ s.id_sancion }}</th>
+              <td><a href="{{ url_for('prestamos.consultar_prestamo', identificador=s.id_prestamo) }}">#{{ s.id_prestamo }}</a></td>
+              <td>{{ s.responsable }}</td>
+              <td>{{ s.motivo }}<small>{{ s.fecha|fecha }}</small>
+                {% if s.descripcion %}<details class="detalle-sancion"><summary>Ver descripción</summary><p>{{ s.descripcion }}</p></details>{% endif %}
+              </td>
+              <td>{{ estado(s.estado) }}</td>
+              <td>
+                {% if s.estado == 'ACTIVA' %}
+                  <form method="post" class="levantamiento-sancion" action="{{ url_for('sanciones.levantar_sancion', identificador=s.id_sancion) }}">
+                    {{ csrf() }}
+                    <input type="hidden" name="q" value="{{ consulta }}">
+                    <label>
+                      <span class="solo-lectores">Motivo de levantamiento de la sanción #{{ s.id_sancion }}</span>
+                      <input name="justificacion" required maxlength="255" placeholder="Motivo de levantamiento">
+                    </label>
+                    <button class="secundario">Levantar</button>
+                  </form>
+                {% else %}
+                  {{ s.justificacion_levantamiento or '—' }}
+                  <small>{{ s.fecha_levantamiento|fecha }}</small>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="sin-recursos">No se encontraron sanciones {{ 'activas' if estado_actual == 'ACTIVA' else 'levantadas' }}{% if consulta %} para esta búsqueda{% endif %}.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="suave">{{ sanciones|length }} {{ 'sanción encontrada' if sanciones|length == 1 else 'sanciones encontradas' }}</p>
+  </div>
+{% endblock %}

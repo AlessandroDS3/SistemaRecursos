@@ -1,79 +1,85 @@
-from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import date
-from dominio.gestion_recursos.validacion_recurso import entero, texto, fecha
+from typing import Protocol
+from dominio.compartido.contratos import IRepositorioTransaccional
+from dominio.compartido.validacion import Conflicto, entero, texto, version
 
-
-class EstadoBienMaterial(str, Enum):
-    DISPONIBLE = "DISPONIBLE"
-    PRESTADO = "PRESTADO"
-    RESERVADO = "RESERVADO"
-    DANADO = "DANADO"
-    MANTENIMIENTO = "MANTENIMIENTO"
-    PERDIDO = "PERDIDO"
-
-
-ESTADOS_FUERA_SERVICIO = frozenset({
-    EstadoBienMaterial.DANADO, EstadoBienMaterial.MANTENIMIENTO, EstadoBienMaterial.PERDIDO,
-})
-ESTADOS_CAMBIO_MANUAL = ESTADOS_FUERA_SERVICIO | {EstadoBienMaterial.DISPONIBLE}
-ESTADOS_GESTION_PRESTAMOS = frozenset({EstadoBienMaterial.PRESTADO, EstadoBienMaterial.RESERVADO})
-ESTADOS_RECEPCION = frozenset({
-    EstadoBienMaterial.DISPONIBLE, EstadoBienMaterial.DANADO, EstadoBienMaterial.MANTENIMIENTO,
-})
+ESTADOS_BIEN = ('DISPONIBLE', 'PRESTADO', 'RESERVADO', 'DANADO', 'MANTENIMIENTO', 'PERDIDO')
+ESTADOS_MANUALES = ('DISPONIBLE', 'DANADO', 'MANTENIMIENTO', 'PERDIDO')
 
 
 @dataclass(kw_only=True)
 class BienMaterial:
-    id_recurso_ref: int
+    id_recurso: int
     codigo_inventario: str
-    fecha_adquisicion: date
-    numero_serie: str = ""
-    descripcion_bien: str = ""
-    ubicacion: str = ""
-    estado: EstadoBienMaterial = EstadoBienMaterial.DISPONIBLE
+    numero_serie: str = ''
+    fecha_adquisicion: date | str | None = None
+    ubicacion: str = ''
+    descripcion_bien: str | None = None
     id_bien: int | None = None
 
+    @classmethod
+    def desde_datos(
+        cls, datos: dict, *, id_recurso: int, id_bien: int | None = None
+    ) -> 'BienMaterial':
+        valores = {
+            campo.name: datos[campo.name]
+            for campo in fields(cls)
+            if campo.name in datos and campo.name not in ('id_recurso', 'id_bien')
+        }
+        valores.setdefault('codigo_inventario', None)
+        return cls(**valores, id_recurso=id_recurso, id_bien=id_bien)
+
     def __post_init__(self):
-        self.id_recurso_ref = entero(self.id_recurso_ref, "Recurso")
-        self.codigo_inventario = texto(self.codigo_inventario, "Código de inventario", 40, True)
-        self.numero_serie = texto(self.numero_serie, "Número de serie", 60)
-        self.descripcion_bien = texto(self.descripcion_bien, "Descripción del bien", 255)
-        self.ubicacion = texto(self.ubicacion, "Ubicación", 120)
-        self.fecha_adquisicion = fecha(self.fecha_adquisicion, "Fecha de adquisición")
-        if self.fecha_adquisicion > date.today():
-            raise ValueError("La fecha de adquisición no puede ser futura.")
-        try:
-            self.estado = EstadoBienMaterial(self.estado)
-        except (ValueError, TypeError):
-            raise ValueError("Selecciona un estado de bien válido.") from None
-
-    def esta_disponible(self):
-        return self.estado == EstadoBienMaterial.DISPONIBLE
-
-    def validar_disponible(self):
-        if not self.esta_disponible():
-            raise ValueError("El bien no está disponible.")
-
-    def cambiar_estado(self, estado):
-        try:
-            nuevo = EstadoBienMaterial(estado)
-        except (ValueError, TypeError):
-            raise ValueError("El estado solicitado no es válido.") from None
-        if nuevo not in TRANSICIONES_PERMITIDAS[self.estado]:
-            raise ValueError(f"No se puede cambiar de {self.estado.value} a {nuevo.value}.")
-        self.estado = nuevo
+        self.id_recurso = entero(self.id_recurso, 'Recurso')
+        self.codigo_inventario = texto(self.codigo_inventario, 'Código de inventario', 40, True)
+        self.numero_serie = texto(self.numero_serie, 'Número de serie', 60)
+        self.ubicacion = texto(self.ubicacion, 'Ubicación', 120)
+        self.descripcion_bien = texto(self.descripcion_bien, 'Descripción', 255) or None
+        if self.fecha_adquisicion in ('', None):
+            self.fecha_adquisicion = None
+        elif isinstance(self.fecha_adquisicion, str):
+            try:
+                self.fecha_adquisicion = date.fromisoformat(self.fecha_adquisicion)
+            except (ValueError, TypeError):
+                raise ValueError('La fecha de adquisición no es válida.') from None
+        elif not isinstance(self.fecha_adquisicion, date):
+            raise ValueError('La fecha de adquisición no es válida.')
 
 
-TRANSICIONES_PERMITIDAS = {
-    EstadoBienMaterial.DISPONIBLE: ESTADOS_FUERA_SERVICIO | ESTADOS_GESTION_PRESTAMOS,
-    EstadoBienMaterial.PRESTADO: ESTADOS_RECEPCION | {EstadoBienMaterial.PERDIDO},
-    EstadoBienMaterial.RESERVADO: frozenset({EstadoBienMaterial.DISPONIBLE, EstadoBienMaterial.PRESTADO}),
-    EstadoBienMaterial.DANADO: frozenset({
-        EstadoBienMaterial.DISPONIBLE, EstadoBienMaterial.MANTENIMIENTO, EstadoBienMaterial.PERDIDO,
-    }),
-    EstadoBienMaterial.MANTENIMIENTO: frozenset({
-        EstadoBienMaterial.DISPONIBLE, EstadoBienMaterial.DANADO, EstadoBienMaterial.PERDIDO,
-    }),
-    EstadoBienMaterial.PERDIDO: ESTADOS_RECEPCION,
-}
+def version_bien_material(datos: dict) -> str:
+    """La edición descriptiva no depende del estado ni de los nombres de otras tablas."""
+    return version({campo.name: datos[campo.name] for campo in fields(BienMaterial)})
+
+
+def validar_filtros_inventario(filtros) -> dict:
+    estado = filtros.get('estado', '')
+    if estado and estado not in ESTADOS_BIEN:
+        raise ValueError('Estado de bien inválido.')
+    resultado = dict(q=texto(filtros.get('q'), 'Búsqueda', 120), estado=estado)
+    for campo in ('id_recurso', 'id_categoria'):
+        valor = filtros.get(campo)
+        resultado[campo] = entero(valor) if valor not in (None, '') else None
+    resultado['solo_disponibles'] = filtros.get('solo_disponibles') == '1'
+    return resultado
+
+
+def validar_cambio_estado(actual, nuevo, esperado) -> None:
+    if actual != esperado:
+        raise Conflicto('El estado cambió. Recarga el bien.')
+    if actual in ('PRESTADO', 'RESERVADO') or nuevo not in ESTADOS_MANUALES:
+        raise Conflicto('Los estados de préstamo y reserva se cambian desde su operación.')
+    if actual == nuevo:
+        raise ValueError('Selecciona un estado diferente.')
+
+
+class IRepositorioBienMaterial(IRepositorioTransaccional, Protocol):
+    def consultar_bien_material(self, identificador: int, bloquear=False) -> dict | None: ...
+    def consultar_bienes_materiales(self, filtros: dict) -> list[dict]: ...
+    def guardar_bien_material(self, bien: BienMaterial) -> int: ...
+    def cambiar_estado_bien_material(
+        self, identificador: int, anterior: str, nuevo: str, motivo: str, actor: str
+    ) -> None: ...
+    def consultar_prestamo_pendiente(self, identificador: int) -> dict | None: ...
+    def consultar_relaciones_bien_material(self, identificador: int) -> dict: ...
+    def eliminar_bien_material(self, identificador: int) -> None: ...

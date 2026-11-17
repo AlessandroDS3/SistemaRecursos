@@ -1,192 +1,123 @@
-from __future__ import annotations
-from dominio.gestion_recursos.recurso import Recurso
-from dominio.resultados_consulta import RecursoListado
-from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
-from dominio.gestion_recursos.fabrica_recurso import FabricaRecurso
-from dominio.gestion_recursos.fabrica_bien_material import FabricaBienMaterial
-from dominio.gestion_recursos.categoria_recurso import CategoriaRecurso
-from repositorio.conexion_mysql import MySQLConnection
-from repositorio.repositorio_bien_material_sql import insertar_bien_material
+from dataclasses import asdict
+from repositorio.base_sql import RepositorioSQL
+from repositorio.repositorio_bien_material_sql import RepositorioBienMaterialSQL
 
 
-CAMPOS_RECURSO = (
-    "id_recurso", "id_categoria_ref", "nombre", "marca", "modelo", "descripcion",
-)
-COLUMNAS_RECURSO = ", ".join(CAMPOS_RECURSO)
-COLUMNAS_RECURSO_LISTADO = ", ".join(f"r.{campo}" for campo in CAMPOS_RECURSO)
-COLUMNAS_CATEGORIA = "id_categoria, nombre, descripcion"
-
-
-class RepositorioRecursoSQL(IRepositorioRecurso):
-    """Guarda recursos y ejemplares en MySQL."""
-
-    def __init__(self, conexion=None):
-        self.conexion = conexion or MySQLConnection()
-
-    @staticmethod
-    def _insertar_recurso(cursor, recurso):
-        cursor.execute(
-            """
-            INSERT INTO recurso (
-                nombre, id_categoria_ref, marca, modelo, descripcion
+class RepositorioRecursoSQL(RepositorioSQL):
+    def consultar_recursos(self, filtros: dict, contar_bienes=True) -> list[dict]:
+        columnas = '''r.*,c.nombre AS categoria'''
+        if contar_bienes:
+            columnas += ''',
+            (SELECT COUNT(*) FROM bien_material b WHERE b.id_recurso=r.id_recurso) AS total,
+            (SELECT COUNT(*) FROM bien_material b WHERE b.id_recurso=r.id_recurso AND b.estado='DISPONIBLE') AS disponibles'''
+        sql = 'SELECT ' + columnas + ''' FROM recurso r
+            JOIN categoria_recurso c ON c.id_categoria=r.id_categoria WHERE 1=1'''
+        parametros = []
+        condiciones_bien = ['b.id_recurso=r.id_recurso']
+        parametros_bien = []
+        if filtros.get('estado'):
+            condiciones_bien.append('b.estado=%s')
+            parametros_bien.append(filtros['estado'])
+        if filtros.get('solo_disponibles'):
+            condiciones_bien.append("b.estado='DISPONIBLE'")
+        subconsulta_bien = 'SELECT 1 FROM bien_material b WHERE ' + ' AND '.join(condiciones_bien)
+        if filtros.get('q'):
+            sql += (
+                ' AND (r.nombre LIKE %s OR r.marca LIKE %s OR r.modelo LIKE %s OR EXISTS('
+                + subconsulta_bien
+                + ' AND b.codigo_inventario LIKE %s))'
             )
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (
-                recurso.nombre,
-                recurso.id_categoria_ref,
-                recurso.marca,
-                recurso.modelo,
-                recurso.descripcion,
-            ),
-        )
-        return cursor.lastrowid
-
-    def registrar_recurso(self, recurso) -> Recurso:
-        with self.conexion.sesion(escritura=True) as cursor:
-            nuevo_id = self._insertar_recurso(cursor, recurso)
-        recurso.id_recurso = nuevo_id
-        return recurso
-
-    def registrar_recurso_con_bien(self, recurso, datos_bien) -> Recurso:
-        # Ambos registros se confirman juntos; cualquier fallo revierte la operación.
-        with self.conexion.sesion(escritura=True) as cursor:
-            nuevo_id = self._insertar_recurso(cursor, recurso)
-            bien = FabricaBienMaterial.construir(
-                dict(datos_bien, id_recurso_ref=nuevo_id, estado="DISPONIBLE", id_bien=None)
-            )
-            insertar_bien_material(cursor, bien)
-        recurso.id_recurso = nuevo_id
-        return recurso
-
-    def consultar_recurso(self, id_recurso) -> Recurso | None:
-        with self.conexion.sesion() as cursor:
-            cursor.execute(
-                f"SELECT {COLUMNAS_RECURSO} FROM recurso WHERE id_recurso = %s", (id_recurso,)
-            )
-            fila_recurso = cursor.fetchone()
-            return FabricaRecurso.construir(fila_recurso) if fila_recurso else None
-
-    def actualizar_recurso(self, recurso) -> Recurso:
-        with self.conexion.sesion(escritura=True) as cursor:
-            cursor.execute(
-                "SELECT id_recurso FROM recurso WHERE id_recurso=%s FOR UPDATE",
-                (recurso.id_recurso,),
-            )
-            if cursor.fetchone() is None:
-                raise LookupError("No se encontró el recurso.")
-            cursor.execute(
-                """
-                UPDATE recurso
-                SET nombre = %s, id_categoria_ref = %s,
-                    marca = %s, modelo = %s, descripcion = %s
-                WHERE id_recurso = %s
-                """,
-                (
-                    recurso.nombre,
-                        recurso.id_categoria_ref,
-                    recurso.marca,
-                    recurso.modelo,
-                    recurso.descripcion,
-                    recurso.id_recurso,
-                ),
-            )
-        return recurso
-
-    def eliminar_recurso(self, id_recurso) -> None:
-        # Las FK impiden eliminar recursos con bienes o reservas asociados.
-        with self.conexion.sesion(escritura=True) as cursor:
-            cursor.execute("DELETE FROM recurso WHERE id_recurso=%s", (id_recurso,))
-
-    def consultar_recursos(self, filtros=None) -> list[RecursoListado]:
-        sql, parametros = self._consulta_todos(filtros)
-        with self.conexion.sesion() as cursor:
-            cursor.execute(sql + " ORDER BY r.nombre, r.id_recurso", parametros)
-            return cursor.fetchall()
-
-    @staticmethod
-    def _consulta_todos(filtros=None):
-        filtros = filtros or {}
-        condiciones, parametros = [], []
-        if filtros.get("q"):
-            estado_codigo = " AND buscado.estado=%s" if filtros.get("estado") else ""
-            condiciones.append(
-                "(r.nombre LIKE %s OR r.marca LIKE %s OR r.modelo LIKE %s "
-                "OR EXISTS (SELECT 1 FROM bien_material buscado "
-                "WHERE buscado.id_recurso_ref=r.id_recurso AND buscado.codigo_inventario LIKE %s"
-                + estado_codigo + "))"
-            )
-            parametros.extend([filtros["q"] + "%"] * 4)
-            if filtros.get("estado"):
-                parametros.append(filtros["estado"])
-        if filtros.get("estado"):
-            condiciones.append("EXISTS (SELECT 1 FROM bien_material filtrado WHERE filtrado.id_recurso_ref=r.id_recurso AND filtrado.estado=%s)")
-            parametros.append(filtros["estado"])
-        if filtros.get("id_categoria_ref"):
-            condiciones.append("r.id_categoria_ref=%s")
-            parametros.append(filtros["id_categoria_ref"])
+            busqueda = f"%{filtros['q']}%"
+            parametros.extend([busqueda] * 3 + parametros_bien + [busqueda])
+        if filtros.get('id_categoria'):
+            sql += ' AND r.id_categoria=%s'
+            parametros.append(filtros['id_categoria'])
         if filtros.get('id_recurso'):
-            condiciones.append('r.id_recurso=%s')
+            sql += ' AND r.id_recurso=%s'
             parametros.append(filtros['id_recurso'])
-        if filtros.get('id_bien'):
-            condiciones.append('EXISTS (SELECT 1 FROM bien_material elegido WHERE elegido.id_recurso_ref=r.id_recurso AND elegido.id_bien=%s)')
-            parametros.append(filtros['id_bien'])
-        sql = f"""
-            SELECT {COLUMNAS_RECURSO_LISTADO}, cat.nombre AS categoria_nombre,
-                COUNT(b.id_bien) AS total_bienes,
-                SUM(CASE WHEN b.estado='DISPONIBLE' THEN 1 ELSE 0 END) AS disponibles
-            FROM recurso r JOIN categoria_recurso cat ON cat.id_categoria=r.id_categoria_ref
-            LEFT JOIN bien_material b ON b.id_recurso_ref=r.id_recurso
-        """
-        if condiciones:
-            sql += " WHERE " + " AND ".join(condiciones)
-        sql += " GROUP BY r.id_recurso, cat.id_categoria"
-        if filtros.get("solo_disponibles"):
-            sql += " HAVING disponibles > 0"
-        return sql, tuple(parametros)
+        if len(condiciones_bien) > 1:
+            sql += ' AND EXISTS(' + subconsulta_bien + ')'
+            parametros.extend(parametros_bien)
+        return self.consultar_sql(sql + ' ORDER BY r.nombre,r.id_recurso', parametros)
 
-    def consultar_categorias(self) -> list[CategoriaRecurso]:
-        with self.conexion.sesion() as cursor:
-            cursor.execute(f"SELECT {COLUMNAS_CATEGORIA} FROM categoria_recurso ORDER BY nombre")
-            return [CategoriaRecurso(**fila_categoria) for fila_categoria in cursor.fetchall()]
+    def consultar_disponibilidad(self) -> int:
+        return self.consultar_sql(
+            "SELECT COUNT(*) AS total FROM bien_material WHERE estado='DISPONIBLE'", una=True
+        )['total']
 
-    def consultar_categoria(self, id_categoria) -> CategoriaRecurso | None:
-        with self.conexion.sesion() as cursor:
-            cursor.execute(
-                f"SELECT {COLUMNAS_CATEGORIA} FROM categoria_recurso WHERE id_categoria = %s",
-                (id_categoria,),
+    def consultar_recurso(self, identificador: int, bloquear: bool = False) -> dict | None:
+        return self.consultar_sql(
+            'SELECT * FROM recurso WHERE id_recurso=%s' + (' FOR UPDATE' if bloquear else ''),
+            (identificador,),
+            una=True,
+        )
+
+    def guardar_recurso(self, recurso) -> int:
+        datos = asdict(recurso)
+        identificador = datos.pop('id_recurso')
+        if identificador is None:
+            recurso.id_recurso = self.insertar('recurso', datos)
+        else:
+            self.ejecutar(
+                'UPDATE recurso SET ' + ','.join(c + '=%s' for c in datos) + ' WHERE id_recurso=%s',
+                (*datos.values(), identificador),
             )
-            fila_categoria = cursor.fetchone()
-            return CategoriaRecurso(**fila_categoria) if fila_categoria else None
+        return recurso.id_recurso
 
-    def registrar_categoria(self, categoria) -> CategoriaRecurso:
-        with self.conexion.sesion(escritura=True) as cursor:
-            cursor.execute(
-                "INSERT INTO categoria_recurso (nombre,descripcion) VALUES (%s,%s)",
-                (categoria.nombre, categoria.descripcion),
-            )
-            nuevo_id = cursor.lastrowid
-        categoria.id_categoria = nuevo_id
-        return categoria
+    def guardar_bien_material(self, bien) -> int:
+        return RepositorioBienMaterialSQL(self.conexion, self._cursor).guardar_bien_material(bien)
 
-    def actualizar_categoria(self, categoria) -> CategoriaRecurso:
-        with self.conexion.sesion(escritura=True) as cursor:
-            cursor.execute(
-                "SELECT id_categoria FROM categoria_recurso WHERE id_categoria=%s FOR UPDATE",
-                (categoria.id_categoria,),
-            )
-            if cursor.fetchone() is None:
-                raise LookupError("No se encontró la categoría.")
-            cursor.execute(
-                """
-                UPDATE categoria_recurso
-                SET nombre = %s, descripcion = %s
-                WHERE id_categoria = %s
-                """,
-                (categoria.nombre, categoria.descripcion, categoria.id_categoria),
-            )
-        return categoria
+    def consultar_bienes_materiales(self, filtros: dict) -> list[dict]:
+        return RepositorioBienMaterialSQL(self.conexion, self._cursor).consultar_bienes_materiales(
+            filtros
+        )
 
-    def eliminar_categoria(self, id_categoria) -> None:
-        with self.conexion.sesion(escritura=True) as cursor:
-            cursor.execute("DELETE FROM categoria_recurso WHERE id_categoria=%s", (id_categoria,))
+    def consultar_relaciones_recurso(self, identificador: int) -> dict:
+        consultas = {
+            'bienes': 'SELECT id_bien FROM bien_material WHERE id_recurso=%s LIMIT 1 FOR UPDATE',
+            'reservas': 'SELECT id_reserva FROM reserva WHERE id_recurso=%s LIMIT 1 FOR UPDATE',
+        }
+        return {
+            relacion: self.consultar_sql(sql, (identificador,), una=True) is not None
+            for relacion, sql in consultas.items()
+        }
+
+    def eliminar_recurso(self, identificador: int) -> None:
+        self.ejecutar('DELETE FROM recurso WHERE id_recurso=%s', (identificador,))
+
+    def consultar_categorias(self) -> list[dict]:
+        return self.consultar_sql('SELECT * FROM categoria_recurso ORDER BY nombre')
+
+    def consultar_categoria(self, identificador: int, bloquear: bool = False) -> dict | None:
+        return self.consultar_sql(
+            'SELECT * FROM categoria_recurso WHERE id_categoria=%s'
+            + (' FOR UPDATE' if bloquear else ''),
+            (identificador,),
+            una=True,
+        )
+
+    def consultar_relaciones_categoria(self, identificador: int) -> dict:
+        consultas = {
+            'recursos': 'SELECT id_recurso FROM recurso WHERE id_categoria=%s LIMIT 1 FOR UPDATE',
+            'politicas': 'SELECT id_politica FROM politica_prestamo WHERE id_categoria=%s LIMIT 1 FOR UPDATE',
+        }
+        return {
+            relacion: self.consultar_sql(sql, (identificador,), una=True) is not None
+            for relacion, sql in consultas.items()
+        }
+
+    def guardar_categoria(
+        self, nombre: str, descripcion: str, identificador: int | None = None
+    ) -> int:
+        if identificador is None:
+            return self.insertar(
+                'categoria_recurso', dict(nombre=nombre, descripcion=descripcion or None)
+            )
+        self.ejecutar(
+            'UPDATE categoria_recurso SET nombre=%s,descripcion=%s WHERE id_categoria=%s',
+            (nombre, descripcion or None, identificador),
+        )
+        return identificador
+
+    def eliminar_categoria(self, identificador: int) -> None:
+        self.ejecutar('DELETE FROM categoria_recurso WHERE id_categoria=%s', (identificador,))

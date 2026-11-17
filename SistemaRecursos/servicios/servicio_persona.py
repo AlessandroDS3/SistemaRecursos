@@ -1,63 +1,91 @@
-from __future__ import annotations
-from dominio.gestion_personas_usuarios.persona import Persona
-from dominio.resultados_consulta import ResultadoPersonas
-from dominio.gestion_personas_usuarios.i_repositorio_persona import IRepositorioPersona
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
-from servicios.validacion_identificadores import identificador
-from dominio.gestion_personas_usuarios.fabrica_persona import FabricaPersona
+from dominio.compartido.validacion import NoEncontrado
+from dominio.compartido.validacion import comprobar_version, dni, entero, texto, version
+from dominio.gestion_personas_usuarios.persona import (
+    ESTADOS_PERSONA,
+    IRepositorioPersona,
+    Persona,
+    TIPOS_PERSONA,
+)
+from dominio.gestion_personas_usuarios.cuenta import proteger_administradores
+from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 
 
 class ServicioAplicacionPersona:
-    def __init__(self, repositorio_personas: IRepositorioPersona):
-        self.repositorio: IRepositorioPersona = repositorio_personas
+    def __init__(self, repositorio: IRepositorioPersona):
+        self.repositorio = repositorio
 
-    def registrar_persona(self, datos) -> Persona:
-        datos = dict(datos)
-        datos["estado"] = "ACTIVA"
-        return self.repositorio.registrar_persona(FabricaPersona.construir(datos))
-
-    def consultar_persona(self, dni) -> Persona:
-        persona = self.repositorio.consultar_persona(validar_dni(dni))
-        if persona is None:
-            raise LookupError("No se encontró la persona.")
-        return persona
-
-    def consultar_personas(self, filtros, incluir_cuenta=False) -> ResultadoPersonas:
-        filtros = dict(filtros or {})
-        termino = filtros.get("q", "")
-        if not isinstance(termino, str) or len(termino) > 120:
-            raise ValueError("La búsqueda admite hasta 120 caracteres.")
-        filtros["q"] = termino.strip()
-        filtros["pagina"] = identificador(filtros.get("pagina", 1))
-        if filtros["q"] and not any(len(p) >= 2 for p in filtros["q"].split()):
-            return {
-                "personas": [], "resumen": {"total": 0, "activas": 0, "inactivas": 0},
-                "pagina": 1, "paginas": 1, "aviso": "Escribe al menos dos caracteres para buscar.",
-            }
-        if filtros.get("tipo", "") not in {"", "ESTUDIANTE", "DOCENTE", "ADMINISTRATIVO"}:
-            raise ValueError("Selecciona un tipo de persona válido.")
-        if filtros.get("estado", "") not in {"", "ACTIVA", "INACTIVA"}:
-            raise ValueError("Selecciona un estado válido.")
-        cuentas_validas = {"", "CON_ACCESO", "SIN_CUENTA", "ACCESO_INACTIVO"}
-        if not incluir_cuenta or filtros.get("cuenta", "") not in cuentas_validas:
-            filtros["cuenta"] = ""
-        return self.repositorio.consultar_personas(filtros)
-
-    def actualizar_persona(self, datos, dni_actual, id_usuario_actor=None) -> Persona:
-        id_usuario_actor = identificador(id_usuario_actor) if id_usuario_actor is not None else None
-        actual = self.consultar_persona(dni_actual)
-        if datos.get("tipo") != actual.tipo:
-            raise ValueError("No se puede cambiar el tipo de una persona registrada.")
-        datos = dict(datos)
-        datos.setdefault("estado", actual.estado)
-        for campo in ("codigo_docente", "departamento_academico", "facultad", "escuela_profesional", "codigo_empleado", "area"):
-            datos.setdefault(campo, getattr(actual, campo, None))
-        return self.repositorio.actualizar_persona(
-            FabricaPersona.construir(datos), dni_actual=actual.dni,
-            id_usuario_actor=id_usuario_actor, version=datos.get("version"),
+    def consultar_personas(self, filtros) -> dict:
+        if filtros.get('estado', '') not in ('', *ESTADOS_PERSONA):
+            raise ValueError('Estado de persona inválido.')
+        if filtros.get('tipo', '') not in ('', *TIPOS_PERSONA):
+            raise ValueError('Tipo de persona inválido.')
+        if filtros.get('cuenta', '') not in ('', 'CON_CUENTA', 'SIN_CUENTA'):
+            raise ValueError('Filtro de cuenta inválido.')
+        return self.repositorio.consultar_personas(
+            dict(
+                q=texto(filtros.get('q'), 'Búsqueda', 120),
+                estado=filtros.get('estado', ''),
+                tipo=filtros.get('tipo', ''),
+                cuenta=filtros.get('cuenta', ''),
+                pagina=entero(filtros.get('pagina', 1), 'Página'),
+            )
         )
 
-    def desactivar_persona(self, dni, id_usuario_actor=None) -> None:
-        id_usuario_actor = identificador(id_usuario_actor) if id_usuario_actor is not None else None
-        persona = self.consultar_persona(dni)
-        self.repositorio.desactivar_persona(persona.dni, id_usuario_actor=id_usuario_actor)
+    def consultar_persona(self, documento: str) -> tuple[Persona, str]:
+        fila = self.repositorio.consultar_persona(dni(documento))
+        if fila is None:
+            raise NoEncontrado('Persona inexistente.')
+        persona = Persona.desde_datos(fila)
+        return persona, version(persona.datos())
+
+    def guardar_persona(
+        self, datos: dict, actor: int, documento_anterior: str | None = None
+    ) -> str:
+        actor = entero(actor)
+        valores = dict(datos)
+        if documento_anterior is None:
+            valores['estado'] = 'ACTIVA'
+        persona = Persona.desde_datos(valores)
+        bloquear_cuentas = False
+        if documento_anterior is not None:
+            documento_anterior = dni(documento_anterior)
+            # Decide los bloqueos; la versión se vuelve a comprobar dentro de la transacción.
+            persona_anterior, version_anterior = self.consultar_persona(documento_anterior)
+            comprobar_version(datos.get('version'), version_anterior)
+            bloquear_cuentas = (
+                persona.estado != persona_anterior.estado or persona.dni != documento_anterior
+            )
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.consultar_cuenta_actor(actor), 'PERSONAS_GESTIONAR')
+            if documento_anterior is not None:
+                # Estado y DNI conservan el orden cuentas -> persona; los demás cambios
+                # bloquean únicamente la ficha y sus datos institucionales.
+                cuentas = operacion.consultar_cuentas_para_actualizar() if bloquear_cuentas else []
+                anterior = operacion.consultar_persona(documento_anterior, bloquear=True)
+                if anterior is None:
+                    raise NoEncontrado('Persona inexistente.')
+                comprobar_version(
+                    datos.get('version'), version(Persona.desde_datos(anterior).datos())
+                )
+                if persona.tipo != anterior['tipo']:
+                    raise ValueError(
+                        'El tipo institucional de una ficha registrada no se cambia en esta operación.'
+                    )
+                cuenta = next((c for c in cuentas if c['dni_persona'] == documento_anterior), None)
+                if cuenta:
+                    proteger_administradores(
+                        cuentas, cuenta, dict(cuenta, estado_persona=persona.estado), actor
+                    )
+                    if cuenta['id_usuario'] == actor and persona.estado != 'ACTIVA':
+                        raise ValueError('No puedes desactivar tu propia persona.')
+            operacion.guardar_persona(persona, documento_anterior)
+        return persona.dni
+
+    def desactivar_persona(self, documento: str, actor: int) -> str:
+        persona, version_actual = self.consultar_persona(documento)
+        datos = dict(persona.datos(), estado='INACTIVA', version=version_actual)
+        return self.guardar_persona(datos, actor, documento)
+
+    def buscar_personas(self, termino: str) -> list[dict]:
+        termino = texto(termino, 'Búsqueda', 120)
+        return self.repositorio.buscar_personas(termino) if len(termino) >= 2 else []

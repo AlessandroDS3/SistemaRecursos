@@ -1,75 +1,122 @@
 from dataclasses import dataclass
-from datetime import timedelta
-from dominio.gestion_control.tipo_persona import TipoPersona
-from dominio.gestion_recursos.validacion_recurso import entero
+from datetime import datetime, time, timedelta, timezone
+from typing import Protocol
+from dominio.compartido.contratos import IRepositorioTransaccional
+from dominio.compartido.validacion import LIMA, entero
+from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
+
+
+def hora(valor):
+    if isinstance(valor, timedelta):
+        segundos = int(valor.total_seconds())
+        if segundos != valor.total_seconds() or segundos % 60 or not 0 <= segundos < 86400:
+            raise ValueError('Horario inválido.')
+        valor = time(segundos // 3600, segundos % 3600 // 60)
+    if isinstance(valor, str):
+        try:
+            valor = time.fromisoformat(valor)
+        except ValueError:
+            raise ValueError('Introduce una hora válida.') from None
+    if not isinstance(valor, time) or valor.second or valor.microsecond or valor.tzinfo:
+        raise ValueError('El horario debe indicar horas y minutos.')
+    return valor
+
+
+@dataclass(kw_only=True)
+class HorarioAtencion:
+    hora_apertura: time = time(8)
+    hora_cierre: time = time(16)
+
+    def __post_init__(self):
+        self.hora_apertura, self.hora_cierre = hora(self.hora_apertura), hora(self.hora_cierre)
+        if self.hora_apertura >= self.hora_cierre:
+            raise ValueError('La apertura debe ser anterior al cierre.')
+
+    def cierre(self, fecha):
+        local = fecha.replace(tzinfo=timezone.utc).astimezone(LIMA)
+        if not self.hora_apertura <= local.time() < self.hora_cierre:
+            raise ValueError(
+                f'La atención es de {self.hora_apertura:%H:%M} a {self.hora_cierre:%H:%M}.'
+            )
+        return (
+            datetime.combine(local.date(), self.hora_cierre, LIMA)
+            .astimezone(timezone.utc)
+            .replace(tzinfo=None)
+        )
 
 
 @dataclass(kw_only=True)
 class PoliticaPrestamo:
-    tipo_persona: TipoPersona
-    id_categoria_ref: int
+    tipo_persona: str
+    id_categoria: int
     plazo_maximo: int
     unidad_plazo: str
     permite_salida: bool = False
     id_politica: int | None = None
 
     def __post_init__(self):
-        try:
-            self.tipo_persona = TipoPersona(self.tipo_persona)
-        except (ValueError, TypeError):
-            raise ValueError("Selecciona un tipo de persona válido.") from None
-        self.id_categoria_ref = entero(self.id_categoria_ref, "Categoría")
-        if self.unidad_plazo not in ("HORAS", "DIAS"):
-            raise ValueError("Selecciona horas o días para el plazo.")
+        if self.tipo_persona not in TIPOS_PERSONA or self.unidad_plazo not in ('HORAS', 'DIAS'):
+            raise ValueError('Tipo de persona o unidad de plazo inválidos.')
+        self.id_categoria = entero(self.id_categoria, 'Categoría')
+        self.plazo_maximo = entero(
+            self.plazo_maximo,
+            'Plazo máximo',
+            maximo=87600 if self.unidad_plazo == 'HORAS' else 3650,
+        )
+        if self.permite_salida not in (True, False, 0, 1, '0', '1', ''):
+            raise ValueError('Permiso de salida inválido.')
+        self.permite_salida = self.permite_salida in (True, 1, '1')
 
-        limite = 87600 if self.unidad_plazo == "HORAS" else 3650
-        if (
-            isinstance(self.plazo_maximo, bool)
-            or not isinstance(self.plazo_maximo, int)
-            or not 1 <= self.plazo_maximo <= limite
-        ):
-            unidad = "horas" if self.unidad_plazo == "HORAS" else "días"
-            raise ValueError(f"El plazo debe ser un entero entre 1 y {limite} {unidad}.")
-        self.permite_salida = bool(self.permite_salida)
-
-    def aplica_a(self, tipo_persona, id_categoria):
-        return self.tipo_persona == tipo_persona and self.id_categoria_ref == id_categoria
+    @classmethod
+    def desde_datos(cls, datos):
+        valores = {k: datos[k] for k in cls.__dataclass_fields__ if k in datos}
+        for campo in ('tipo_persona', 'id_categoria', 'plazo_maximo', 'unidad_plazo'):
+            valores.setdefault(campo, None)
+        return cls(**valores)
 
     @property
-    def plazo_texto(self):
-        if self.unidad_plazo == "HORAS":
-            unidad = "hora" if self.plazo_maximo == 1 else "horas"
-        else:
-            unidad = "día" if self.plazo_maximo == 1 else "días"
-        return f"{self.plazo_maximo} {unidad}"
+    def duracion(self):
+        return timedelta(**{'hours' if self.unidad_plazo == 'HORAS' else 'days': self.plazo_maximo})
 
-    def fecha_limite(self, fecha_entrega, horario=None):
-        if self.unidad_plazo == "HORAS":
-            duracion = timedelta(hours=self.plazo_maximo)
-        else:
-            duracion = timedelta(days=self.plazo_maximo)
-        limite = fecha_entrega + duracion
-        if self.unidad_plazo == 'HORAS' and horario is not None:
-            return horario.limitar_prestamo_por_horas(fecha_entrega, limite)
-        return limite
+    def vencimiento(self, entrega, horario):
+        fin = entrega + self.duracion
+        return min(fin, horario.cierre(entrega)) if self.unidad_plazo == 'HORAS' else fin
 
 
 @dataclass(kw_only=True)
-class LimiteArticulosPrestamo:
-    tipo_persona: TipoPersona
-    maximo_articulos: int | None = None
+class ConfiguracionReservas:
+    plazo_espera: int = 2
+    unidad_espera: str = 'DIAS'
+    plazo_retiro: int = 24
+    unidad_retiro: str = 'HORAS'
 
     def __post_init__(self):
-        self.tipo_persona = TipoPersona(self.tipo_persona)
-        if self.maximo_articulos is not None:
-            self.maximo_articulos = entero(self.maximo_articulos, 'Máximo de artículos')
-            if self.maximo_articulos > 2147483647:
-                raise ValueError('El máximo de artículos es demasiado grande.')
+        for campo in ('espera', 'retiro'):
+            unidad = getattr(self, 'unidad_' + campo)
+            if unidad not in ('HORAS', 'DIAS'):
+                raise ValueError('Unidad de plazo de reserva inválida.')
+            setattr(
+                self,
+                'plazo_' + campo,
+                entero(
+                    getattr(self, 'plazo_' + campo),
+                    'Plazo de reserva',
+                    maximo=720 if unidad == 'HORAS' else 30,
+                ),
+            )
 
-    def validar_entrega(self, pendientes: int, nuevos: int) -> None:
-        if self.maximo_articulos is None:
-            raise ValueError(f'El administrador debe configurar el máximo de artículos para {self.tipo_persona.value.lower()} en Políticas.')
-        disponibles = max(0, self.maximo_articulos - pendientes)
-        if nuevos > disponibles:
-            raise ValueError(f'La persona tiene {pendientes} artículo(s) pendiente(s). Su máximo general es {self.maximo_articulos}. '
-                             f'Solo puede recibir {disponibles} artículo(s) más; seleccionaste {nuevos}.')
+    def vencimiento(self, desde, etapa):
+        unidad, cantidad = getattr(self, 'unidad_' + etapa), getattr(self, 'plazo_' + etapa)
+        return desde + timedelta(**{'hours' if unidad == 'HORAS' else 'days': cantidad})
+
+
+class IRepositorioPoliticaPrestamo(IRepositorioTransaccional, Protocol):
+    def consultar_politicas_prestamo(self) -> list[dict]: ...
+    def consultar_politica_prestamo(self, identificador: int, bloquear=False) -> dict | None: ...
+    def consultar_limites_articulos(self) -> list[dict]: ...
+    def desactivar_politica_prestamo(self, identificador: int): ...
+    def eliminar_politica_prestamo(self, identificador: int): ...
+    def consultar_configuracion_general(self, bloquear=False) -> dict | None: ...
+    def guardar_politica_prestamo(self, politica: PoliticaPrestamo): ...
+    def guardar_configuracion_general(self, datos: dict): ...
+    def guardar_limite_articulos(self, tipo: str, cantidad: int): ...

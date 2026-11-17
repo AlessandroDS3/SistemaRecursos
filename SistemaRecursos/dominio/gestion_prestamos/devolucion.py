@@ -1,26 +1,25 @@
-from dominio.gestion_personas_usuarios.validacion_persona import validar_dni
 from dataclasses import dataclass
-from datetime import datetime
-from dominio.gestion_recursos.validacion_recurso import entero, texto
-from dominio.gestion_recursos.bien_material import ESTADOS_RECEPCION
+from dominio.compartido.validacion import Conflicto, entero, texto
 
 
 @dataclass(kw_only=True)
 class Devolucion:
-    id_detalle_ref: int
-    dni_encargado: str
-    estado_devolucion: str = "DISPONIBLE"
-    observaciones: str = ""
-    fecha: datetime | None = None
-    id_devolucion: int | None = None
+    id_detalle: int
+    condicion: str
+    observacion: str = ''
 
     def __post_init__(self):
-        self.id_detalle_ref = entero(self.id_detalle_ref, "Detalle del préstamo")
-        self.dni_encargado = validar_dni(self.dni_encargado)
-        if self.estado_devolucion not in ESTADOS_RECEPCION:
-            raise ValueError(
-                "La recepción solo permite disponible, dañado o mantenimiento. Una pérdida sigue pendiente de devolución."
-            )
-        self.observaciones = texto(self.observaciones, "Observaciones de devolución", 255)
-        if self.estado_devolucion != "DISPONIBLE" and not self.observaciones:
-            raise ValueError("Describe la condición del bien dañado o en mantenimiento.")
+        self.id_detalle = entero(self.id_detalle, 'Detalle')
+        if self.condicion not in ('BUENO', 'DANADO'):
+            raise ValueError('La recepción física debe indicar BUENO o DANADO.')
+        self.observacion = texto(self.observacion, 'Observación', 255, self.condicion == 'DANADO')
+
+    @property
+    def estado_bien(self):
+        return 'DISPONIBLE' if self.condicion == 'BUENO' else 'DANADO'
+
+    def validar(self, detalle):
+        if detalle['fecha_devolucion'] is not None:
+            raise Conflicto('El bien ya fue recibido.')
+        if detalle['estado_bien'] not in ('PRESTADO', 'PERDIDO'):
+            raise Conflicto('El inventario no corresponde a una entrega pendiente.')

@@ -1,90 +1,100 @@
-from __future__ import annotations
-from dominio.gestion_control.politica_prestamo import PoliticaPrestamo
-from dominio.gestion_control.politica_prestamo import LimiteArticulosPrestamo
-from dominio.gestion_recursos.i_repositorio_recurso import IRepositorioRecurso
-from dominio.gestion_control.i_repositorio_politica_prestamo import IRepositorioPoliticaPrestamo
-from dominio.gestion_control.fabrica_politica_prestamo import FabricaPoliticaPrestamo
-from servicios.validacion_identificadores import identificador
-from dominio.gestion_control.tipo_persona import TipoPersona
-from dominio.gestion_recursos.validacion_recurso import entero
-from dominio.gestion_control.horario_atencion import HorarioAtencion
-from dominio.gestion_control.politica_vencimiento_reserva import PoliticaVencimientoReserva
+from dataclasses import asdict
+from dominio.compartido.validacion import Conflicto, NoEncontrado
+from dominio.compartido.validacion import comprobar_version, entero, version
+from dominio.gestion_personas_usuarios.acceso import exigir_permiso
+from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
+from dominio.gestion_control.politica_prestamo import (
+    ConfiguracionReservas,
+    HorarioAtencion,
+    IRepositorioPoliticaPrestamo,
+    PoliticaPrestamo,
+)
 
 
 class ServicioAplicacionPoliticaPrestamo:
-    def __init__(self, repositorio_politicas: IRepositorioPoliticaPrestamo, repositorio_recursos: IRepositorioRecurso):
-        self.repositorio: IRepositorioPoliticaPrestamo = repositorio_politicas
-        self.recursos: IRepositorioRecurso = repositorio_recursos
+    def __init__(self, repositorio: IRepositorioPoliticaPrestamo):
+        self.repositorio = repositorio
 
-    def registrar_politica(self, datos) -> PoliticaPrestamo:
-        datos = dict(datos)
-        datos.pop("id_politica", None)
-        politica = FabricaPoliticaPrestamo.construir(datos)
-        self._validar_categoria(politica.id_categoria_ref)
-        return self.repositorio.registrar_politica(politica)
+    def consultar_politica_prestamo(self, identificador):
+        fila = self.repositorio.consultar_politica_prestamo(entero(identificador))
+        if fila is None:
+            raise NoEncontrado('Política inexistente.')
+        return fila, version(fila)
 
-    def _validar_categoria(self, id_categoria):
-        if not self.recursos.consultar_categoria(id_categoria):
-            raise ValueError("Selecciona una categoría existente.")
+    def consultar_politicas_prestamo(self):
+        return [
+            dict(fila, version=version({k: v for k, v in fila.items() if k != 'categoria'}))
+            for fila in self.repositorio.consultar_politicas_prestamo()
+        ]
 
-    def consultar_categorias(self):
-        return self.recursos.consultar_categorias()
+    def consultar_configuracion_general(self):
+        return self.repositorio.consultar_configuracion_general() or {}
 
-    def consultar_horario_atencion(self) -> HorarioAtencion:
-        return self.repositorio.consultar_horario_atencion()
-
-    def actualizar_horario_atencion(self, datos) -> HorarioAtencion:
-        horario = HorarioAtencion(hora_apertura=datos.get('hora_apertura'), hora_cierre=datos.get('hora_cierre'))
-        return self.repositorio.actualizar_horario_atencion(horario)
-
-    def consultar_politica_vencimiento_reserva(self) -> PoliticaVencimientoReserva:
-        return self.repositorio.consultar_politica_vencimiento_reserva()
-
-    def actualizar_politica_vencimiento_reserva(self, datos) -> PoliticaVencimientoReserva:
-        politica = PoliticaVencimientoReserva(
-            plazo_espera=datos.get("plazo_espera"), unidad_espera=datos.get("unidad_espera"),
-            plazo_retiro=datos.get("plazo_retiro"), unidad_retiro=datos.get("unidad_retiro"),
-        )
-        return self.repositorio.actualizar_politica_vencimiento_reserva(politica)
-
-    def consultar_politica(self, id_politica) -> PoliticaPrestamo:
-        politica = self.repositorio.consultar_politica(identificador(id_politica))
-        if not politica:
-            raise LookupError("No se encontró la política de préstamo.")
-        return politica
-
-    def consultar_politicas(self) -> list[PoliticaPrestamo]:
-        return self.repositorio.consultar_politicas()
-
-    def actualizar_politica(self, datos) -> PoliticaPrestamo:
-        actual = self.consultar_politica(datos.get("id_politica"))
-        cambios = dict(datos)
-        cambios.update(
-            id_politica=actual.id_politica,
-            tipo_persona=actual.tipo_persona.value,
-            id_categoria_ref=actual.id_categoria_ref,
-        )
-        return self.repositorio.actualizar_politica(FabricaPoliticaPrestamo.construir(cambios))
-
-    def eliminar_politica(self, id_politica) -> None:
-        self.repositorio.eliminar_politica(self.consultar_politica(id_politica).id_politica)
-
-    def validar_prestamo(self, tipo_persona, id_categoria_ref, salida=False):
-        politica = self.repositorio.consultar_politica_aplicable(tipo_persona, id_categoria_ref)
-        if not politica:
-            raise ValueError(
-                f"No existe una política para {tipo_persona} en esta categoría. El administrador debe registrarla antes de la entrega."
-            )
-        if salida and not politica.permite_salida:
-            raise ValueError(
-                f"La política de esta categoría para {tipo_persona} no permite salida de la institución."
-            )
-        return politica
-
-    def consultar_limites_articulos(self) -> list[LimiteArticulosPrestamo]:
+    def consultar_limites_articulos(self):
         return self.repositorio.consultar_limites_articulos()
 
-    def actualizar_limites_articulos(self, datos) -> None:
-        limites = [LimiteArticulosPrestamo(tipo_persona=tipo,
-            maximo_articulos=entero(datos.get('maximo_' + tipo.value), 'Máximo para ' + tipo.value.lower())) for tipo in TipoPersona]
-        self.repositorio.actualizar_limites_articulos(limites)
+    def guardar_politica_prestamo(self, datos, actor, identificador=None):
+        identificador = entero(identificador) if identificador is not None else None
+        politica = PoliticaPrestamo.desde_datos(datos)
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'POLITICAS_GESTIONAR')
+            if identificador is not None:
+                anterior = operacion.consultar_politica_prestamo(identificador, bloquear=True)
+                if anterior is None:
+                    raise NoEncontrado('Política inexistente.')
+                if not anterior['vigente']:
+                    raise Conflicto('La política ya no está vigente.')
+                comprobar_version(datos.get('version'), version(anterior))
+                vigente = PoliticaPrestamo.desde_datos(anterior)
+                if all(
+                    valor == getattr(vigente, campo)
+                    for campo, valor in asdict(politica).items()
+                    if campo != 'id_politica'
+                ):
+                    return identificador
+                operacion.desactivar_politica_prestamo(anterior['id_politica'])
+            return operacion.guardar_politica_prestamo(politica)
+
+    def guardar_configuracion_general(self, datos, actor):
+        requeridos = ('hora_apertura', 'hora_cierre', *ConfiguracionReservas.__dataclass_fields__)
+        if any(campo not in datos for campo in requeridos):
+            raise ValueError('Envía el horario y los cuatro campos de vencimiento juntos.')
+        horario = HorarioAtencion(
+            hora_apertura=datos.get('hora_apertura'), hora_cierre=datos.get('hora_cierre')
+        )
+        plazos = ConfiguracionReservas(
+            **{k: datos[k] for k in ConfiguracionReservas.__dataclass_fields__ if k in datos}
+        )
+        valores = {
+            "hora_apertura": horario.hora_apertura,
+            "hora_cierre": horario.hora_cierre,
+            "plazo_espera": plazos.plazo_espera,
+            "unidad_espera": plazos.unidad_espera,
+            "plazo_retiro": plazos.plazo_retiro,
+            "unidad_retiro": plazos.unidad_retiro,
+        }
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'POLITICAS_GESTIONAR')
+            operacion.guardar_configuracion_general(valores)
+
+    def guardar_limite_articulos(self, tipo, cantidad, actor):
+        if tipo not in TIPOS_PERSONA:
+            raise ValueError('Tipo de persona inválido.')
+        cantidad = entero(cantidad, 'Máximo total de bienes')
+        with self.repositorio.transaccion() as operacion:
+            cuenta = exigir_permiso(
+                operacion.consultar_cuenta_actor(entero(actor)), 'POLITICAS_GESTIONAR'
+            )
+            if cuenta['rol'] != 'ADMINISTRADOR':
+                raise PermissionError(
+                    'Solo el administrador modifica el límite total de artículos.'
+                )
+            operacion.guardar_limite_articulos(tipo, cantidad)
+
+    def eliminar_politica_prestamo(self, identificador, actor):
+        with self.repositorio.transaccion() as operacion:
+            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'POLITICAS_GESTIONAR')
+            identificador = entero(identificador)
+            if operacion.consultar_politica_prestamo(identificador, bloquear=True) is None:
+                raise NoEncontrado('Política inexistente.')
+            operacion.eliminar_politica_prestamo(identificador)
