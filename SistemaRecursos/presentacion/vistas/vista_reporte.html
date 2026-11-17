@@ -86,7 +86,7 @@
       {{ indicador(campo_resumen.etiqueta,resumen[campo_resumen.nombre]|valor_reporte(campo_resumen.formato)) }}
     {% endfor %}
   </section>
-  <p class="suave">Mostrando {{ filas|length }} de {{ resumen.detalles }} filas. Los indicadores y la descarga incluyen todas las páginas con estos filtros.</p>
+  <p class="suave">Mostrando {{ filas|length }} filas. La tabla, los indicadores y la descarga corresponden a los filtros seleccionados.</p>
   {% set columnas = reporte.columnas|selectattr('en_tabla')|list %}
   <section class="panel panel-tabla">
     <div class="tabla">
@@ -155,11 +155,4 @@
       </table>
     </div>
   </section>
-  <div class="acciones paginacion">
-    <small>Página {{ filtro.pagina }} de {{ paginas }}</small>
-    {% for pagina, etiqueta in ((filtro.pagina-1,'Anterior'),(filtro.pagina+1,'Siguiente')) if pagina>=1 and pagina<=paginas %}
-      <a class="boton secundario"
-         href="{{ url_for('reportes.consultar_reportes',pagina=pagina,**parametros) }}">{{ etiqueta }}</a>
-    {% endfor %}
-  </div>
 {% endblock %}

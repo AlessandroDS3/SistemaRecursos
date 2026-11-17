@@ -150,7 +150,7 @@ Las devoluciones son una operación del préstamo: `ControladorPrestamo.registra
 - **Devolución y pérdida:** se pueden recibir bienes parcialmente. Un daño requiere observación. La pérdida deja el detalle pendiente y el inventario en `PERDIDO`; recuperarlo se registra como devolución `BUENO` o `DANADO`.
 - **Ampliación:** la petición es presencial. El personal añade horas o días a un detalle pendiente y no vencido. Cada ampliación admite como máximo otro plazo de la política aplicada y respeta el cierre cuando corresponde. La fecha anterior evita aplicar dos veces un formulario. Se actualizan detalle e historial juntos.
 - **Sanciones:** el retraso genera una incidencia y una sanción por detalle; afecta al responsable y a todos los integrantes. Una sanción levantada no se reactiva automáticamente. Daño y pérdida mantienen el registro de inventario e historial; no se añadieron reglas nuevas de sanción para esos casos.
-- **Reportes:** consultas sin escrituras, filtros por fechas de Lima, estado, modalidad, persona, integrantes, recurso o inventario. Cada bien ocupa una fila aunque el préstamo sea grupal. La pantalla pagina de 50 en 50 y el CSV incluye todos los resultados, usa UTF-8 con BOM y protege las celdas que podrían interpretarse como fórmulas.
+- **Reportes:** consultas sin escrituras, filtros por fechas de Lima, estado, modalidad, persona, integrantes, recurso o inventario. Cada bien ocupa una fila aunque el préstamo sea grupal. La pantalla y el CSV incluyen todos los resultados filtrados, usa UTF-8 con BOM y protege las celdas que podrían interpretarse como fórmulas.
 
 Validación del flujo de reserva futura (16/11/2026): **143 pruebas correctas, sin omisiones**, sobre MySQL temporal aislado. Se comprueban el rechazo de fechas ausentes o no futuras y de solicitudes inmediatas, la titularidad de la reserva, la atención al llegar la fecha y la compatibilidad con solicitudes anteriores. Registro local: `datos_locales/verificacion_reserva_futura.log`.
 
@@ -215,7 +215,7 @@ La reorganización de presentación toma como referencia la copia local anterior
 
 ## Reportes disponibles
 
-El commit `af9767d` conserva la presentación anterior a esta ampliación. `/reportes` ofrece un selector con ocho reportes. Al cambiar de reporte se reinician los filtros; al consultar, paginar o descargar CSV se conservan los filtros activos.
+El commit `af9767d` conserva la presentación anterior a esta ampliación. `/reportes` ofrece un selector con siete reportes. Al cambiar de reporte se reinician los filtros; al consultar o descargar CSV se conservan los filtros activos.
 
 | Reporte | Fechas y filtros específicos | Contenido |
 | --- | --- | --- |
@@ -223,7 +223,6 @@ El commit `af9767d` conserva la presentación anterior a esta ampliación. `/rep
 | Devoluciones y cumplimiento | Fecha de devolución, puntualidad, estado del préstamo, modalidad y tipo de solicitante | Condición, cumplimiento y retraso de cada devolución; porcentaje puntual y retraso promedio de las tardías. |
 | Bienes atrasados | Fecha límite, modalidad y tipo de solicitante | Exclusivamente bienes pendientes vencidos, integrantes del grupo y tiempo de retraso al consultar. |
 | Inventario | Estado actual y ubicación; sin filtro de fechas | Bienes, categoría, marca, modelo, serie, ubicación y fecha de adquisición. |
-| Uso de recursos | Fecha de entrega, modalidad y tipo de solicitante | Cantidades agrupadas por mes de Lima y recurso. El total de préstamos distintos no suma los grupos: un préstamo puede contener varios recursos. |
 | Solicitudes y reservas | Fecha de solicitud, estado, tipo de gestión y tipo de solicitante | Solicitudes del período con su estado actual, recurso, retiro solicitado y vencimiento. |
 | Sanciones | Fecha de sanción, estado, modalidad y tipo de solicitante | Motivo, responsable y grupo, bien y levantamiento. La fecha de una sanción automática corresponde al vencimiento que la originó. |
 | Daños y pérdidas | Fecha del evento y tipo de evento | Historial de bienes dañados o perdidos, incluso si fueron recuperados; operador registrador y observación. El registrador no se presenta como causante del daño. |
@@ -232,7 +231,7 @@ Todos permiten filtrar por categoría y buscar texto. La búsqueda se adapta a l
 
 `dominio/gestion_control/catalogo_reportes.py` centraliza títulos, columnas de salida, filtros admitidos, estados e indicadores. `reporte.py` valida y normaliza los filtros. `repositorio_reporte_sql.py` comparte las condiciones y las consultas de movimientos, y mantiene una función por consulta específica. `servicio_reporte.py` reutiliza la misma consulta para pantalla y CSV. `vista_reporte.html` dibuja los filtros, indicadores y columnas definidos en el catálogo; el controlador reutiliza el servicio de recursos para consultar las categorías.
 
-La consulta y la exportación requieren `REPORTES_CONSULTAR` y solo leen las tablas existentes. No se crean tablas ni se modifican operaciones de préstamos, reservas o sanciones. La pantalla pagina de 50 en 50; los indicadores abarcan todo el resultado filtrado y el CSV incluye todas sus páginas. El CSV conserva UTF-8 con BOM, separador `;`, fechas de Lima y protección contra fórmulas. Los campos de retraso se exportan en minutos y se muestran en pantalla como días, horas y minutos.
+La consulta y la exportación requieren `REPORTES_CONSULTAR` y solo leen las tablas existentes. No se crean tablas ni se modifican operaciones de préstamos, reservas o sanciones. La pantalla muestra todos los resultados filtrados; los indicadores y el CSV abarcan ese mismo conjunto de datos. El CSV conserva UTF-8 con BOM, separador `;`, fechas de Lima y protección contra fórmulas. Los campos de retraso se exportan en minutos y se muestran en pantalla como días, horas y minutos.
 
 Validación de esta ampliación (15/11/2026): **104 pruebas correctas, sin omisiones, en 123,001 segundos**, sobre MySQL aislado. Incluye 13 pruebas nuevas de filtros, puntualidad en el límite exacto, atrasos, grupos, agregación mensual en Lima, paginación, exportación, permisos e historial de bienes recuperados. También se revisaron los ocho reportes y sus CSV en Chrome de escritorio y móvil.
 

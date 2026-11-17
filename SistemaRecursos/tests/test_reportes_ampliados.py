@@ -29,6 +29,7 @@ class FiltrosReportes(unittest.TestCase):
         self.assertEqual(filtro.parametros, {'tipo': 'inventario', 'estado': 'DANADO'})
         for datos in (
             {'tipo': 'otro'},
+            {'tipo': 'uso_recursos'},
             {'id_categoria': '-1'},
             {'tipo': 'devoluciones', 'cumplimiento': 'OTRO'},
         ):
@@ -137,30 +138,6 @@ class ReportesAmpliados(CasoMySQL):
         self.assertEqual(resultado['resumen']['danados'], 1)
         self.assertEqual(resultado['filas'][0]['codigo_inventario'], 'OTRO-1')
 
-    def test_uso_agrupa_por_mes_de_lima_sin_multiplicar_integrantes_ni_totales(self):
-        self.ejecutar('UPDATE bien_material SET id_recurso=2 WHERE id_bien=3')
-        prestamo = self.prestar(
-            [2, 3], tipo_prestamo='GRUPAL', participantes=['99000001', '99000002']
-        )
-        self.ejecutar(
-            "UPDATE prestamo SET fecha_entrega='2026-12-01 04:30:00' WHERE id_prestamo=%s",
-            (prestamo,),
-        )
-        resultado = self.reporte(
-            'uso_recursos',
-            desde='2026-11-30',
-            hasta='2026-11-30',
-            q='99000001',
-            modalidad='GRUPAL',
-            tipo_persona='ESTUDIANTE',
-        )
-        self.assertEqual(resultado['resumen']['detalles'], 2)
-        self.assertEqual(resultado['resumen']['prestamos'], 1)
-        self.assertEqual(resultado['resumen']['bienes_prestados'], 2)
-        self.assertEqual(resultado['resumen']['recursos'], 2)
-        self.assertTrue(all(f['periodo'] == '2026-11' for f in resultado['filas']))
-        self.assertEqual(self.reporte('uso_recursos', desde='2026-12-01')['resumen']['detalles'], 0)
-
     def test_estado_filtra_el_prestamo_completo_y_no_la_situacion_de_cada_bien(self):
         prestamo = self.prestar([2, 3])
         self.ejecutar(
@@ -252,7 +229,7 @@ class ReportesAmpliados(CasoMySQL):
         self.assertTrue(all(f['registrador'] == 'Administrador Prueba' for f in resultado['filas']))
         self.assertEqual(self.reporte('danos_perdidas', estado='PERDIDO')['resumen']['detalles'], 1)
 
-    def test_pantallas_y_csv_de_los_ocho_reportes_son_solo_lectura(self):
+    def test_pantallas_y_csv_de_los_siete_reportes_son_solo_lectura(self):
         self.prestar()
         self.login()
         antes = self.fila('SELECT COUNT(*) FROM historial_estado')
@@ -275,18 +252,17 @@ class ReportesAmpliados(CasoMySQL):
         self.assertEqual(self.fila('SELECT COUNT(*) FROM historial_estado'), antes)
         pagina = self.cliente.get('/reportes?tipo=inventario').get_data(as_text=True)
         selector = re.search(r'<select name="tipo"[^>]*>(.*?)</select>', pagina, re.S).group(1)
-        self.assertEqual(len(re.findall('<option ', selector)), 8)
+        self.assertEqual(len(re.findall('<option ', selector)), 7)
 
-    def test_exportacion_conserva_filtros_y_exporta_inventario_completo(self):
+    def test_pantalla_y_exportacion_conservan_filtros_y_muestran_inventario_completo(self):
         for numero in range(52):
             self.ejecutar(
                 "INSERT INTO bien_material(id_recurso,codigo_inventario,ubicacion) VALUES(2,%s,'Sala B')",
                 (f'PAG-{numero:03}',),
             )
         resultado = self.reporte('inventario', ubicacion='Sala B', id_categoria='1', pagina='999')
-        self.assertEqual(resultado['paginas'], 2)
-        self.assertEqual(resultado['filtro'].pagina, 2)
-        self.assertEqual(len(resultado['filas']), 2)
+        self.assertEqual(len(resultado['filas']), 52)
+        self.assertNotIn('paginas', resultado)
         texto, _ = self.servicios['reportes'].exportar_reportes_csv(
             dict(tipo='inventario', ubicacion='Sala B', id_categoria='1', pagina='2')
         )
@@ -297,33 +273,13 @@ class ReportesAmpliados(CasoMySQL):
         pagina = self.cliente.get(
             '/reportes?tipo=inventario&ubicacion=Sala+B&id_categoria=1'
         ).get_data(as_text=True)
+        self.assertIn('PAG-000', pagina)
+        self.assertIn('PAG-051', pagina)
+        self.assertNotIn('acciones paginacion', pagina)
         enlaces = [urlsplit(unescape(e)) for e in re.findall(r'href="([^"]+)"', pagina)]
         exportacion = next(e for e in enlaces if e.path == '/reportes/exportar.csv')
         self.assertEqual(parse_qs(exportacion.query)['ubicacion'], ['Sala B'])
         self.assertEqual(parse_qs(exportacion.query)['id_categoria'], ['1'])
-
-    def test_uso_pagina_grupos_mensuales_y_csv_incluye_todos(self):
-        for mes in range(52):
-            self.ejecutar(
-                """INSERT INTO prestamo(dni_persona,dni_encargado,fecha_solicitud,fecha_entrega,estado)
-                VALUES('02167885','98000002',UTC_TIMESTAMP(),DATE_SUB('2026-10-15 15:00:00',INTERVAL %s MONTH),'DEVUELTO')""",
-                (mes,),
-            )
-            self.ejecutar(
-                """INSERT INTO detalle_prestamo(id_prestamo,id_bien,id_politica,fecha_limite_devolucion,
-                fecha_devolucion,dni_encargado_devolucion,condicion_devolucion)
-                VALUES(LAST_INSERT_ID(),2,24,UTC_TIMESTAMP(),UTC_TIMESTAMP(),'98000002','BUENO')"""
-            )
-        resultado = self.reporte('uso_recursos', pagina='999')
-        self.assertEqual(resultado['resumen']['detalles'], 52)
-        self.assertEqual(resultado['paginas'], 2)
-        self.assertEqual(len(resultado['filas']), 2)
-        texto, _ = self.servicios['reportes'].exportar_reportes_csv(
-            dict(tipo='uso_recursos', pagina='2')
-        )
-        self.assertEqual(
-            len(list(csv.DictReader(StringIO(texto.lstrip('\ufeff')), delimiter=';'))), 52
-        )
 
     def test_reportes_rechazan_usuario_sin_permiso_y_filtros_invalidos(self):
         self.login('usuario1', 'UsuarioPrueba2026!')
@@ -337,11 +293,13 @@ class ReportesAmpliados(CasoMySQL):
         self.login()
         for filtros in (
             {'tipo': 'ajeno'},
+            {'tipo': 'uso_recursos'},
             {'tipo': 'sanciones', 'estado': 'VENCIDO'},
             {'tipo': 'inventario', 'id_categoria': '1 OR 1=1'},
             {'tipo': 'reservas', 'desde': 'mal'},
         ):
-            with self.subTest(filtros=filtros):
-                self.assertEqual(
-                    self.cliente.get('/reportes', query_string=filtros).status_code, 400
-                )
+            for ruta in ('/reportes', '/reportes/exportar.csv'):
+                with self.subTest(filtros=filtros, ruta=ruta):
+                    self.assertEqual(
+                        self.cliente.get(ruta, query_string=filtros).status_code, 400
+                    )

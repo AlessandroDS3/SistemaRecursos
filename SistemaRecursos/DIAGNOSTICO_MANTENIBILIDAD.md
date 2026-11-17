@@ -7,8 +7,8 @@ Fecha: 16 de noviembre de 2026.
 La revisión posterior de capas también está atendida: ampliaciones devuelve
 `ContextoAmpliacion` con campos nombrados y el servicio decide los errores de
 ausencia; los formatos y la visibilidad HTML están en `presentacion/formatos_reportes.py`.
-El cálculo de páginas se comparte en `paginas_reporte`, la lectura de filtros usa
-`FiltroReporte.desde_datos` y reportes reutiliza `TABLAS_TIPO` de persistencia.
+La pantalla de reportes muestra todos los resultados filtrados, la lectura de filtros
+usa `FiltroReporte.desde_datos` y reportes reutiliza `TABLAS_TIPO` de persistencia.
 Los ocho reportes conservan el formato, el orden y la visibilidad anteriores.
 Esta revisión pasó la suite completa de 139 pruebas, una comprobación adicional de
 20 pruebas de reportes y la revisión de tipos de ocho módulos.

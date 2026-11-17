@@ -3,7 +3,7 @@
 Abre [reportes_consultas_aplicacion.sql](reportes_consultas_aplicacion.sql).
 Contiene las consultas para comprobar los reportes sin filtros y sin paginación,
 como al descargar todo un reporte.
-Las consultas 01-16 corresponden al SQL actual del repositorio, incluidos los JOIN
+Las consultas 01-14 corresponden al SQL actual del repositorio, incluidos los JOIN
 del resumen 02. Los parámetros de filtros no están incluidos en estos ejemplos.
 Se eliminó `reportes_csv_mysql.sql`: imitaba en SQL pasos que el programa hace en Python.
 
@@ -15,7 +15,7 @@ Se eliminó `reportes_csv_mysql.sql`: imitaba en SQL pasos que el programa hace 
 3. Selecciona y ejecuta únicamente la consulta de **filas** que corresponde al reporte.
    No agregues `LIMIT`: la descarga incluye todas las filas.
 4. Compara los identificadores, los bienes, las cantidades y los demás datos con el CSV.
-   Para préstamos, devoluciones y sanciones, ejecuta también la consulta 17
+   Para préstamos, devoluciones y sanciones, ejecuta también la consulta 15
    con los `id_prestamo` que salieron para comprobar sus integrantes.
 
 | Reporte | Filas para comparar con el CSV | Indicadores de la pantalla |
@@ -24,15 +24,14 @@ Se eliminó `reportes_csv_mysql.sql`: imitaba en SQL pasos que el programa hace 
 | Devoluciones y cumplimiento | 03 | 04 |
 | Bienes atrasados | 05 | 06 |
 | Inventario | 07 | 08 |
-| Uso de recursos | 09 | 10 |
-| Solicitudes y reservas | 11 | 12 |
-| Sanciones | 13 | 14 |
-| Daños y pérdidas | 15 | 16 |
+| Solicitudes y reservas | 09 | 10 |
+| Sanciones | 11 | 12 |
+| Daños y pérdidas | 13 | 14 |
 
 Los indicadores son otro resultado: no son las filas que se exportan. La pantalla
 consulta filas y resumen; la descarga consulta solo filas y, si hay préstamos
-grupales, sus integrantes. No consulta indicadores ni calcula páginas.
-Las consultas 18-20 documentan la cuenta, sus permisos y las categorías del selector;
+grupales, sus integrantes. No consulta indicadores.
+Las consultas 16-18 documentan la cuenta, sus permisos y las categorías del selector;
 no generan las filas del reporte.
 
 ## Qué hace Python después del SELECT
@@ -43,10 +42,10 @@ son idénticas en todas sus columnas ni en su representación:
 - Las fechas y horas de la base están en UTC. Python las convierte a Lima (UTC−5).
   Por ejemplo, `2026-11-16 15:00:00` en MySQL corresponde a `2026-11-16 10:00:00` en el CSV.
   La fecha de adquisición del inventario es un día, sin conversión de hora.
-- La consulta 17 devuelve una fila por integrante. Python reúne esos nombres como
+- La consulta 15 devuelve una fila por integrante. Python reúne esos nombres como
   `Nombre (DNI); Nombre (DNI)` en la columna `integrantes` de cada préstamo.
 - Cada consulta selecciona las columnas de su propio reporte. Préstamos, devoluciones
-  y sanciones agregan `integrantes` al final del CSV con el resultado de la consulta 17,
+  y sanciones agregan `integrantes` al final del CSV con el resultado de la consulta 15,
   únicamente para los préstamos grupales; en individuales la celda queda vacía.
   Atrasados devuelve únicamente las ocho columnas de su consulta, sin integrantes.
 - Python escribe los `NULL` como celdas vacías y protege los valores que podrían
@@ -59,27 +58,27 @@ SELECT ya devuelve exactamente todas sus celdas no describiría el programa actu
 ## Si comparas un CSV con filtros
 
 Este archivo muestra el caso **sin filtros**. Cuando eliges filtros, el repositorio
-agrega condiciones `AND` al `WHERE` y pasa los valores como parámetros `%s`.
+construye el `WHERE`, une sus condiciones con `AND` y pasa los valores como parámetros `%s`.
 No ejecuta condiciones opcionales con `@variable IS NULL OR ...`.
 
 Ejemplo real: en inventario, al seleccionar únicamente la categoría 1, el final de
 la consulta 07 pasa a ser:
 
 ```sql
-WHERE 1=1 AND r.id_categoria=1
+WHERE r.id_categoria=1
 ORDER BY r.nombre,b.codigo_inventario,b.id_bien;
 ```
 
-Para esa misma selección, agrega `AND r.id_categoria=1` al `WHERE` del resumen 08.
+Para esa misma selección, agrega `WHERE r.id_categoria=1` al resumen 08.
 En la aplicación se envía `r.id_categoria=%s` con el parámetro `1`; en MySQL lo
 escribes directamente. No cambies sus `JOIN`, sus columnas ni su agrupación.
 
 Las fechas de los filtros se introducen en hora de Lima y se convierten a UTC antes
 de llegar al repositorio. Por ejemplo, del 1 al 30 de noviembre de 2026, ambos
-incluidos, en préstamos agrega estas condiciones antes de `ORDER BY`:
+incluidos, en préstamos agrega este `WHERE` antes de `ORDER BY`:
 
 ```sql
-AND p.fecha_entrega >= '2026-11-01 05:00:00'
+WHERE p.fecha_entrega >= '2026-11-01 05:00:00'
 AND p.fecha_entrega <  '2026-12-01 05:00:00'
 ```
 

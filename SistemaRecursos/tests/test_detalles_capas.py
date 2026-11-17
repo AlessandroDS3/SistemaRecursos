@@ -2,18 +2,16 @@ import unittest
 from caso_mysql import CasoMySQL
 from dominio.compartido.validacion import NoEncontrado
 from dominio.gestion_control.catalogo_reportes import REPORTES
-from dominio.gestion_control.reporte import FiltroReporte, paginas_reporte
+from dominio.gestion_control.reporte import FiltroReporte
 from presentacion.formatos_reportes import presentar_reporte
 
 
 class ContratosReportes(unittest.TestCase):
-    def test_paginacion_en_los_limites_y_filtro_desde_formulario(self):
-        for total, paginas in ((0, 1), (1, 1), (50, 1), (51, 2), (100, 2), (101, 3)):
-            self.assertEqual(paginas_reporte(total), paginas)
+    def test_filtro_desde_formulario_descarta_campos_ajenos(self):
         filtro = FiltroReporte.desde_datos(
             {'tipo': 'inventario', 'pagina': '2', 'csrf_token': 'ajeno'}
         )
-        self.assertEqual(filtro.pagina, 2)
+        self.assertFalse(hasattr(filtro, 'pagina'))
         self.assertEqual(filtro.tipo, 'inventario')
 
     def test_presentacion_no_modifica_las_columnas_que_exporta_el_dominio(self):

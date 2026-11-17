@@ -58,7 +58,7 @@ class Reportes(CasoMySQL):
         self.assertEqual(resultado['filas'][0]['id_prestamo'], prestamo)
         self.assertEqual(resultado['filas'][0]['codigo_inventario'], 'INV-2')
 
-    def test_exportacion_incluye_todas_las_paginas(self):
+    def test_pantalla_y_exportacion_incluyen_todos_los_resultados(self):
         self.prestar()
         self.ejecutar(
             '''INSERT INTO detalle_prestamo(id_prestamo,id_bien,id_politica,fecha_limite_devolucion)
@@ -80,7 +80,7 @@ class Reportes(CasoMySQL):
                     (identificador, bien),
                 )
         resultado = self.servicios['reportes'].consultar_reportes({})
-        self.assertEqual(len(resultado['filas']), 50)
+        self.assertEqual(len(resultado['filas']), 54)
         self.assertEqual(resultado['resumen']['detalles'], 54)
         texto, _ = self.servicios['reportes'].exportar_reportes_csv({})
         self.assertEqual(len(list(csv.reader(StringIO(texto), delimiter=';'))), 55)

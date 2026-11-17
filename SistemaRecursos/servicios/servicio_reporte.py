@@ -3,7 +3,6 @@ from io import StringIO
 from datetime import datetime, timezone
 from dominio.compartido.validacion import LIMA
 from dominio.gestion_control.reporte import (
-    paginas_reporte,
     FiltroReporte,
     IRepositorioReporte,
     celda_csv,
@@ -14,16 +13,15 @@ class ServicioAplicacionReporte:
     def __init__(self, repositorio: IRepositorioReporte):
         self.repositorio = repositorio
 
-    def consultar_reportes(self, datos, paginar=True):
+    def consultar_reportes(self, datos):
         filtro = FiltroReporte.desde_datos(datos)
-        filas, resumen = self.repositorio.consultar_reportes(filtro, paginar)
+        filas, resumen = self.repositorio.consultar_reportes(filtro)
         return dict(
             filtro=filtro,
             reporte=filtro.definicion,
             parametros=filtro.parametros,
             filas=filas,
             resumen=resumen,
-            paginas=paginas_reporte(resumen['detalles']),
         )
 
     def exportar_reportes_csv(self, datos):

@@ -149,26 +149,6 @@ REPORTES = {
             CampoReporte('perdidos', 'Perdidos'),
         ),
     ),
-    'uso_recursos': DefinicionReporte(
-        titulo='Uso de recursos',
-        descripcion='Entregas agrupadas por mes de Lima y recurso. Un préstamo con varios recursos puede aparecer en varios grupos; el total de préstamos cuenta cada préstamo una vez.',
-        fecha='entrega',
-        filtros=FILTROS_PRESTAMO,
-        columnas=(
-            CampoReporte('periodo', 'Mes'),
-            CampoReporte('recurso', 'Recurso'),
-            CampoReporte('categoria', 'Categoría'),
-            CampoReporte('prestamos', 'Préstamos'),
-            CampoReporte('bienes_prestados', 'Bienes entregados'),
-            CampoReporte('solicitantes', 'Responsables distintos'),
-        ),
-        indicadores=(
-            CampoReporte('prestamos', 'Préstamos distintos'),
-            CampoReporte('bienes_prestados', 'Bienes entregados'),
-            CampoReporte('recursos', 'Recursos utilizados'),
-            CampoReporte('solicitantes', 'Responsables distintos'),
-        ),
-    ),
     'reservas': DefinicionReporte(
         titulo='Solicitudes y reservas',
         descripcion='Solicitudes registradas en el período y su estado actual.',

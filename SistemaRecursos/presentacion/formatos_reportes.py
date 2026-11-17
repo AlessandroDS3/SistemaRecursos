@@ -34,9 +34,6 @@ FORMATOS = {
     'retraso_minutos': 'duracion',
     'id_sancion': 'numero',
     'id_historial_estado': 'numero',
-    'prestamos': 'numero',
-    'bienes_prestados': 'numero',
-    'solicitantes': 'numero',
 }
 FORMATOS_INDICADORES = {
     'porcentaje_puntual': 'porcentaje',
