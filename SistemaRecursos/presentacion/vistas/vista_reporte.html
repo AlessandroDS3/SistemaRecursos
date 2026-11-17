@@ -77,7 +77,7 @@
       </label>
     </div>
     {% if reporte.fecha %}
-      <p class="suave">Las fechas corresponden a la {{ reporte.fecha }}, en horario de Lima, e incluyen ambos días.</p>
+      <p class="suave">Fechas de {{ reporte.fecha }}. Se incluyen ambos días.</p>
     {% endif %}
     <div class="acciones">
       <button>Consultar reporte</button>
@@ -90,7 +90,7 @@
       {{ indicador(campo_resumen.etiqueta,resumen[campo_resumen.nombre]|valor_reporte(campo_resumen.formato)) }}
     {% endfor %}
   </section>
-  <p class="suave">Mostrando {{ filas|length }} filas. La tabla, los indicadores y la descarga corresponden a los filtros seleccionados.</p>
+  <p class="suave">{{ filas|length }} {{ 'registro' if filas|length == 1 else 'registros' }}.</p>
   {% set columnas = reporte.columnas|selectattr('en_tabla')|list %}
   <section class="panel panel-tabla">
     <div class="tabla">
@@ -152,7 +152,7 @@
             </tr>
           {% else %}
             <tr>
-              <td colspan="{{ columnas|length }}">No hay resultados para estos filtros.</td>
+              <td colspan="{{ columnas|length }}">No se encontraron registros.</td>
             </tr>
           {% endfor %}
         </tbody>

@@ -42,7 +42,7 @@
         <p class="suave">Estado inicial: disponible.</p>
       </fieldset>
     {% endif %}
-    <button type="submit">Guardar recurso</button>
+    <button type="submit">Guardar</button>
   </form>
 {% endmacro %}
 
@@ -71,7 +71,7 @@
                 <input type="hidden" name="version" value="{{ c.version }}">
                 {{ campo('nombre','Nombre',c.nombre,requerido=true,maximo=80) }}
                 {{ campo('descripcion','Descripción',c.descripcion or '') }}
-                <button>Guardar cambios</button>
+                <button>Guardar</button>
               </form>
             </details>
             <form method="post"
@@ -93,7 +93,7 @@
         <input type="hidden" name="volver" value="{{ volver }}">
         {{ campo('nombre','Nombre de categoría',requerido=true,maximo=80) }}
         {{ campo('descripcion', 'Descripción (opcional)') }}
-        <button>Guardar categoría</button>
+        <button>Guardar</button>
       </form>
     </div>
   </section>

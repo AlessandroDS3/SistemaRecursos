@@ -1,5 +1,6 @@
-from flask import Blueprint, flash, g, redirect, request, url_for
+from flask import Blueprint, flash, g, redirect, request
 from presentacion.seguridad import requiere_permiso
+from presentacion.navegacion import detalle_prestamo
 
 
 class ControladorAmpliacionPrestamo:
@@ -19,4 +20,4 @@ class ControladorAmpliacionPrestamo:
             identificador, detalle_id, request.form.to_dict(), g.usuario.id_usuario
         )
         flash('Plazo ampliado.')
-        return redirect(url_for('prestamos.consultar_prestamo', identificador=identificador))
+        return redirect(detalle_prestamo(identificador))

@@ -4,9 +4,9 @@
   <h1>Roles y permisos</h1>
   <section class="panel">
     <h2>Asignar rol a una cuenta</h2>
-    <p class="suave">Busca por DNI, apellidos o nombre de usuario y elige el rol de la cuenta.</p>
+    <p class="suave">Busca por DNI, CUI, apellidos o usuario y elige el rol.</p>
     <form class="filtros">
-      {{ campo('q','DNI, apellidos o usuario',request.args.get('q',''),maximo=120) }}
+      {{ campo('q','DNI, CUI, apellidos o usuario',request.args.get('q',''),maximo=120) }}
       <button>Buscar</button>
       <a href="{{ url_for('roles.consultar_roles') }}">Limpiar</a>
     </form>
@@ -63,15 +63,7 @@
   </section>
   <section class="panel permisos-panel">
     <h2>Permisos por rol</h2>
-    <p class="suave">Marca los permisos del rol. Se aplican a todas sus cuentas.</p>
-    <details>
-      <summary>Permisos de consulta necesarios</summary>
-      <ul>
-        {% for permiso, requeridos in dependencias.items() %}
-          <li>{{ permisos[permiso] }} requiere: {% for requerido in requeridos %}{{ permisos[requerido] }}{{ ', ' if not loop.last else '.' }}{% endfor %}</li>
-        {% endfor %}
-      </ul>
-    </details>
+
     <form method="post" action="{{ url_for('roles.guardar_matriz_permisos') }}">
       {{ csrf() }}
       <input type="hidden" name="version" value="{{ version }}">

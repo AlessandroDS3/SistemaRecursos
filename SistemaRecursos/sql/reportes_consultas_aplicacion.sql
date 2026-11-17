@@ -10,7 +10,6 @@
 -- Ejecuta USE y SET NAMES y después únicamente la consulta que quieras comprobar.
 -- Para comparar, limpia los filtros del reporte y utiliza la misma base de datos.
 -- Si eliges filtros, el repositorio construye el WHERE y envía valores mediante parámetros %s.
--- Ver LEEME_reportes.md para ejemplos de filtros y diferencias entre SQL, CSV y PDF.
 USE prestamos_escuela_pruebas;
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -263,7 +262,7 @@ ORDER BY pp.id_prestamo, pp.responsable DESC, pp.id_participante;
 -- 16. Cuenta de la sesion: consulta compartida por todas las pantallas.
 SET @id_usuario = 1;
 SELECT u.id_usuario, p.dni, u.nombre_usuario, u.contrasena_hash,
-       u.rol, u.estado_cuenta, p.estado AS estado_persona, p.nombres, p.apellidos
+       u.rol, u.estado_cuenta, u.debe_cambiar_clave, p.estado AS estado_persona, p.nombres, p.apellidos
 FROM usuario_sistema u
 JOIN persona p ON p.dni = u.dni_persona
 WHERE u.id_usuario = @id_usuario;

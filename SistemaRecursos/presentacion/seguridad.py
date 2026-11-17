@@ -60,3 +60,15 @@ def configurar_seguridad(app, acceso):
                 abort(
                     400, description='El formulario caducó. Recarga la página e inténtalo otra vez.'
                 )
+        if (
+            g.usuario is not None
+            and g.usuario.debe_cambiar_clave
+            and request.endpoint
+            not in (
+                'cuentas.cambiar_clave_propia',
+                'auth.cerrar_sesion',
+                'auth.iniciar_sesion',
+                'static',
+            )
+        ):
+            return redirect(url_for('cuentas.cambiar_clave_propia'))

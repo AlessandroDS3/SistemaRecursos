@@ -1,4 +1,14 @@
-from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
+from flask import (
+    Blueprint,
+    flash,
+    g,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from dominio.gestion_personas_usuarios.cuenta import ESTADOS_CUENTA
 from presentacion.seguridad import requiere_permiso
 
@@ -39,16 +49,27 @@ class ControladorCuenta:
     @requiere_permiso('USUARIOS_GESTIONAR')
     def registrar_cuenta(self, documento):
         if request.method == 'POST':
-            self.servicio.registrar_cuenta(
+            creada = self.servicio.registrar_cuenta(
                 documento,
-                request.form.get('nombre_usuario'),
-                request.form.get('clave'),
+                request.form.get('nombre_usuario', ''),
                 g.usuario.id_usuario,
             )
-            flash('Cuenta creada con el rol Usuario.')
-            return redirect(url_for('personas.consultar_persona', documento=documento))
-        self.servicio.validar_creacion_cuenta(documento)
-        return render_template('vista_cuenta.html', documento=documento, cuenta={}, nueva=True)
+            respuesta = make_response(
+                render_template(
+                    'vista_cuenta_creada.html',
+                    creada=creada,
+                    documento=documento,
+                ),
+                201,
+            )
+            respuesta.headers['Cache-Control'] = 'no-store, private'
+            respuesta.headers['Pragma'] = 'no-cache'
+            respuesta.headers['Referrer-Policy'] = 'no-referrer'
+            return respuesta
+        propuesta = self.servicio.consultar_propuesta_cuenta(documento)
+        return render_template(
+            'vista_cuenta.html', documento=documento, cuenta=propuesta, nueva=True
+        )
 
     @requiere_permiso('USUARIOS_GESTIONAR')
     def actualizar_cuenta(self, documento):

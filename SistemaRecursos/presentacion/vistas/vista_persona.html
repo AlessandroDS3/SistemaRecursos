@@ -76,7 +76,7 @@
                   <a href="{{ url_for('personas.consultar_persona',documento=p.dni) }}">{{ p.nombres }} {{ p.apellidos }}
                   </a>
                 </td>
-                <td>{{ p.correo }}</td>
+                <td>{{ p.correo or 'Sin correo' }}</td>
                 <td>{{ p.tipo|capitalize }}</td>
                 <td>{{ estado(p.estado) }}</td>
                 <td>
@@ -90,7 +90,7 @@
               </tr>
             {% else %}
               <tr>
-                <td colspan="7">No hay personas para estos filtros.</td>
+                <td colspan="7">No se encontraron registros.</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -115,7 +115,7 @@
       {{ persona.estado }}
     </p>
     <dl>
-      {% for nombre, valor in persona.datos().items() if valor is not none and valor != '' and nombre not in ('estado_matricula',) %}
+      {% for nombre, valor in persona.datos().items() if valor is not none and valor != '' and nombre not in ('estado_matricula','dni','nombres','apellidos','tipo','estado') %}
         <dt>{{ nombre|replace('_', ' ')|title }}</dt>
         <dd>
           {{ valor }}
@@ -131,7 +131,7 @@
     <div class="acciones">
       {% if g.usuario.permite("PERSONAS_GESTIONAR") %}
         <a class="boton"
-           href="{{ url_for('personas.gestionar_formulario_persona', documento=persona.dni) }}">Editar ficha</a>
+           href="{{ url_for('personas.gestionar_formulario_persona', documento=persona.dni) }}">Editar</a>
         <form method="post"
               action="{{ url_for('personas.desactivar_persona',documento=persona.dni) }}">
           {{ csrf() }}
@@ -158,7 +158,7 @@
         {{ campo('dni','DNI',persona.dni, requerido=true,maximo=8) }}
         {{ campo('nombres','Nombres',persona.nombres,requerido=true,maximo=100) }}
         {{ campo('apellidos','Apellidos',persona.apellidos,requerido=true,maximo=100) }}
-        {{ campo('correo','Correo',persona.correo,tipo='email',requerido=true,maximo=120) }}
+        {{ campo('correo','Correo',persona.correo,tipo='email',maximo=120) }}
         {{ campo('telefono','Teléfono',persona.telefono,maximo=20) }}
         {% if persona %}
           <input type="hidden" name="tipo" value="{{ persona.tipo }}">
@@ -185,7 +185,10 @@
           </div>
         </fieldset>
       {% endfor %}
-      <button>Guardar persona</button>
+      <div class="acciones">
+        <button>Guardar</button>
+        <a href="{{ url_for('personas.consultar_persona',documento=persona.dni) if persona else url_for('personas.consultar_personas') }}">Cancelar</a>
+      </div>
     </form>
   {% endif %}
 {% endblock %}

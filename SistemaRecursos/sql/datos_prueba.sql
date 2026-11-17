@@ -1,6 +1,8 @@
 -- Datos ficticios para probar el sistema de recursos con MySQL 8.
 -- Crea una base de demostracion aislada y carga escenarios consistentes al 12-11-2026.
 -- Ejecutar SOLO en una instalacion nueva; NO ejecutar sobre una base con datos.
+-- Incluye correo opcional y debe_cambiar_clave; no requiere migracion al crear la base.
+-- Las cuentas de demostracion usan debe_cambiar_clave=FALSE y las claves indicadas abajo.
 -- Cuentas locales de demostracion (no usar en produccion):
 -- admin / AdminPrueba2026!
 -- encargado1 y encargado2 / EncargadoPrueba2026!
@@ -18,7 +20,7 @@ CREATE TABLE IF NOT EXISTS persona (
   nombres    VARCHAR(100) NOT NULL,
   apellidos  VARCHAR(100) NOT NULL,
   telefono   VARCHAR(20),
-  correo     VARCHAR(120) NOT NULL,
+  correo     VARCHAR(120) NULL,
   estado     ENUM('ACTIVA','INACTIVA') NOT NULL DEFAULT 'ACTIVA',
   CONSTRAINT uq_persona_correo UNIQUE (correo),
   INDEX idx_persona_apellidos_nombres (apellidos, nombres)
@@ -55,6 +57,7 @@ CREATE TABLE IF NOT EXISTS usuario_sistema (
   dni_persona     VARCHAR(8) NOT NULL UNIQUE,
   nombre_usuario  VARCHAR(50) NOT NULL UNIQUE,
   contrasena_hash VARCHAR(255) NOT NULL,
+  debe_cambiar_clave BOOLEAN NOT NULL DEFAULT FALSE,
   rol             ENUM('USUARIO','ENCARGADO_PRESTAMOS','ADMINISTRADOR') NOT NULL DEFAULT 'USUARIO',
   estado_cuenta   ENUM('ACTIVA','INACTIVA','BLOQUEADA') NOT NULL DEFAULT 'ACTIVA',
   ultimo_acceso   DATETIME,

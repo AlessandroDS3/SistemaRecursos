@@ -1,5 +1,8 @@
 -- Estructura del sistema de prestamos de recursos para MySQL 8.
 -- Crea prestamos_escuela sin registros: personas, cuentas y catalogo vacios.
+-- Acceso actualizado: persona.correo admite NULL y usuario_sistema incluye debe_cambiar_clave.
+-- Al crear las tablas desde cero no se necesita una migracion adicional.
+-- CREATE TABLE IF NOT EXISTS no modifica la estructura de tablas ya existentes.
 SET NAMES utf8mb4;
 
 CREATE DATABASE IF NOT EXISTS prestamos_escuela
@@ -15,7 +18,7 @@ CREATE TABLE IF NOT EXISTS persona (
   nombres    VARCHAR(100) NOT NULL,
   apellidos  VARCHAR(100) NOT NULL,
   telefono   VARCHAR(20),
-  correo     VARCHAR(120) NOT NULL,
+  correo     VARCHAR(120) NULL,
   estado     ENUM('ACTIVA','INACTIVA') NOT NULL DEFAULT 'ACTIVA',
   CONSTRAINT uq_persona_correo UNIQUE (correo),
   INDEX idx_persona_apellidos_nombres (apellidos, nombres)
@@ -57,6 +60,7 @@ CREATE TABLE IF NOT EXISTS usuario_sistema (
   dni_persona     VARCHAR(8) NOT NULL UNIQUE,
   nombre_usuario  VARCHAR(50) NOT NULL UNIQUE,
   contrasena_hash VARCHAR(255) NOT NULL,
+  debe_cambiar_clave BOOLEAN NOT NULL DEFAULT FALSE,
   rol             ENUM('USUARIO','ENCARGADO_PRESTAMOS','ADMINISTRADOR') NOT NULL DEFAULT 'USUARIO',
   estado_cuenta   ENUM('ACTIVA','INACTIVA','BLOQUEADA') NOT NULL DEFAULT 'ACTIVA',
   ultimo_acceso   DATETIME,

@@ -4,28 +4,16 @@
 {% block contenido %}
   {% if modo=="lista" %}
     <div class="cabecera">
-      <h1>{{ 'Préstamos y devoluciones' if gestionar else 'Mis préstamos' }}</h1>
+      <h1>{{ 'Préstamos' if gestionar else 'Mis préstamos' }}</h1>
       {% if gestionar %}
-        <a class="boton" href="{{ url_for('prestamos.registrar_prestamo') }}">Registrar préstamo</a>
-        <a class="boton secundario"
-           href="{{ url_for('prestamos.consultar_prestamos',estado='PENDIENTES') }}">Registrar devolución</a>
-      {% endif %}
-    </div>
-    <div class="acciones enlaces-seccion">
-      {% if gestionar or g.usuario.permite("RESERVAS_PROPIAS_GESTIONAR") %}
-        <a class="boton secundario"
-           href="{{ url_for('reservas.consultar_reservas') }}">Reservas</a>
-      {% endif %}
-      {% if g.usuario.permite("CATALOGO_CONSULTAR") %}
-        <a class="boton secundario"
-           href="{{ url_for('recursos.consultar_recursos') }}">Reservar un recurso desde el catálogo</a>
+        <a class="boton" href="{{ url_for('prestamos.registrar_prestamo',volver=volver) }}">+ Nuevo préstamo</a>
       {% endif %}
     </div>
     <form class="filtros filtros-bloque">
       <div class="rejilla dos-columnas">
-        {{ campo('q','Buscar por persona, DNI o número de préstamo',request.args.get('q',''),maximo=120) }}
+        {{ campo('q','Buscar por nombre, DNI, CUI o n.º de préstamo',request.args.get('q',''),maximo=120) }}
         <label>
-          Estado o seguimiento<select name="estado">
+          Estado<select name="estado">
           <option value="">Todos</option>
           {% for codigo,etiqueta in estados.items() %}
             <option value="{{ codigo }}"
@@ -39,16 +27,16 @@
         <a href="{{ url_for('prestamos.consultar_prestamos') }}">Limpiar filtros</a>
       </div>
     </form>
-    <p class="suave">Mostrando {{ prestamos|length }} préstamos.</p>
+    <p class="suave">{{ prestamos|length }} {{ 'préstamo' if prestamos|length == 1 else 'préstamos' }}.</p>
     <section class="panel panel-tabla">
       <div class="tabla">
         <table>
           <thead>
             <tr>
-              <th>Préstamo</th>
+              <th>N.º</th>
               <th>Solicitante</th>
-              <th>Fecha del préstamo</th>
-              <th>Fecha límite de devolución</th>
+              <th>Fecha</th>
+              <th>Fecha límite</th>
               <th>Estado</th>
               <th>Devueltos / total</th>
               <th>Acciones</th>
@@ -58,7 +46,7 @@
             {% for p in prestamos %}
               <tr>
                 <td>
-                  <a href="{{ url_for('prestamos.consultar_prestamo',identificador=p.id_prestamo) }}">#{{ p.id_prestamo }}
+                  <a href="{{ url_for('prestamos.consultar_prestamo',identificador=p.id_prestamo,volver=volver) }}">#{{ p.id_prestamo }}
                   </a>
                   <small>{{ p.tipo_prestamo|capitalize }}</small>
                 </td>
@@ -72,13 +60,13 @@
                 <td>{{ p.devueltos }} / {{ p.total_bienes }}</td>
                 <td>
                   <a class="boton secundario"
-                     href="{{ url_for('prestamos.consultar_prestamo',identificador=p.id_prestamo,_anchor='devolucion') }}">{{ 'Registrar devolución' if gestionar and p.estado_actual!='DEVUELTO' else 'Ver detalle' }}
+                     href="{{ url_for('prestamos.consultar_prestamo',identificador=p.id_prestamo,volver=volver,_anchor='devolucion') }}">{{ 'Devolver' if gestionar and p.estado_actual!='DEVUELTO' else 'Ver' }}
                   </a>
                 </td>
               </tr>
             {% else %}
               <tr>
-                <td colspan="7">No hay préstamos para estos filtros.</td>
+                <td colspan="7">No se encontraron registros.</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -87,11 +75,12 @@
     </section>
     {% if gestionar %}
       <details class="panel">
-        <summary>Registrar vencimientos en el historial</summary>
+        <summary>Vencimientos</summary>
         <p>Deja constancia de los préstamos que ya vencieron.</p>
         <form method="post"
               action="{{ url_for('prestamos.registrar_vencimientos_prestamos') }}">
           {{ csrf() }}
+          <input type="hidden" name="volver" value="{{ volver }}">
           <button class="secundario">Registrar vencimientos</button>
         </form>
       </details>
@@ -103,12 +92,12 @@
           data-condiciones-prestamo="{{ url_for('prestamos.consultar_condiciones_prestamo') }}"
           data-buscar-personas="{{ url_for('personas.buscar_personas') }}">
       {{ csrf() }}
+      <input type="hidden" name="volver" value="{{ volver }}">
       <div class="pasos-prestamo">
         <section class="panel">
           <h2>
             <span class="numero-paso">1</span>¿Quién recibe el préstamo?
           </h2>
-          <p class="suave">Busca y selecciona a la persona registrada, o introduce su DNI.</p>
           <label>
             Buscar por apellidos, DNI o CUI<input type="search"
                                                   data-busqueda-persona
@@ -118,10 +107,7 @@
           <div class="resultados-busqueda"
                data-resultados-persona
                aria-live="polite"></div>
-          <div class="rejilla dos-columnas">
-            {{ campo('dni_persona','DNI del solicitante',requerido=true,maximo=8) }}
-            <p data-persona-seleccionada class="suave">Sin seleccionar</p>
-          </div>
+          {{ campo('dni_persona','DNI del solicitante',requerido=true,maximo=8) }}
           <div class="rejilla dos-columnas">
             <fieldset>
               <legend>Modalidad</legend>
@@ -152,7 +138,6 @@
           <h2>
             <span class="numero-paso">2</span>¿Qué bienes se llevará?
           </h2>
-          <p class="suave">Busca por inventario o nombre del recurso y marca los bienes.</p>
           <label>
             Buscar bien disponible<input type="search"
                                          data-buscar-bien
@@ -174,12 +159,11 @@
               <p>No hay bienes disponibles.</p>
             {% endfor %}
           </div>
-          <p class="suave" data-contador-bienes>Bienes seleccionados: 0</p>
         </section>
         <section class="panel condiciones-prestamo"
                  data-texto-condiciones-prestamo
                  aria-live="polite">
-          <p>Completa el DNI para consultar el cupo, el horario y las condiciones aplicables.</p>
+          <p>Ingresa el DNI para consultar las condiciones.</p>
         </section>
         <section class="panel">
           <label>
@@ -189,7 +173,7 @@
         </section>
       </div>
       <aside class="panel resumen-prestamo">
-        <h2>Resumen del préstamo</h2>
+        <h2>Resumen</h2>
         <dl>
           <dt>Solicitante</dt>
           <dd data-resumen-solicitante>
@@ -209,8 +193,6 @@
           </dd>
         </dl>
         <p class="suave">Las fechas se confirman al registrar la entrega.</p>
-        <ul data-resumen-seleccionados>
-        </ul>
         <label class="check">
           <input type="checkbox"
                  name="acepta_condiciones"
@@ -218,7 +200,7 @@
                  required>He comunicado el plazo y el permiso de salida al solicitante.
         </label>
         <button type="submit" data-confirmar-prestamo>Registrar préstamo</button>
-        <a href="{{ url_for('prestamos.consultar_prestamos') }}">Cancelar</a>
+        <a href="{{ volver }}">Cancelar</a>
       </aside>
     </form>
   {% else %}
@@ -243,8 +225,10 @@
           <span>DNI: {{ prestamo.dni_encargado }}</span>
         </div>
       </div>
-      <small>Observaciones</small>
-      <p>{{ prestamo.observaciones or 'Sin observaciones.' }}</p>
+      {% if prestamo.observaciones %}
+        <small>Observaciones</small>
+        <p>{{ prestamo.observaciones }}</p>
+      {% endif %}
       {% if prestamo.tipo_prestamo=="GRUPAL" %}
         <details>
           <summary>Integrantes ({{ prestamo.participantes|length }})</summary>
@@ -260,7 +244,10 @@
       <h2>{{ 'Registrar devolución' if gestionar else 'Bienes y devoluciones' }}</h2>
       {% if gestionar %}
         <form method="post"
-              action="{{ url_for('prestamos.registrar_devolucion',identificador=prestamo.id_prestamo) }}">{{ csrf() }}{% endif %}
+              action="{{ url_for('prestamos.registrar_devolucion',identificador=prestamo.id_prestamo) }}">
+          {{ csrf() }}
+          <input type="hidden" name="volver" value="{{ volver }}">
+      {% endif %}
         <div class="tabla">
           <table>
             <thead>
@@ -317,21 +304,22 @@
   {% if gestionar %}
     {% if prestamo.estado_actual!="DEVUELTO" %}
       <div class="acciones al-final">
-        <button>Confirmar devolución</button>
+        <button>Registrar devolución</button>
       </div>
     {% endif %}
     </form>
   {% endif %}
   </section>
   {% if gestionar %}
-    <section class="panel">
-      <h2>Ampliar plazo</h2>
-      <p class="suave">Cada ampliación permite como máximo otro plazo de la política aplicada. Los préstamos por horas respetan el cierre de atención.</p>
+    <details class="panel">
+      <summary>Ampliar plazo</summary>
+      <p class="suave">Máximo: otro plazo permitido. Los préstamos por horas terminan al cierre.</p>
       {% for d in prestamo.detalles if not d.fecha_devolucion and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora %}
         <form method="post"
               action="{{ url_for('ampliaciones.ampliar_prestamo',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
               class="formulario operacion-bien">
           {{ csrf() }}
+          <input type="hidden" name="volver" value="{{ volver }}">
           <strong>{{ d.codigo_inventario }} · {{ d.recurso }}</strong>
           <input type="hidden"
                  name="fecha_actual"
@@ -346,14 +334,15 @@
       {% else %}
         <p>No hay bienes pendientes con plazo vigente que se puedan ampliar.</p>
       {% endfor %}
-    </section>
-    <section class="panel">
-      <h2>Reportar un bien perdido</h2>
+    </details>
+    <details class="panel">
+      <summary>Reportar pérdida</summary>
       {% for d in prestamo.detalles if not d.fecha_devolucion and d.estado_bien=='PRESTADO' %}
         <form method="post"
               action="{{ url_for('prestamos.registrar_perdida_bien_material',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
               class="formulario operacion-bien">
           {{ csrf() }}
+          <input type="hidden" name="volver" value="{{ volver }}">
           <strong>{{ d.codigo_inventario }} · {{ d.recurso }}
           </strong>{{ campo('motivo','Descripción de la pérdida',requerido=true) }}
           <button class="secundario">Registrar pérdida</button>
@@ -361,12 +350,12 @@
       {% else %}
         <p>No hay bienes prestados pendientes que se puedan reportar como perdidos.</p>
       {% endfor %}
-    </section>
+    </details>
   {% endif %}
   <details class="panel">
     <summary>Historial del préstamo ({{ prestamo.historial|length }})</summary>
     {{ historial(prestamo.historial) }}
   </details>
-  <a href="{{ url_for('prestamos.consultar_prestamos') }}">Volver al listado</a>
+  <a href="{{ volver }}">Volver al listado</a>
 {% endif %}
 {% endblock %}

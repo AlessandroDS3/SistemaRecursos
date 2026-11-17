@@ -62,10 +62,12 @@ def clave_local():
     return archivo.read_text().strip()
 
 
-def crear_servicios(conexion):
+def crear_servicios(conexion, dominios_institucionales=('unsa.edu.pe',)):
     return {
         'acceso': ServicioAplicacionAcceso(RepositorioAccesoSQL(conexion)),
-        'cuentas': ServicioAplicacionCuenta(RepositorioCuentaSQL(conexion)),
+        'cuentas': ServicioAplicacionCuenta(
+            RepositorioCuentaSQL(conexion), dominios_institucionales
+        ),
         'personas': ServicioAplicacionPersona(RepositorioPersonaSQL(conexion)),
         'roles': ServicioAplicacionRol(RepositorioRolSQL(conexion)),
         'recursos': ServicioAplicacionRecurso(RepositorioRecursoSQL(conexion)),
@@ -159,18 +161,30 @@ def registrar_errores(app):
 
     @app.errorhandler(HTTPException)
     def error_http(error):
-        return mostrar_error(error.description, error.code)
+        mensajes = {
+            400: 'Revisa los datos e inténtalo de nuevo.',
+            403: 'Tu cuenta no tiene permiso para esta operación.',
+            404: 'No se encontró la página solicitada.',
+            405: 'Esta acción no está disponible desde esta página.',
+            413: 'La información enviada es demasiado grande.',
+            500: 'No se pudo completar la operación. Inténtalo de nuevo.',
+        }
+        mensaje = error.description
+        if mensaje == type(error).description:
+            mensaje = mensajes.get(error.code, 'No se pudo completar la operación.')
+        return mostrar_error(mensaje, error.code)
 
     @app.errorhandler(ErrorMySQL)
     def error_base(error):
         app.logger.exception('Falló la base de datos.')
-        return mostrar_error('No se pudo acceder a la base de datos.', 503)
+        return mostrar_error(
+            'El sistema no está disponible. Inténtalo de nuevo en un momento.', 503
+        )
 
 
 def create_app(config=None):
     app = Flask(
-        __name__, template_folder='presentacion/vistas',
-          static_folder='presentacion/static'
+        __name__, template_folder='presentacion/vistas', static_folder='presentacion/static'
     )
     app.config.update(
         SECRET_KEY=clave_local(),
@@ -182,7 +196,12 @@ def create_app(config=None):
     app.config.update(config or {})
 
     conexion = MySQLConnection(app.config.get('MYSQL_CONFIG'))
-    servicios = crear_servicios(conexion)
+    dominios = app.config.get(
+        'DOMINIOS_CORREO_INSTITUCIONAL', os.getenv('DOMINIOS_CORREO_INSTITUCIONAL', 'unsa.edu.pe')
+    )
+    if isinstance(dominios, str):
+        dominios = dominios.split(',')
+    servicios = crear_servicios(conexion, dominios)
     app.extensions['servicios'] = servicios
 
     configurar_seguridad(app, servicios['acceso'])

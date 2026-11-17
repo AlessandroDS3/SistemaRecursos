@@ -13,10 +13,16 @@
     {{ csrf() }}
     {% if not nueva %}<input type="hidden" name="version" value="{{ cuenta.version }}">{% endif %}
     {{ campo('nombre_usuario','Nombre de usuario',cuenta.nombre_usuario,requerido=true,maximo=50) }}
-    <label>
-      {{ 'Contraseña' if nueva else 'Nueva contraseña (deja vacío para conservar)' }}
-      <input name="clave" type="password" minlength="12"maxlength="256" autocomplete="new-password" {% if nueva %}required{% endif %}>
-    </label>
+    {% if nueva %}
+      <p class="suave">Usuario sugerido por correo institucional o CUI. Puedes editarlo.</p>
+      <p>Se generará una contraseña temporal individual. Se mostrará una sola vez al crear la cuenta y deberá cambiarse en el primer ingreso.</p>
+    {% else %}
+      <label>
+        Nueva contraseña (deja vacío para conservar)
+        <input name="clave" type="password" minlength="12" maxlength="256" autocomplete="new-password">
+      </label>
+      <p class="suave">Si restableces la contraseña, la persona deberá cambiarla al iniciar sesión.</p>
+    {% endif %}
     {% if not nueva %}
       {{ opciones('estado_cuenta','Estado',estados,cuenta.estado_cuenta) }}
       <p>
@@ -25,6 +31,9 @@
         . Se modifica en Roles y permisos.
       </p>
     {% endif %}
-    <button>Guardar cuenta</button>
+    <div class="acciones">
+      <button>Guardar</button>
+      <a href="{{ url_for('personas.consultar_persona',documento=documento) }}">Cancelar</a>
+    </div>
   </form>
 {% endblock %}

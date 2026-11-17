@@ -48,7 +48,7 @@ class ControladorReserva:
             identificador = self.servicio.registrar_reserva(
                 request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Reserva registrada. Consulta su estado antes de recoger el bien.')
+            flash('Reserva registrada.')
             return redirect(url_for('reservas.consultar_reserva', identificador=identificador))
         return render_template(
             'vista_reserva.html',
@@ -89,7 +89,14 @@ class ControladorReserva:
 
     def _resolver_reserva(self, identificador, operacion):
         prestamo = operacion(identificador, request.form.to_dict(), g.usuario.id_usuario)
-        flash('Reserva actualizada.')
+        mensajes = {
+            'reservas.preparar_reserva': 'Bien preparado.',
+            'reservas.entregar_reserva': 'Préstamo registrado.',
+            'reservas.cancelar_reserva': 'Reserva cancelada.',
+            'reservas.rechazar_reserva': 'Reserva rechazada.',
+            'reservas.expirar_reserva': 'Reserva vencida.',
+        }
+        flash(mensajes[request.endpoint])
         if prestamo:
             return redirect(url_for('prestamos.consultar_prestamo', identificador=prestamo))
         return redirect(url_for('reservas.consultar_reserva', identificador=identificador))

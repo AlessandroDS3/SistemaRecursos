@@ -16,6 +16,7 @@ class CuentaAcceso:
     estado_cuenta: str
     estado_persona: str
     contrasena_hash: str = field(repr=False)
+    debe_cambiar_clave: bool = False
     permisos: frozenset[str] = frozenset()
 
     @property
@@ -24,13 +25,14 @@ class CuentaAcceso:
 
     @property
     def version_credenciales(self):
-        return sha256(self.contrasena_hash.encode()).hexdigest()
+        datos = f'{self.contrasena_hash}:{int(self.debe_cambiar_clave)}'
+        return sha256(datos.encode()).hexdigest()
 
     def puede_acceder(self):
         return self.estado_cuenta == self.estado_persona == 'ACTIVA'
 
     def permite(self, codigo):
-        return codigo in self.permisos
+        return not self.debe_cambiar_clave and codigo in self.permisos
 
 
 class IRepositorioAcceso(Protocol):
@@ -45,6 +47,7 @@ def exigir_permiso(cuenta_actor, permiso):
         cuenta_actor is None
         or cuenta_actor['estado_cuenta'] != 'ACTIVA'
         or cuenta_actor['estado_persona'] != 'ACTIVA'
+        or cuenta_actor.get('debe_cambiar_clave', False)
         or permiso not in cuenta_actor['permisos']
     ):
         raise PermissionError('La cuenta no tiene permiso para esta operación.')

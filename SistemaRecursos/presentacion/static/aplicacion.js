@@ -1,6 +1,9 @@
 const mostrarClave = document.querySelector('[data-mostrar-clave]');
 const selectorReporte = document.querySelector('[data-seleccionar-reporte]');
 selectorReporte?.addEventListener('change', () => selectorReporte.form.requestSubmit());
+document.querySelectorAll('[data-filtrar-al-cambiar]').forEach(selector => {
+  selector.addEventListener('change', () => selector.form.requestSubmit());
+});
 mostrarClave?.addEventListener('change', () => {
   const clave = document.getElementById('clave');
   if (clave) clave.type = mostrarClave.checked ? 'text' : 'password';
@@ -25,6 +28,8 @@ document.addEventListener('keydown', evento => {
 // La selección del tipo solo cambia los campos visibles. El dominio vuelve a validarlos.
 const tipoPersona = document.querySelector('[name="tipo"]');
 function mostrarDatosInstitucionales() {
+  const correo = document.querySelector('[name="correo"]');
+  if (correo && tipoPersona) correo.required = tipoPersona.value !== 'ESTUDIANTE';
   document.querySelectorAll('[data-tipo]').forEach(grupo => {
     const visible = grupo.dataset.tipo === tipoPersona?.value;
     grupo.hidden = !visible;
@@ -58,6 +63,11 @@ document.querySelectorAll('[data-filtrar-filas]').forEach(campo => {
 document.querySelectorAll('[data-volver]').forEach(boton => {
   boton.addEventListener('click', () => window.history.back());
 });
+document.querySelectorAll('form[data-confirmar]').forEach(formulario => {
+  formulario.addEventListener('submit', evento => {
+    if (!window.confirm(formulario.dataset.confirmar)) evento.preventDefault();
+  });
+});
 
 const recursoReserva = document.querySelector('[data-condiciones-reserva]');
 function mostrarCondicionesReserva() {
@@ -81,7 +91,7 @@ if (formularioPrestamo) {
     consulta?.abort();
     panel.replaceChildren();
     if (!/^[0-9]{8}$/.test(documento.value.trim())) {
-      agregarTexto('Completa un DNI de ocho dígitos.');
+      agregarTexto('Ingresa el DNI de ocho dígitos.');
       return;
     }
     consulta = new AbortController();
@@ -90,8 +100,11 @@ if (formularioPrestamo) {
       const respuesta = await fetch(`${formularioPrestamo.dataset.condicionesPrestamo}?${parametros}`, {signal: consulta.signal});
       if (!respuesta.ok) throw new Error('Consulta no disponible');
       const datos = await respuesta.json();
-      agregarTexto(`${datos.solicitante}: ${datos.pendientes} bienes pendientes. Máximo total: ${datos.limite ?? 'sin configurar'}.`);
-      if (datos.horario) agregarTexto(`Atención de ${datos.horario.apertura} a ${datos.horario.cierre} de Lima. Los plazos en horas terminan al cierre.`);
+      documento.dataset.documento = documento.value;
+      documento.dataset.nombre = datos.solicitante;
+      actualizarResumen();
+      agregarTexto(`${datos.pendientes} ${datos.pendientes === 1 ? 'bien pendiente' : 'bienes pendientes'}. Máximo permitido: ${datos.limite ?? 'sin configurar'}.`);
+      if (datos.horario) agregarTexto(`Atención: ${datos.horario.apertura} a ${datos.horario.cierre}. Los plazos en horas terminan al cierre.`);
       for (const politica of datos.politicas) {
         agregarTexto(`${politica.categoria}: ${politica.plazo_maximo} ${politica.unidad_plazo.toLowerCase()}; salida externa ${politica.permite_salida ? 'permitida' : 'no permitida'}.`);
       }
@@ -118,20 +131,11 @@ if (formularioPrestamo) {
     formularioPrestamo.elements.participantes.disabled = !grupal;
     if (documento.dataset.documento !== documento.value) delete documento.dataset.nombre;
     const nombre = documento.dataset.nombre || documento.value || 'Sin seleccionar';
-    formularioPrestamo.querySelector('[data-persona-seleccionada]').textContent = nombre;
     formularioPrestamo.querySelector('[data-resumen-solicitante]').textContent = nombre;
     formularioPrestamo.querySelector('[data-resumen-modalidad]').textContent = grupal ? 'Grupal' : 'Individual';
     formularioPrestamo.querySelector('[data-resumen-uso]').textContent = formularioPrestamo.elements.salida_solicitada.checked ? 'Fuera de la institución' : 'Dentro de la institución';
     const seleccionados = [...formularioPrestamo.querySelectorAll('[name="bienes"]:checked')];
     formularioPrestamo.querySelector('[data-resumen-bienes]').textContent = String(seleccionados.length);
-    formularioPrestamo.querySelector('[data-contador-bienes]').textContent = `Bienes seleccionados: ${seleccionados.length}`;
-    const lista = formularioPrestamo.querySelector('[data-resumen-seleccionados]');
-    lista.replaceChildren();
-    for (const bien of seleccionados) {
-      const elemento = document.createElement('li');
-      elemento.textContent = bien.dataset.nombreBien;
-      lista.append(elemento);
-    }
     formularioPrestamo.querySelector('[data-confirmar-prestamo]').disabled = !(
       /^[0-9]{8}$/.test(documento.value.trim()) && seleccionados.length && formularioPrestamo.elements.acepta_condiciones.checked
     );
@@ -169,7 +173,7 @@ if (formularioPrestamo) {
         });
         resultados.append(boton);
       }
-      if (!personas.length) resultados.textContent = 'No hay personas para esta búsqueda.';
+      if (!personas.length) resultados.textContent = 'No se encontraron registros.';
     } catch (error) {
       if (error.name !== 'AbortError') resultados.textContent = 'No se pudo consultar. Puedes introducir el DNI directamente.';
     }

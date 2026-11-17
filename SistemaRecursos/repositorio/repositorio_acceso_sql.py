@@ -8,7 +8,7 @@ class RepositorioAccesoSQL(RepositorioSQL):
         # La columna procede únicamente de los dos métodos públicos siguientes.
         fila_cuenta = self.consultar_sql(
             f'''SELECT u.id_usuario,p.dni,u.nombre_usuario,u.contrasena_hash,
-            u.rol,u.estado_cuenta,p.estado AS estado_persona,p.nombres,p.apellidos
+            u.rol,u.estado_cuenta,u.debe_cambiar_clave,p.estado AS estado_persona,p.nombres,p.apellidos
             FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona WHERE {columna}=%s''',
             (valor,),
             una=True,

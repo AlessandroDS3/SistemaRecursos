@@ -15,7 +15,8 @@ class ControladorAcceso:
 
     def iniciar_sesion(self):
         if g.usuario:
-            return redirect(url_for('inicio'))
+            destino = 'cuentas.cambiar_clave_propia' if g.usuario.debe_cambiar_clave else 'inicio'
+            return redirect(url_for(destino))
         error = None
         if request.method == 'POST':
             cuenta_acceso = self.servicio.autenticar_cuenta(
@@ -23,7 +24,10 @@ class ControladorAcceso:
             )
             if cuenta_acceso:
                 establecer_sesion(cuenta_acceso)
-                return redirect(url_for('inicio'))
+                destino = (
+                    'cuentas.cambiar_clave_propia' if cuenta_acceso.debe_cambiar_clave else 'inicio'
+                )
+                return redirect(url_for(destino))
             error = 'Credenciales incorrectas o cuenta sin acceso.'
         return render_template('vista_acceso.html', error=error)
 

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, url_for
 from presentacion.seguridad import requiere_permiso
+from presentacion.navegacion import detalle_prestamo, regreso_prestamos
 from dominio.gestion_prestamos.prestamo import FILTROS_ESTADO_PRESTAMO
 
 
@@ -48,6 +49,10 @@ class ControladorPrestamo:
             prestamos=filas,
             gestionar=gestionar,
             estados=FILTROS_ESTADO_PRESTAMO,
+            volver=url_for(
+                'prestamos.consultar_prestamos',
+                **{k: request.args[k] for k in ('q', 'estado', 'pagina') if k in request.args},
+            ),
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
@@ -67,12 +72,13 @@ class ControladorPrestamo:
                 ],
             )
             identificador = self.servicio.registrar_prestamo(datos, g.usuario.id_usuario)
-            flash('Préstamo entregado.')
-            return redirect(url_for('prestamos.consultar_prestamo', identificador=identificador))
+            flash('Préstamo registrado.')
+            return redirect(detalle_prestamo(identificador))
         return render_template(
             'vista_prestamo.html',
             modo='formulario',
             bienes=self.bienes.consultar_bienes_materiales({'estado': 'DISPONIBLE'}),
+            volver=regreso_prestamos(),
         )
 
     @requiere_permiso('PRESTAMOS_PROPIOS_CONSULTAR', 'PRESTAMOS_GESTIONAR')
@@ -85,6 +91,7 @@ class ControladorPrestamo:
             prestamo=prestamo,
             gestionar=gestionar,
             ahora=datetime.now(timezone.utc).replace(tzinfo=None),
+            volver=regreso_prestamos(),
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
@@ -92,7 +99,7 @@ class ControladorPrestamo:
         datos = dict(request.form, detalles=request.form.getlist('detalles'))
         self.servicio.registrar_devolucion(identificador, datos, g.usuario.id_usuario)
         flash('Devolución registrada.')
-        return redirect(url_for('prestamos.consultar_prestamo', identificador=identificador))
+        return redirect(detalle_prestamo(identificador))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     def registrar_perdida_bien_material(self, identificador, detalle_id):
@@ -100,10 +107,10 @@ class ControladorPrestamo:
             identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario
         )
         flash('Pérdida registrada; el bien continúa pendiente de recuperación.')
-        return redirect(url_for('prestamos.consultar_prestamo', identificador=identificador))
+        return redirect(detalle_prestamo(identificador))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     def registrar_vencimientos_prestamos(self):
         self.servicio.registrar_vencimientos_prestamos(g.usuario.id_usuario)
-        flash('Vencimientos registrados en el historial.')
-        return redirect(url_for('prestamos.consultar_prestamos'))
+        flash('Vencimientos registrados.')
+        return redirect(regreso_prestamos())

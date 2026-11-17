@@ -68,6 +68,7 @@ class RepositorioPersonaSQL(RepositorioSQL):
         comunes = {
             k: datos[k] for k in ('dni', 'nombres', 'apellidos', 'telefono', 'correo', 'estado')
         }
+        comunes['correo'] = comunes['correo'] or None
         especificos = {k: datos[k] for k in CAMPOS_TIPO[persona.tipo]}
         tabla = TABLAS_TIPO[persona.tipo]
         if documento_anterior is None:

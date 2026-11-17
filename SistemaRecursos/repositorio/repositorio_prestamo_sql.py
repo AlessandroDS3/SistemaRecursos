@@ -68,8 +68,11 @@ class RepositorioPrestamoSQL(RepositorioSQL):
                 WHERE pp.id_prestamo=p.id_prestamo AND pp.dni_persona=%s))'''
             parametros += [documento, documento]
         if filtros.get('q'):
-            sql += " AND (p.dni_persona LIKE %s OR CONCAT(per.nombres,' ',per.apellidos) LIKE %s OR p.id_prestamo=%s)"
+            sql += """ AND (p.dni_persona LIKE %s OR CONCAT(per.nombres,' ',per.apellidos) LIKE %s
+                OR EXISTS(SELECT 1 FROM estudiante e WHERE e.dni=per.dni AND e.cui LIKE %s)
+                OR p.id_prestamo=%s)"""
             parametros += [
+                f"%{filtros['q']}%",
                 f"%{filtros['q']}%",
                 f"%{filtros['q']}%",
                 filtros['q'] if filtros['q'].isdigit() else 0,

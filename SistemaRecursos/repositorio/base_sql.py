@@ -72,7 +72,7 @@ class RepositorioSQL:
     def consultar_cuenta_actor(self, identificador):
         """Devuelve el diccionario del actor con sus permisos, o None si no existe."""
         cuenta_actor = self.consultar_sql(
-            '''SELECT u.id_usuario,u.dni_persona,u.rol,u.estado_cuenta,
+            '''SELECT u.id_usuario,u.dni_persona,u.rol,u.estado_cuenta,u.debe_cambiar_clave,
             p.estado AS estado_persona FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona
             WHERE u.id_usuario=%s''',
             (identificador,),

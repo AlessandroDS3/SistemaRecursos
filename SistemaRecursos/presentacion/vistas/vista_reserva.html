@@ -12,7 +12,7 @@
       {% endif %}
     </div>
     <p class="suave">
-      {{ 'Respeta el orden de reservas. Prepara el bien al llegar la fecha y confirma su entrega.' if gestionar else 'Consulta el estado de tus reservas y la fecha de retiro. Para un préstamo inmediato, acércate al encargado.' }}
+      {{ 'Atiende las reservas en orden.' if gestionar else 'Para un préstamo inmediato, acércate al encargado.' }}
     </p>
     <form class="filtros filtros-bloque">
       <div class="rejilla dos-columnas">
@@ -34,7 +34,7 @@
       </div>
     </form>
     <section class="panel panel-tabla">
-      <p class="suave">{{ reservas|length }} registro(s).</p>
+      <p class="suave">{{ reservas|length }} {{ 'registro' if reservas|length == 1 else 'registros' }}.</p>
       <div class="tabla">
         <table>
           <thead>
@@ -73,7 +73,7 @@
         </tr>
   {% else %}
     <tr>
-      <td colspan="7">No hay reservas para estos filtros.</td>
+      <td colspan="7">No se encontraron registros.</td>
     </tr>
   {% endfor %}
   </tbody>
@@ -97,12 +97,11 @@
           {% endfor %}
         </select>
       </label>
-      {{ campo('fecha_requerida','Fecha y hora de retiro (hora de Lima)',tipo='datetime-local',requerido=true) }}
+      {{ campo('fecha_requerida','Fecha y hora de retiro',tipo='datetime-local',requerido=true) }}
     </div>
     <p data-texto-condiciones-reserva aria-live="polite"></p>
     <p>
-      Elige una fecha futura. El encargado preparará el bien y confirmará su entrega al recogerlo.
-      Para un préstamo inmediato, acércate al encargado.
+      Elige una fecha futura. El encargado confirmará la entrega al recoger el bien.
     </p>
     {{ campo('observaciones','Observaciones',maximo=220) }}
     <label class="check">
@@ -113,7 +112,10 @@
       <input type="checkbox" name="acepta_condiciones" value="1" required>
       Revisé el plazo y el permiso de salida del recurso.
     </label>
-    <button>Registrar reserva</button>
+    <div class="acciones">
+      <button>Registrar reserva</button>
+      <a href="{{ url_for('reservas.consultar_reservas') }}">Cancelar</a>
+    </div>
   </form>
 {% else %}
   <h1>
@@ -127,7 +129,7 @@
   </p>
   <h2>{{ reserva.recurso }}</h2>
   <p>
-    <strong>{{ reserva.estado }}</strong>
+    {{ etiqueta_estado(reserva.estado) }}
   </p>
   <dl>
     <dt>Requerido para</dt>
@@ -150,12 +152,13 @@
   {% if reserva.id_prestamo_ref %}
     <a class="boton"
        href="{{ url_for('prestamos.consultar_prestamo',identificador=reserva.id_prestamo_ref) }}">
-      Ver préstamo entregado
+      Ver préstamo
     </a>
   {% endif %}
   <div class="acciones">
     {% if reserva.estado in estados_por_accion.cancelar %}
       <form method="post"
+            data-confirmar="¿Deseas cancelar esta reserva?"
             action="{{ url_for('reservas.cancelar_reserva',identificador=reserva.id_reserva) }}">
         {{ csrf() }}
         <button class="secundario">Cancelar reserva</button>
@@ -166,7 +169,7 @@
     <form method="post"
           action="{{ url_for('reservas.preparar_reserva',identificador=reserva.id_reserva) }}">
       {{ csrf() }}
-      <button>Preparar bien disponible</button>
+      <button>Preparar bien</button>
     </form>
     <form class="filtros"
           method="post"
@@ -196,10 +199,11 @@
             action="{{ url_for('reservas.expirar_reserva',identificador=reserva.id_reserva) }}">
         {{ csrf() }}
         {{ campo('motivo','Motivo',requerido=true) }}
-        <button class="secundario">Confirmar vencimiento manual</button>
+        <button class="secundario">Registrar vencimiento</button>
       </form>
     </details>
   {% endif %}
   {{ historial(reserva.historial) }}
+  <a href="{{ url_for('reservas.consultar_reservas') }}">Volver al listado</a>
 {% endif %}
 {% endblock %}

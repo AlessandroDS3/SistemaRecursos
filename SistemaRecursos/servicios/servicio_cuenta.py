@@ -3,7 +3,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from dominio.compartido.validacion import dni, entero
 from dominio.gestion_personas_usuarios.cuenta import (
     IRepositorioCuenta,
+    CuentaCreada,
     ESTADOS_CUENTA,
+    base_nombre_usuario,
+    generar_clave_temporal,
+    nombre_usuario_disponible,
     proteger_administradores,
     validar_clave,
     validar_nombre_usuario,
@@ -14,8 +18,13 @@ from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 
 
 class ServicioAplicacionCuenta:
-    def __init__(self, repositorio: IRepositorioCuenta):
+    def __init__(self, repositorio: IRepositorioCuenta, dominios_institucionales=('unsa.edu.pe',)):
         self.repositorio = repositorio
+        self.dominios_institucionales = tuple(
+            dominio.strip().lower().lstrip('@')
+            for dominio in dominios_institucionales
+            if dominio.strip()
+        )
 
     def cambiar_clave_propia(self, actor: int, actual: str, nueva: str, confirmacion: str) -> None:
         actor = entero(actor)
@@ -34,8 +43,14 @@ class ServicioAplicacionCuenta:
                 raise PermissionError('La cuenta no tiene acceso activo.')
             if not check_password_hash(cuenta['contrasena_hash'], actual):
                 raise ValueError('La contraseña actual es incorrecta.')
+            if check_password_hash(cuenta['contrasena_hash'], nueva):
+                raise ValueError('La nueva contraseña debe ser diferente de la actual.')
             operacion.actualizar_cuenta(
-                actor, {'contrasena_hash': generate_password_hash(nueva, method='scrypt')}
+                actor,
+                {
+                    'contrasena_hash': generate_password_hash(nueva, method='scrypt'),
+                    'debe_cambiar_clave': False,
+                },
             )
 
     def consultar_cuenta(self, documento: str) -> dict:
@@ -49,28 +64,52 @@ class ServicioAplicacionCuenta:
     def tiene_cuenta(self, documento: str) -> bool:
         return self.repositorio.consultar_cuenta(dni(documento)) is not None
 
-    def validar_creacion_cuenta(self, documento: str) -> None:
-        self._validar_persona_sin_cuenta(self.repositorio, dni(documento))
+    def consultar_propuesta_cuenta(self, documento: str) -> dict:
+        persona = self._validar_persona_sin_cuenta(self.repositorio, dni(documento))
+        try:
+            nombre = self._proponer_nombre(self.repositorio, persona)
+        except ValueError:
+            nombre = ''
+        return dict(nombre_usuario=nombre)
+
+    def _proponer_nombre(self, repositorio, persona):
+        base = base_nombre_usuario(persona, self.dominios_institucionales)
+        ocupados = repositorio.consultar_nombres_usuario(base[:45])
+        return nombre_usuario_disponible(base, ocupados)
 
     @staticmethod
-    def _validar_persona_sin_cuenta(repositorio: IRepositorioCuenta, documento: str) -> None:
-        estado = repositorio.consultar_estado_persona(documento)
-        if estado is None:
+    def _validar_persona_sin_cuenta(
+        repositorio: IRepositorioCuenta, documento: str, bloquear=False
+    ) -> dict:
+        persona = repositorio.consultar_persona_para_cuenta(documento, bloquear=bloquear)
+        if persona is None:
             raise NoEncontrado('Persona inexistente.')
-        if estado != 'ACTIVA':
+        if persona['estado'] != 'ACTIVA':
             raise ValueError('La persona debe estar activa para crear su cuenta.')
         if repositorio.consultar_cuenta(documento) is not None:
             raise Conflicto('La persona ya tiene una cuenta de acceso.')
+        return persona
 
-    def registrar_cuenta(self, documento: str, nombre: str, clave: str, actor: int) -> int:
+    def registrar_cuenta(self, documento: str, nombre: str, actor: int) -> CuentaCreada:
         documento = dni(documento)
         actor = entero(actor)
-        nombre = validar_nombre_usuario(nombre)
-        hash_clave = generate_password_hash(validar_clave(clave), method='scrypt')
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(actor), 'USUARIOS_GESTIONAR')
-            self._validar_persona_sin_cuenta(operacion, documento)
-            return operacion.registrar_cuenta(documento, nombre, hash_clave)
+            persona = self._validar_persona_sin_cuenta(operacion, documento, bloquear=True)
+            nombre = (
+                validar_nombre_usuario(nombre)
+                if nombre
+                else self._proponer_nombre(operacion, persona)
+            )
+            if operacion.consultar_id_por_nombre_usuario(nombre) is not None:
+                raise Conflicto('El nombre de usuario ya está registrado.')
+            clave = generar_clave_temporal()
+            identificador = operacion.registrar_cuenta(
+                documento,
+                nombre,
+                generate_password_hash(clave, method='scrypt'),
+            )
+            return CuentaCreada(identificador, nombre, clave)
 
     def actualizar_cuenta(self, documento: str, datos: dict, actor: int) -> None:
         if 'rol' in datos:
@@ -82,11 +121,12 @@ class ServicioAplicacionCuenta:
 
     def _preparar_cambios_cuenta(self, datos: dict) -> dict:
         clave = validar_clave(datos.get('clave', ''), permitir_vacia=True)
-        cambios = {}
+        cambios: dict = {}
         if 'nombre_usuario' in datos:
             cambios['nombre_usuario'] = validar_nombre_usuario(datos['nombre_usuario'])
         if clave:
             cambios['contrasena_hash'] = generate_password_hash(clave, method='scrypt')
+            cambios['debe_cambiar_clave'] = True
         if 'estado_cuenta' in datos:
             if datos['estado_cuenta'] not in ESTADOS_CUENTA:
                 raise ValueError('Estado de cuenta inválido.')
@@ -106,6 +146,10 @@ class ServicioAplicacionCuenta:
             actual = next((c for c in cuentas if c['dni_persona'] == documento), None)
             if actual is None:
                 raise NoEncontrado('Cuenta inexistente.')
+            if 'nombre_usuario' in cambios:
+                ocupado = operacion.consultar_id_por_nombre_usuario(cambios['nombre_usuario'])
+                if ocupado is not None and ocupado != actual['id_usuario']:
+                    raise Conflicto('El nombre de usuario ya está registrado.')
             if permiso == 'USUARIOS_GESTIONAR':
                 comprobar_version(datos.get('version'), version_cuenta(actual))
             cuenta_actor = next((c for c in cuentas if c['id_usuario'] == actor), None)
