@@ -1343,44 +1343,66 @@ img {
 }
 
 .politicas-matriz {
-    min-width: 950px;
+    min-width: 900px;
     table-layout: fixed;
 }
 
+.politicas-matriz thead th {
+    background: var(--blanco);
+    text-transform: uppercase;
+    font-size: var(--letra-pequena);
+    letter-spacing: .5px;
+    font-weight: 500;
+}
+
 .politicas-matriz th:first-child {
-    width: 22%;
+    width: 28%;
 }
 
 .politicas-matriz td {
-    vertical-align: top;
+    vertical-align: middle;
+    padding: 13px 18px;
+    background: var(--blanco);
+}
+
+.politicas-matriz tbody th {
+    vertical-align: middle;
+    background: var(--blanco);
+    font-size: var(--letra-normal);
 }
 
 .politicas-matriz .check {
-    font-size: var(--letra-micro);
-    align-items: flex-start;
+    font-size: var(--letra-pequena);
+    align-items: center;
+    gap: 8px;
+    margin: 0;
 }
 
 .politica-plazo {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 66px 96px;
     gap: 8px;
 }
 
 .politica-celda {
-    gap: 16px;
+    gap: 7px;
 }
 
 .politica-celda button {
-    justify-self: end;
+    justify-self: start;
+    margin-top: 0;
 }
 
 .politica-celda label {
     font-size: var(--letra-micro);
+    min-width: 0;
+    margin: 0;
 }
 
 .politica-celda input:not([type=checkbox]), .politica-celda select {
-    padding: 7px 8px;
-    font-size: var(--letra-pequena);
+    min-height: 42px;
+    padding: 9px 10px;
+    font-size: var(--letra-normal);
 }
 
 .permisos-panel .tabla td {
@@ -1624,3 +1646,98 @@ img {
 html [hidden], body[hidden] {
     display: none;
 }
+/* Administración: listado compacto, categorías y formularios en diálogo. */
+.solo-lectores {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+.administracion-recursos { max-width: 1280px; }
+.administracion-recursos h1 { font-size: clamp(24px, 2.5vw, 32px); letter-spacing: -.6px; }
+.administracion-recursos .cabecera { margin-bottom: 18px; }
+.resumen-recursos { margin: 0 0 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.resumen-recursos article { padding: 15px 21px; }
+.resumen-recursos article > strong { font-size: 28px; margin: 1px 0 0; }
+.resumen-recursos .disponibilidad { background: var(--blanco); }
+.pestanas-recursos { display: flex; gap: 26px; border-bottom: 1px solid var(--borde); }
+.pestanas-recursos a { padding: 13px 0 11px; border-bottom: 2px solid transparent; text-decoration: none; color: var(--suave); font-size: var(--letra-pequena); }
+.pestanas-recursos a[aria-current] { color: var(--acento); border-bottom-color: var(--acento); font-weight: 650; }
+.filtros-administracion { display: grid; grid-template-columns: 1.7fr 1fr 1fr auto; gap: 12px; border: 0; background: transparent; padding: 0; margin: 20px 0; }
+.filtros-administracion label { font-size: var(--letra-pequena); }
+.filtros-administracion input, .filtros-administracion select { font-size: var(--letra-pequena); min-height: 39px; }
+.filtros-administracion .acciones { gap: 14px; font-size: var(--letra-pequena); }
+.tabla-administracion { margin: 0; }
+.tabla-administracion > table { table-layout: fixed; }
+.tabla-administracion > table > thead th { background: var(--blanco); font-size: var(--letra-micro); text-transform: uppercase; letter-spacing: .5px; font-weight: 500; }
+.tabla-administracion > table > thead th:first-child { width: 45%; }
+.tabla-administracion > table > thead th:nth-child(2) { width: 27%; }
+.tabla-administracion > table > thead th:last-child { width: 100px; }
+.tabla-administracion td { vertical-align: middle; padding: 10px 18px; overflow-wrap: anywhere; }
+.tabla-administracion th { padding: 12px 18px; }
+.tabla-administracion tbody tr:nth-child(even) { background: var(--blanco); }
+.tabla-administracion tbody tr:hover { background: var(--fondo-hover); }
+.tabla-administracion td small { margin-top: 0; }
+.tabla-administracion .nombre-recurso { color: var(--texto); text-decoration: none; font-weight: 600; }
+.tabla-administracion .nombre-recurso:hover { color: var(--acento); text-decoration: underline; }
+.acciones-fila { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+.acciones-fila form { margin: 0; }
+.boton-icono, .tabla .boton-icono { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 6px; border: 0; background: transparent; color: var(--suave); border-radius: 5px; text-decoration: none; }
+.boton-icono:hover { color: var(--acento); background: var(--fondo-hover); filter: none; }
+.cantidad-bienes, .tabla .cantidad-bienes { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 0; color: var(--acento); padding: 5px 0; }
+.cantidad-bienes svg { width: 13px; height: 13px; }
+.cantidad-bienes[aria-expanded=true] svg { transform: rotate(180deg); }
+.fila-inventario > td { background: var(--fondo); padding: 18px; }
+.inventario-desplegado .encabezado-seccion { margin: 0 0 12px; }
+.inventario-desplegado h2 { margin: 0; font-size: var(--letra-normal); }
+.inventario-desplegado table { border: 1px solid var(--borde); }
+.pie-administracion, .encabezado-categorias { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; font-size: var(--letra-pequena); }
+.pie-administracion { margin-top: 17px; }
+.encabezado-categorias { margin: 20px 0 18px; }
+.encabezado-categorias > button { border-color: var(--acento); }
+.lista-categorias-admin { background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radio-panel); overflow: hidden; }
+.categoria-admin { display: flex; align-items: center; gap: 16px; padding: 12px 18px; border-bottom: 1px solid var(--borde); }
+.categoria-admin:last-child { border-bottom: 0; }
+.categoria-admin > div:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.categoria-admin strong { display: block; font-size: var(--letra-pequena); font-weight: 600; }
+.categoria-admin small { display: block; font-size: var(--letra-micro); }
+.sin-recursos, .tabla-administracion td.sin-recursos { padding: 30px 18px; color: var(--suave); text-align: center; }
+.dialogo-recursos { width: min(540px, calc(100% - 32px)); max-height: calc(100dvh - 48px); padding: 26px; border: 1px solid var(--borde); border-radius: 12px; color: var(--texto); background: var(--blanco); box-shadow: 0 18px 60px #302b2d26; }
+.dialogo-recurso-amplio { width: min(860px, calc(100% - 32px)); }
+.dialogo-recursos::backdrop { background: #21131b80; }
+.cabecera-dialogo { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+.cabecera-dialogo h2 { margin: 0; font-size: 21px; }
+.dialogo-recursos .cuatro-columnas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 850px) {
+    .filtros-administracion { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .filtros-administracion .acciones { align-self: end; }
+}
+@media (max-width: 600px) {
+    .resumen-recursos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .resumen-recursos article { padding: 12px; border-bottom: 0; border-right: 1px solid var(--borde); }
+    .resumen-recursos article > strong { font-size: 25px; }
+    .filtros-administracion { grid-template-columns: minmax(0, 1fr); }
+    .tabla-administracion > table { min-width: 590px; }
+    .dialogo-recursos { padding: 20px; }
+    .dialogo-recursos .cuatro-columnas { grid-template-columns: minmax(0, 1fr); }
+}
+/* Sanciones: estados separados y levantamiento con motivo por fila. */
+.sanciones-administracion { max-width: 1440px; }
+.busqueda-sanciones { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 24px 0; }
+.busqueda-sanciones label { width: min(100%, 445px); font-size: var(--letra-pequena); }
+.tabla-sanciones { margin-top: 0; }
+.tabla-sanciones table { min-width: 960px; }
+.tabla-sanciones thead th { background: var(--blanco); text-transform: uppercase; font-size: var(--letra-pequena); letter-spacing: .5px; font-weight: 500; }
+.tabla-sanciones tbody th, .tabla-sanciones td { vertical-align: middle; background: var(--blanco); padding: 16px 20px; }
+.tabla-sanciones tbody th { font-size: var(--letra-normal); }
+.tabla-sanciones th:last-child { min-width: 315px; }
+.levantamiento-sancion { display: flex; align-items: center; gap: 10px; margin: 0; }
+.levantamiento-sancion label { flex: 1; min-width: 170px; margin: 0; }
+.levantamiento-sancion input { font-size: var(--letra-pequena); }
+.tabla-sanciones .levantamiento-sancion button { border-color: var(--acento); padding: 10px 18px; }
+.detalle-sancion { margin-top: 6px; color: var(--suave); font-size: var(--letra-micro); }
+.detalle-sancion summary { margin: 0; font-weight: 400; }
+.detalle-sancion p { max-width: 280px; margin: 6px 0 0; }

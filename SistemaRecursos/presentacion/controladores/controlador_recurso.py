@@ -86,12 +86,15 @@ class ControladorRecurso:
             modo='formulario',
             recurso=recurso,
             categorias=self.servicio.consultar_categorias(),
+            volver='administracion' if request.args.get('volver') == 'administracion' else '',
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
     def eliminar_recurso(self, identificador):
         self.servicio.eliminar_recurso(identificador, g.usuario.id_usuario)
         flash('Recurso eliminado.')
+        if request.form.get('volver') == 'administracion':
+            return redirect(url_for('recursos.consultar_administracion_recursos'))
         return redirect(url_for('recursos.consultar_recursos'))
 
     @requiere_permiso('RECURSOS_GESTIONAR')
@@ -105,7 +108,11 @@ class ControladorRecurso:
             flash('Categoría guardada.')
             if request.form.get('volver') == 'administracion':
                 return redirect(
-                    url_for('recursos.consultar_administracion_recursos', _anchor='categorias')
+                    url_for(
+                        'recursos.consultar_administracion_recursos',
+                        vista='categorias',
+                        _anchor='categorias',
+                    )
                 )
             return redirect(url_for('recursos.gestionar_categorias'))
         return render_template(
@@ -117,6 +124,10 @@ class ControladorRecurso:
         self.servicio.eliminar_categoria(identificador, g.usuario.id_usuario)
         if request.form.get('volver') == 'administracion':
             return redirect(
-                url_for('recursos.consultar_administracion_recursos', _anchor='categorias')
+                url_for(
+                    'recursos.consultar_administracion_recursos',
+                    vista='categorias',
+                    _anchor='categorias',
+                )
             )
         return redirect(url_for('recursos.gestionar_categorias'))

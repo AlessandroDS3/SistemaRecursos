@@ -1,6 +1,15 @@
 {% from 'formularios.html' import csrf, campo %}
 
-{% macro formulario_recurso(datos, categorias, accion, primer_bien=false, volver='') %}
+{% macro icono_recurso(tipo) %}
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    {% if tipo == 'editar' %}<path d="m16 3 5 5-12 12H4v-5L16 3Z M14 5l5 5"/>
+    {% elif tipo == 'eliminar' %}<path d="M3 6h18 M9 6V3h6v3 M6 6l1 15h10l1-15 M10 10v7 M14 10v7"/>
+    {% elif tipo == 'cerrar' %}<path d="m6 6 12 12 M18 6 6 18"/>
+    {% else %}<path d="m6 9 6 6 6-6"/>{% endif %}
+  </svg>
+{% endmacro %}
+
+{% macro formulario_recurso(datos, categorias, accion, primer_bien=false, volver='', en_dialogo=false) %}
   <form method="post" action="{{ accion }}" class="formulario">
     {{ csrf() }}
     {% if datos.get("id_recurso") %}
@@ -42,59 +51,66 @@
         <p class="suave">Estado inicial: disponible.</p>
       </fieldset>
     {% endif %}
-    <button type="submit">Guardar</button>
+    <div class="acciones">
+      <button type="submit">Guardar</button>
+      {% if en_dialogo %}<button type="button" class="secundario" data-cerrar-dialogo>Cancelar</button>
+      {% elif volver == 'administracion' %}<a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Cancelar</a>{% endif %}
+    </div>
   </form>
 {% endmacro %}
 
 {% macro categorias_recursos(categorias, volver='') %}
-  <section class="panel" id="categorias">
-    <div class="encabezado-seccion">
-      <h2>Categorías de recursos</h2>
-      <small>{{ categorias|length }} registradas</small>
+  <section class="categorias-administracion" id="categorias">
+    <div class="encabezado-categorias">
+      <small>{{ categorias|length }} {{ 'categoría registrada' if categorias|length == 1 else 'categorías registradas' }}</small>
+      <button type="button" class="secundario" data-abrir-dialogo="nueva-categoria">+ Nueva categoría</button>
     </div>
-    <div class="dos-columnas">
-      <div class="lista-categorias">
-        {% for c in categorias %}
-          <article class="fila-categoria">
-            <div>
-              <strong>{{ c.nombre }}</strong>
-              <small>{{ c.descripcion or 'Sin descripción' }}</small>
-            </div>
-            <details>
-              <summary>Editar categoría</summary>
-              <form method="post"
-                    action="{{ url_for('recursos.gestionar_categorias') }}"
-                    class="formulario">
-                {{ csrf() }}
-                <input type="hidden" name="volver" value="{{ volver }}">
-                <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
-                <input type="hidden" name="version" value="{{ c.version }}">
-                {{ campo('nombre','Nombre',c.nombre,requerido=true,maximo=80) }}
-                {{ campo('descripcion','Descripción',c.descripcion or '') }}
-                <button>Guardar</button>
-              </form>
-            </details>
-            <form method="post"
-                  action="{{ url_for('recursos.eliminar_categoria',identificador=c.id_categoria) }}">
+    <div class="lista-categorias-admin">
+      {% for c in categorias %}
+        <article class="categoria-admin">
+          <div><strong>{{ c.nombre }}</strong>{% if c.descripcion %}<small>{{ c.descripcion }}</small>{% endif %}</div>
+          <div class="acciones-fila">
+            <button type="button" class="boton-icono" data-abrir-dialogo="editar-categoria-{{ c.id_categoria }}"
+                    aria-label="Editar categoría {{ c.nombre }}" title="Editar categoría">{{ icono_recurso('editar') }}</button>
+            <form method="post" action="{{ url_for('recursos.eliminar_categoria', identificador=c.id_categoria) }}"
+                  data-confirmar="¿Deseas eliminar la categoría {{ c.nombre }}?">
               {{ csrf() }}
               <input type="hidden" name="volver" value="{{ volver }}">
-              <button class="secundario">Eliminar categoría</button>
+              <button class="boton-icono" aria-label="Eliminar categoría {{ c.nombre }}" title="Eliminar categoría">{{ icono_recurso('eliminar') }}</button>
             </form>
-          </article>
-        {% else %}
-          <p>Aún no hay categorías.</p>
-        {% endfor %}
-      </div>
-      <form method="post"
-            action="{{ url_for('recursos.gestionar_categorias') }}"
-            class="formulario">
-        <h3>Registrar categoría</h3>
-        {{ csrf() }}
-        <input type="hidden" name="volver" value="{{ volver }}">
-        {{ campo('nombre','Nombre de categoría',requerido=true,maximo=80) }}
-        {{ campo('descripcion', 'Descripción (opcional)') }}
-        <button>Guardar</button>
-      </form>
+          </div>
+        </article>
+      {% else %}<p class="sin-recursos">Aún no hay categorías. Crea la primera para registrar recursos.</p>{% endfor %}
     </div>
   </section>
+  {% for c in categorias %}
+    <dialog id="editar-categoria-{{ c.id_categoria }}" class="dialogo-recursos" aria-labelledby="titulo-categoria-{{ c.id_categoria }}">
+      <div class="cabecera-dialogo">
+        <h2 id="titulo-categoria-{{ c.id_categoria }}">Editar categoría</h2>
+        <button type="button" class="boton-icono" data-cerrar-dialogo aria-label="Cerrar formulario">{{ icono_recurso('cerrar') }}</button>
+      </div>
+      <form method="post" action="{{ url_for('recursos.gestionar_categorias') }}" class="formulario">
+        {{ csrf() }}
+        <input type="hidden" name="volver" value="{{ volver }}">
+        <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
+        <input type="hidden" name="version" value="{{ c.version }}">
+        {{ campo('nombre','Nombre',c.nombre,requerido=true,maximo=80) }}
+        {{ campo('descripcion','Descripción (opcional)',c.descripcion or '') }}
+        <div class="acciones"><button>Guardar</button><button type="button" class="secundario" data-cerrar-dialogo>Cancelar</button></div>
+      </form>
+    </dialog>
+  {% endfor %}
+  <dialog id="nueva-categoria" class="dialogo-recursos" aria-labelledby="titulo-nueva-categoria">
+    <div class="cabecera-dialogo">
+      <h2 id="titulo-nueva-categoria">Nueva categoría</h2>
+      <button type="button" class="boton-icono" data-cerrar-dialogo aria-label="Cerrar formulario">{{ icono_recurso('cerrar') }}</button>
+    </div>
+    <form method="post" action="{{ url_for('recursos.gestionar_categorias') }}" class="formulario">
+      {{ csrf() }}
+      <input type="hidden" name="volver" value="{{ volver }}">
+      {{ campo('nombre','Nombre',requerido=true,maximo=80) }}
+      {{ campo('descripcion','Descripción (opcional)') }}
+      <div class="acciones"><button>Guardar</button><button type="button" class="secundario" data-cerrar-dialogo>Cancelar</button></div>
+    </form>
+  </dialog>
 {% endmacro %}

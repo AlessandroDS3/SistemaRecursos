@@ -1,4 +1,34 @@
 const mostrarClave = document.querySelector('[data-mostrar-clave]');
+document.querySelectorAll('[data-guardar-modificada]').forEach(formulario => {
+  const guardar = formulario.querySelector('[data-guardar-cambios]');
+  if (!guardar) return;
+  const inicial = new URLSearchParams(new FormData(formulario)).toString();
+  function actualizarGuardado() {
+    guardar.hidden = new URLSearchParams(new FormData(formulario)).toString() === inicial;
+  }
+  formulario.addEventListener('input', actualizarGuardado);
+  formulario.addEventListener('change', actualizarGuardado);
+  actualizarGuardado();
+});
+document.querySelectorAll('[data-abrir-dialogo]').forEach(boton => {
+  boton.addEventListener('click', () => {
+    const dialogo = document.getElementById(boton.dataset.abrirDialogo);
+    if (!dialogo || dialogo.open) return;
+    dialogo.showModal();
+    dialogo.querySelector('input:not([type="hidden"]), select, textarea')?.focus();
+  });
+});
+document.querySelectorAll('[data-cerrar-dialogo]').forEach(boton => {
+  boton.addEventListener('click', () => boton.closest('dialog')?.close());
+});
+document.querySelectorAll('[data-desplegar-bienes]').forEach(boton => {
+  boton.addEventListener('click', () => {
+    const inventario = document.getElementById(boton.dataset.desplegarBienes);
+    if (!inventario) return;
+    inventario.hidden = !inventario.hidden;
+    boton.setAttribute('aria-expanded', String(!inventario.hidden));
+  });
+});
 const selectorReporte = document.querySelector('[data-seleccionar-reporte]');
 selectorReporte?.addEventListener('change', () => selectorReporte.form.requestSubmit());
 document.querySelectorAll('[data-filtrar-al-cambiar]').forEach(selector => {

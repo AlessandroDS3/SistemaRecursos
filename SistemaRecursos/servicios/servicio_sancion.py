@@ -1,5 +1,5 @@
 from dominio.compartido.validacion import NoEncontrado
-from dominio.compartido.validacion import entero
+from dominio.compartido.validacion import entero, texto
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 from dominio.gestion_control.incidencia import TipoIncidencia, hay_retraso
 from dominio.gestion_control.sancion import IRepositorioSancion, validar_levantamiento
@@ -48,8 +48,14 @@ class ServicioAplicacionSancion:
                     )
         return creadas
 
-    def consultar_sanciones(self):
-        return self.repositorio.consultar_sanciones()
+    def consultar_sanciones(self, filtros=None):
+        filtros = filtros or {}
+        estado = filtros.get('estado', '')
+        if estado not in ('', 'ACTIVA', 'LEVANTADA'):
+            raise ValueError('Estado de sanción inválido.')
+        return self.repositorio.consultar_sanciones(
+            dict(estado=estado, q=texto(filtros.get('q'), 'Búsqueda', 120))
+        )
 
     def levantar_sancion(self, identificador, justificacion, actor):
         identificador = entero(identificador)

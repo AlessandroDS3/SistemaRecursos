@@ -138,7 +138,7 @@
       <a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Volver a administración</a>
     </div>
     <section class="panel">
-      {{ formulario_recurso(recurso,categorias,request.path,primer_bien=not recurso) }}
+      {{ formulario_recurso(recurso,categorias,request.path,primer_bien=not recurso,volver=volver|default('')) }}
     </section>
   {% endif %}
 {% endblock %}

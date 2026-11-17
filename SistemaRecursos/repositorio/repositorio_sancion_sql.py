@@ -2,13 +2,25 @@ from repositorio.base_sql import RepositorioSQL
 
 
 class RepositorioSancionSQL(RepositorioSQL):
-    def consultar_sanciones(self):
-        return self.consultar_sql('''SELECT s.*,i.tipo,i.id_detalle,d.id_prestamo,
+    def consultar_sanciones(self, filtros=None):
+        filtros = filtros or {}
+        sql = '''SELECT s.*,i.tipo,i.id_detalle,d.id_prestamo,
             CONCAT(p.nombres,' ',p.apellidos) AS responsable FROM sancion s
             JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
             JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle
             JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo JOIN persona p ON p.dni=pr.dni_persona
-            ORDER BY s.fecha DESC,s.id_sancion DESC''')
+            WHERE 1=1'''
+        parametros = []
+        if filtros.get('estado'):
+            sql += ' AND s.estado=%s'
+            parametros.append(filtros['estado'])
+        if filtros.get('q'):
+            consulta = filtros['q']
+            sql += " AND (CONCAT(p.nombres,' ',p.apellidos) LIKE %s OR p.dni LIKE %s OR d.id_prestamo=%s)"
+            parametros.extend(
+                [f'%{consulta}%', f'%{consulta}%', consulta if consulta.isdigit() else 0]
+            )
+        return self.consultar_sql(sql + ' ORDER BY s.fecha DESC,s.id_sancion DESC', parametros)
 
     def consultar_sancion(self, identificador, bloquear=False):
         return self.consultar_sql(

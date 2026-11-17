@@ -16,7 +16,14 @@ class ControladorSancion:
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     def consultar_sanciones(self):
-        return render_template('vista_sancion.html', sanciones=self.servicio.consultar_sanciones())
+        estado = request.args.get('estado') or 'ACTIVA'
+        consulta = request.args.get('q', '').strip()
+        return render_template(
+            'vista_sancion.html',
+            sanciones=self.servicio.consultar_sanciones(dict(estado=estado, q=consulta)),
+            estado_actual=estado,
+            consulta=consulta,
+        )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     def levantar_sancion(self, identificador):
@@ -24,4 +31,4 @@ class ControladorSancion:
             identificador, request.form.get('justificacion'), g.usuario.id_usuario
         )
         flash('Sanción levantada para todos los participantes del préstamo.')
-        return redirect(url_for('sanciones.consultar_sanciones'))
+        return redirect(url_for('sanciones.consultar_sanciones', q=request.form.get('q', '')))
