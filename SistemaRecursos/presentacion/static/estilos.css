@@ -1724,6 +1724,38 @@ html [hidden], body[hidden] {
     .dialogo-recursos { padding: 20px; }
     .dialogo-recursos .cuatro-columnas { grid-template-columns: minmax(0, 1fr); }
 }
+/* Historial completo por objeto, persona y préstamos propios. */
+.historial-completo { max-width: 1500px; }
+.historial-completo .cabecera > div:first-child { max-width: 740px; }
+.historial-completo h2 { font-size: 21px; }
+.busqueda-historial { align-items: end; margin: 22px 0; }
+.busqueda-historial label { width: min(100%, 390px); }
+.ficha-historial { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; margin: 20px 0; padding: 24px; }
+.ficha-historial h2 { margin: 7px 0; }
+.ficha-historial p { margin: 5px 0; }
+.resumen-historial { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.resumen-historial article { display: grid; gap: 8px; padding: 20px; }
+.resumen-historial span { color: var(--suave); font-size: var(--letra-pequena); }
+.resumen-historial strong { font-size: 30px; }
+.anclas-historial { margin: 24px 0; }
+.prestamo-historial { padding: 0; margin: 14px 0; overflow: hidden; }
+.prestamo-historial > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; cursor: pointer; padding: 20px; }
+.prestamo-historial > summary::before { content: '+'; font-size: 20px; color: var(--acento); }
+.prestamo-historial[open] > summary::before { content: '-'; }
+.prestamo-historial > summary > span:not(.estado) { flex: 1; }
+.contenido-prestamo-historial { padding: 0 20px 20px; border-top: 1px solid var(--borde); }
+.contenido-prestamo-historial table { min-width: 870px; }
+.historial-completo section[id] { scroll-margin-top: 20px; margin-top: 30px; }
+.tabla-cronologia table { min-width: 1000px; }
+.tabla-cronologia td { vertical-align: top; }
+.observacion-historial { max-width: 440px; min-width: 220px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.vacio-historial { margin-top: 24px; padding: 28px; }
+@media (max-width: 650px) {
+    .resumen-historial { grid-template-columns: minmax(0, 1fr); }
+    .resumen-historial article { display: flex; align-items: center; justify-content: space-between; }
+    .prestamo-historial > summary { align-items: flex-start; }
+    .prestamo-historial > summary > span { flex-basis: 100%; }
+}
 /* Sanciones: estados separados y levantamiento con motivo por fila. */
 .sanciones-administracion { max-width: 1440px; }
 .busqueda-sanciones { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 24px 0; }

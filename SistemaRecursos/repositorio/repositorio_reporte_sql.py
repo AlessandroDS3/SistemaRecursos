@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from repositorio.base_sql import RepositorioSQL
 from repositorio.repositorio_prestamo_sql import ESTADO_SQL
 from repositorio.repositorio_persona_sql import TABLAS_TIPO
+from repositorio.repositorio_historial_sql import RepositorioHistorialSQL
 
 BUSQUEDA_PRESTAMO = """
     p.dni_persona LIKE %s
@@ -36,6 +37,13 @@ class ConsultaReporte:
     parametros: list
 
 class RepositorioReporteSQL(RepositorioSQL):
+
+    def consultar_historial(self, filtro, solo_prestamos=False):
+        resultado = RepositorioHistorialSQL(self.conexion, self._cursor).consultar_historial(
+            filtro, solo_prestamos
+        )
+        self._consultar_integrantes_prestamos(resultado['prestamos'])
+        return resultado
 
     def _consulta_reporte(self, filtro):
         funciones = {

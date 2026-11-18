@@ -201,3 +201,32 @@ REPORTES = {
         ),
     ),
 }
+
+# La cronología comparte sus columnas en pantalla, CSV y PDF.
+COLUMNAS_HISTORIAL = tuple(CampoReporte(nombre, etiqueta) for nombre, etiqueta in (
+    ('fecha', 'Fecha'), ('evento', 'Evento'), ('referencia', 'Referencia'),
+    ('id_prestamo', 'Préstamo'), ('dni_persona', 'DNI del solicitante'),
+    ('solicitante', 'Solicitante'), ('tipo_prestamo', 'Modalidad'),
+    ('integrantes', 'Integrantes'), ('codigo_inventario', 'Inventario'),
+    ('recurso', 'Recurso'), ('registrador', 'Registrado por'),
+    ('dni_registrador', 'DNI del registrador'),
+    ('estado_anterior', 'Estado anterior'), ('estado_nuevo', 'Estado nuevo'),
+    ('transicion', 'Cambio registrado'), ('estado_prestamo', 'Estado actual del préstamo'),
+    ('fecha_entrega', 'Entrega'), ('fecha_limite_devolucion', 'Plazo vigente'),
+    ('fecha_devolucion', 'Devolución'), ('entregado_por', 'Entregado por'),
+    ('recibido_por', 'Devolución recibida por'),
+    ('condicion_entrega', 'Condición de entrega'),
+    ('condicion_devolucion', 'Condición de devolución'), ('observacion', 'Observación'),
+))
+REPORTES.update({
+    'historial_bien': DefinicionReporte(
+        titulo='Historial por objeto',
+        descripcion='Busca un bien por nombre del recurso o código de inventario y consulta sus préstamos y eventos registrados.',
+        filtros=('codigo_inventario', 'q'), columnas=COLUMNAS_HISTORIAL,
+    ),
+    'historial_persona': DefinicionReporte(
+        titulo='Historial por persona',
+        descripcion='Préstamos individuales y grupales, solicitudes, incidencias y sanciones de una persona.',
+        filtros=('dni_persona', 'q'), columnas=COLUMNAS_HISTORIAL,
+    ),
+})

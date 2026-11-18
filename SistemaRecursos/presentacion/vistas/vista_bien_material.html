@@ -72,6 +72,9 @@
     </h1>
     <p>{{ bien.estado }}</p>
     <div class="acciones">
+      {% if g.usuario.permite('REPORTES_CONSULTAR') %}
+        <a class="boton secundario" href="{{ url_for('reportes.consultar_reportes', tipo='historial_bien', codigo_inventario=bien.codigo_inventario) }}">Ver historial completo</a>
+      {% endif %}
       {% if g.usuario.permite('PRESTAMOS_GESTIONAR') and bien.estado == 'DISPONIBLE' and not prestamo_pendiente %}
         <a class="boton" href="{{ url_for('prestamos.registrar_prestamo',id_bien=bien.id_bien) }}">Prestar este bien</a>
       {% endif %}

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Protocol
-from dominio.compartido.validacion import LIMA, entero, texto
+from dominio.compartido.validacion import LIMA, dni, entero, texto
 from dominio.gestion_control.catalogo_reportes import OPCIONES_FILTROS, REPORTES
 
 
@@ -18,6 +18,8 @@ class FiltroReporte:
     ubicacion: str = ''
     cumplimiento: str = ''
     tipo_gestion: str = ''
+    codigo_inventario: str = ''
+    dni_persona: str = ''
 
     @classmethod
     def desde_datos(cls, datos):
@@ -37,6 +39,9 @@ class FiltroReporte:
                 raise ValueError(f'Filtro {campo.replace("_", " ")} inválido.')
         self.q = texto(self.q, 'Búsqueda', 120)
         self.ubicacion = texto(self.ubicacion, 'Ubicación', 120)
+        self.codigo_inventario = texto(self.codigo_inventario, 'Código de inventario', 40)
+        if self.dni_persona:
+            self.dni_persona = dni(self.dni_persona)
         if self.id_categoria:
             self.id_categoria = entero(self.id_categoria, 'Categoría')
         for campo in ('desde', 'hasta'):
@@ -90,3 +95,4 @@ def celda_csv(valor):
 
 class IRepositorioReporte(Protocol):
     def consultar_filas_reporte(self, filtro: FiltroReporte) -> list[dict]: ...
+    def consultar_historial(self, filtro: FiltroReporte, solo_prestamos: bool = False) -> dict: ...

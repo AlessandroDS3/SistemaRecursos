@@ -74,6 +74,10 @@ def presentar_reporte(tipo):
         'dni_registrador',
         'descripcion',
     }
+    if tipo.startswith('historial_'):
+        visibles = {'fecha', 'evento', 'referencia', 'codigo_inventario',
+                    'solicitante', 'registrador', 'transicion', 'observacion'}
+        ocultos = {c.nombre for c in reporte.columnas if c.nombre not in visibles}
     if tipo in ('prestamos', 'devoluciones', 'sanciones'):
         ocultos.update(('recurso', 'categoria'))
     if tipo == 'atrasados':

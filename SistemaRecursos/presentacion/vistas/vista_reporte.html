@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from 'parciales/formularios.html' import campo %}
-{% from 'parciales/componentes.html' import estado %}
+{% from 'parciales/componentes.html' import estado, selector_reporte %}
 
 {% macro filtro_opciones(nombre, etiqueta, valores, actual) %}
   <label>
@@ -28,18 +28,7 @@
          href="{{ url_for('reportes.exportar_reportes_pdf', **parametros) }}">Descargar PDF</a>
     </div>
   </div>
-  <form class="selector-reporte" method="get">
-    <label>
-      Elegir reporte
-      <select name="tipo" data-seleccionar-reporte>
-        {% for codigo, definicion in reportes.items() %}
-          <option value="{{ codigo }}"
-                  {% if filtro.tipo == codigo %}selected{% endif %}>{{ definicion.titulo }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <button class="secundario">Ver reporte</button>
-  </form>
+  {{ selector_reporte(reportes, filtro.tipo) }}
   <p class="suave descripcion-reporte">{{ reporte.descripcion }}</p>
   <form class="filtros filtros-bloque" method="get">
     <input type="hidden" name="tipo" value="{{ filtro.tipo }}">

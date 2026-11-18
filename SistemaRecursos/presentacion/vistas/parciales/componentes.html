@@ -8,6 +8,20 @@
   </article>
 {% endmacro %}
 
+{% macro selector_reporte(reportes, tipo_actual) %}
+  <form class="selector-reporte" method="get" action="{{ url_for('reportes.consultar_reportes') }}">
+    <label>
+      Elegir reporte
+      <select name="tipo" data-seleccionar-reporte>
+        {% for codigo, definicion in reportes.items() %}
+          <option value="{{ codigo }}" {% if tipo_actual == codigo %}selected{% endif %}>{{ definicion.titulo }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="secundario">Ver reporte</button>
+  </form>
+{% endmacro %}
+
 {% macro estado(valor, texto='') %}
   {% set tono = 'positivo' if valor in ('ACTIVA','ACTIVO','DISPONIBLE','DEVUELTO','ATENDIDA','CON_ACCESO','A_TIEMPO','CUMPLIDA') else 'peligro' if valor in ('VENCIDO','PERDIDO','EXPIRADA','INACTIVA','BLOQUEADA','RECHAZADA','TARDIA','DANADO') else 'neutro' %}
   <span class="estado estado-{{ tono }}">{{ texto or valor|replace('_', ' ')|capitalize }}</span>
