@@ -3,7 +3,7 @@ USE prestamos_escuela_pruebas;
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 
--- 01. Préstamos: filas para pantalla, CSV y PDF.
+-- 01. Préstamos
 SELECT
     p.id_prestamo, p.dni_persona,
     CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
@@ -25,7 +25,7 @@ JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
 ORDER BY p.fecha_entrega DESC, p.id_prestamo DESC, d.id_detalle;
 
 
--- 02. Devoluciones y cumplimiento: filas para pantalla, CSV y PDF.
+-- 02. Devoluciones y cumplimiento
 SELECT
     p.id_prestamo, p.dni_persona,
     CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
@@ -90,7 +90,7 @@ JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
 ORDER BY p.fecha_solicitud DESC, p.id_reserva DESC;
 
 
--- 06. Sanciones: filas para pantalla, CSV y PDF.
+-- 06. Sanciones:
 SELECT
     s.id_sancion, p.id_prestamo, p.dni_persona,
     CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
@@ -109,7 +109,7 @@ JOIN sancion s ON s.id_incidencia_ref = i.id_incidencia
 ORDER BY s.fecha DESC, s.id_sancion DESC;
 
 
--- 07. Daños y pérdidas: filas para pantalla, CSV y PDF.
+-- 07. Daños y pérdidas
 SELECT
     h.id_historial_estado, h.fecha, b.id_bien,
     b.codigo_inventario, r.nombre AS recurso,
@@ -146,8 +146,7 @@ FROM (
 ORDER BY personas.apellidos, personas.nombres, personas.dni;
 
 
--- 09. Integrantes: complemento de préstamos, devoluciones y sanciones en pantalla, CSV y PDF.
--- Sustituir (1, 2, 3) por los id_prestamo GRUPALES presentes en las filas recuperadas.
+-- 09. Integrantes
 SELECT pp.id_prestamo, pp.dni_persona, CONCAT(p.nombres, ' ', p.apellidos) AS nombre
 FROM participante_prestamo pp
 JOIN persona p ON p.dni = pp.dni_persona
@@ -155,7 +154,7 @@ WHERE pp.id_prestamo IN (1, 2, 3)
 ORDER BY pp.id_prestamo, pp.responsable DESC, pp.id_participante;
 
 
--- 10. Cuenta de la sesion: consulta compartida por todas las pantallas.
+-- 10. Cuenta de la sesion
 SET @id_usuario = 1;
 SELECT u.id_usuario, p.dni, u.nombre_usuario, u.contrasena_hash,
        u.rol, u.estado_cuenta, u.debe_cambiar_clave, p.estado AS estado_persona, p.nombres, p.apellidos
@@ -164,10 +163,10 @@ JOIN persona p ON p.dni = u.dni_persona
 WHERE u.id_usuario = @id_usuario;
 
 
--- 11. Permisos: usar el rol devuelto por la consulta anterior.
+-- 11. Permisos
 SET @rol = 'ADMINISTRADOR';
 SELECT permiso FROM rol_permiso WHERE rol = @rol;
 
 
--- 12. Categorías del selector: solo en pantalla si el reporte admite filtrar por categoria; no se consulta al descargar CSV ni PDF.
+-- 12. Categorías del selector
 SELECT * FROM categoria_recurso ORDER BY nombre;

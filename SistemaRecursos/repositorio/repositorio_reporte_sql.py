@@ -1,15 +1,9 @@
-"""Una consulta de filas por reporte, compartida por pantalla, CSV y PDF.
-
-Los préstamos grupales agregan una consulta de integrantes cuando corresponde.
-"""
-
 from dataclasses import dataclass
 
 from repositorio.base_sql import RepositorioSQL
 from repositorio.repositorio_prestamo_sql import ESTADO_SQL
 from repositorio.repositorio_persona_sql import TABLAS_TIPO
 
-# Búsqueda reutilizada en los reportes que consultan préstamos.
 BUSQUEDA_PRESTAMO = """
     p.dni_persona LIKE %s
     OR CONCAT(per.nombres, ' ', per.apellidos) LIKE %s
@@ -36,17 +30,12 @@ JOINS_PRESTAMO = """
     JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
 """
 
-
 @dataclass
 class ConsultaReporte:
     sql_reporte: str
     parametros: list
 
-
 class RepositorioReporteSQL(RepositorioSQL):
-    # ================================================================
-    # ENTRADA: seleccionar el reporte y consultar MySQL
-    # ================================================================
 
     def _consulta_reporte(self, filtro):
         funciones = {
@@ -64,27 +53,20 @@ class RepositorioReporteSQL(RepositorioSQL):
         return funciones[filtro.tipo](filtro)
 
     def consultar_filas_reporte(self, filtro):
-        """Recuperar todas las filas filtradas para pantalla, CSV y PDF."""
         consulta = self._consulta_reporte(filtro)
         filas = self.consultar_sql(consulta.sql_reporte, consulta.parametros)
         if filtro.tipo in ('prestamos', 'devoluciones', 'sanciones'):
             self._consultar_integrantes_prestamos(filas)
         return filas
 
-    # ================================================================
-    # FILTROS COMPARTIDOS: ayudan a mantener legibles los reportes
-    # ================================================================
-
     @staticmethod
     def _where(condiciones):
-        """Construir el WHERE con los filtros del reporte."""
         return 'WHERE ' + ' AND '.join(condiciones) if condiciones else ''
 
     def _filtros_comunes(self, filtro, busqueda, campo_fecha=None, campo_estado=None):
         condiciones = []
         parametros = []
 
-        # Fecha inicial incluida; fecha final excluida.
         if campo_fecha and filtro.inicio:
             condiciones.append(f'{campo_fecha} >= %s')
             parametros.append(filtro.inicio)
@@ -108,11 +90,7 @@ class RepositorioReporteSQL(RepositorioSQL):
         return condiciones, parametros
 
     def _filtros_personas(self, filtro, condiciones, parametros, incluir_modalidad=True):
-        """Aplicar filtros de modalidad y tipo de persona cuando correspondan.
 
-        En reservas no existe p.tipo_prestamo, por eso se omite la modalidad.
-        En todos estos reportes, p.dni_persona identifica al solicitante.
-        """
         if incluir_modalidad and filtro.modalidad:
             condiciones.append('p.tipo_prestamo = %s')
             parametros.append(filtro.modalidad)
@@ -124,18 +102,14 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Préstamos
 
     def _consulta_prestamos(self, filtro):
-        # Filtros
         condiciones, parametros = self._filtros_comunes(
             filtro, BUSQUEDA_PRESTAMO, 'p.fecha_entrega', ESTADO_SQL
         )
         self._filtros_personas(filtro, condiciones, parametros)
         where_sql = self._where(condiciones)
 
-        # Tablas
         tablas = JOINS_PRESTAMO
 
-        # Filas para la tabla y el CSV
-        # Un registro por bien incluido en un préstamo.
         sql_reporte = f"""
             SELECT
                 p.id_prestamo, p.dni_persona,
@@ -162,7 +136,6 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Devoluciones y cumplimiento
 
     def _consulta_devoluciones(self, filtro):
-        # Filtros
         condiciones, parametros = self._filtros_comunes(
             filtro, BUSQUEDA_PRESTAMO, 'd.fecha_devolucion'
         )
@@ -177,10 +150,8 @@ class RepositorioReporteSQL(RepositorioSQL):
         retraso = (
             'GREATEST(TIMESTAMPDIFF(MINUTE, d.fecha_limite_devolucion, d.fecha_devolucion), 0)'
         )
-        # Tablas
         tablas = JOINS_PRESTAMO
 
-        # Filas para la tabla y el CSV
         sql_reporte = f"""
             SELECT
                 p.id_prestamo, p.dni_persona,
@@ -207,18 +178,14 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Bienes atrasados
 
     def _consulta_atrasados(self, filtro):
-        # Filtros
+
         condiciones, parametros = self._filtros_comunes(
             filtro, BUSQUEDA_PRESTAMO, 'd.fecha_limite_devolucion'
         )
-
-        # Reglas para considerar atrasado a un bien:
-        #    no se ha devuelto y su plazo de devolución ya terminó.
         condiciones.append('d.fecha_devolucion IS NULL')
         condiciones.append('d.fecha_limite_devolucion < UTC_TIMESTAMP()')
         where_sql = self._where(condiciones)
 
-        # Tablas
         tablas = """
             FROM detalle_prestamo d
             JOIN prestamo p ON p.id_prestamo = d.id_prestamo
@@ -227,10 +194,8 @@ class RepositorioReporteSQL(RepositorioSQL):
             JOIN recurso r ON r.id_recurso = b.id_recurso
         """
 
-        # Retraso expresado en minutos.
         retraso = 'TIMESTAMPDIFF(MINUTE, d.fecha_limite_devolucion, UTC_TIMESTAMP())'
 
-        # Filas para la tabla y el CSV
         sql_reporte = f"""
             SELECT
                 p.id_prestamo, p.dni_persona,
@@ -251,7 +216,6 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Inventario
 
     def _consulta_inventario(self, filtro):
-        # Filtros
         busqueda = """
             b.codigo_inventario LIKE %s OR r.nombre LIKE %s
             OR r.marca LIKE %s OR r.modelo LIKE %s OR b.numero_serie LIKE %s
@@ -262,14 +226,12 @@ class RepositorioReporteSQL(RepositorioSQL):
             parametros.append(f'%{filtro.ubicacion}%')
         where_sql = self._where(condiciones)
 
-        # Tablas
         tablas = """
             FROM bien_material b
             JOIN recurso r ON r.id_recurso = b.id_recurso
             JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
         """
 
-        # Filas para la tabla y el CSV
         sql_reporte = f"""
             SELECT
                 b.id_bien, b.codigo_inventario,
@@ -289,7 +251,6 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Solicitudes y reservas
 
     def _consulta_reservas(self, filtro):
-        # Filtros
         busqueda = """
             p.dni_persona LIKE %s
             OR CONCAT(per.nombres, ' ', per.apellidos) LIKE %s
@@ -298,14 +259,12 @@ class RepositorioReporteSQL(RepositorioSQL):
         condiciones, parametros = self._filtros_comunes(
             filtro, busqueda, 'p.fecha_solicitud', 'p.estado'
         )
-        # Las reservas sí admiten tipo de persona, pero no tipo_prestamo.
         self._filtros_personas(filtro, condiciones, parametros, incluir_modalidad=False)
         if filtro.tipo_gestion:
             condiciones.append('p.tipo_gestion = %s')
             parametros.append(filtro.tipo_gestion)
         where_sql = self._where(condiciones)
 
-        # Tablas
         tablas = """
             FROM reserva p
             JOIN persona per ON per.dni = p.dni_persona
@@ -313,7 +272,6 @@ class RepositorioReporteSQL(RepositorioSQL):
             JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
         """
 
-        # Filas para la tabla y el CSV
         sql_reporte = f"""
             SELECT
                 p.id_reserva, p.tipo_gestion, p.dni_persona,
@@ -334,19 +292,16 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Sanciones
 
     def _consulta_sanciones(self, filtro):
-        # Filtros
         condiciones, parametros = self._filtros_comunes(
             filtro, BUSQUEDA_PRESTAMO, 's.fecha', 's.estado'
         )
         where_sql = self._where(condiciones)
 
-        # Tablas
         tablas = JOINS_PRESTAMO + """
             JOIN incidencia i ON i.id_detalle = d.id_detalle
             JOIN sancion s ON s.id_incidencia_ref = i.id_incidencia
         """
 
-        # Filas para la tabla y el CSV
         sql_reporte = f"""
             SELECT
                 s.id_sancion, p.id_prestamo, p.dni_persona,
@@ -368,7 +323,6 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Daños y pérdidas
 
     def _consulta_danos_perdidas(self, filtro):
-        # Filtros
         busqueda = """
             b.codigo_inventario LIKE %s OR r.nombre LIKE %s
             OR h.dni_responsable LIKE %s
@@ -382,7 +336,6 @@ class RepositorioReporteSQL(RepositorioSQL):
         condiciones.append("h.estado_nuevo IN ('DANADO', 'PERDIDO')")
         where_sql = self._where(condiciones)
 
-        # Tablas
         tablas = """
             FROM historial_estado h
             JOIN bien_material b ON b.id_bien = h.id_entidad
@@ -391,7 +344,6 @@ class RepositorioReporteSQL(RepositorioSQL):
             LEFT JOIN persona reg ON reg.dni = h.dni_responsable
         """
 
-        # Filas para la tabla y el CSV
         sql_reporte = f"""
             SELECT
                 h.id_historial_estado, h.fecha, b.id_bien,
@@ -411,6 +363,8 @@ class RepositorioReporteSQL(RepositorioSQL):
             parametros=parametros,
         )
 
+    # Personas
+
     def _consulta_personas(self, filtro):
         condiciones, parametros = [], []
         if filtro.tipo_persona:
@@ -429,7 +383,6 @@ class RepositorioReporteSQL(RepositorioSQL):
             )""")
             parametros.extend([f'%{filtro.q}%'] * 5)
         where_sql = self._where(condiciones)
-        # La misma prioridad de tipos que el listado de personas evita duplicados.
         sql_reporte = f"""
             SELECT personas.dni, personas.nombres, personas.apellidos,
                 personas.tipo_persona, personas.telefono, personas.correo, personas.estado
@@ -451,17 +404,13 @@ class RepositorioReporteSQL(RepositorioSQL):
         """
         return ConsultaReporte(sql_reporte=sql_reporte, parametros=parametros)
 
-    # ================================================================
-    # COMPLEMENTO: integrantes de préstamos grupales
-    # ================================================================
+    # Integrantes de préstamos grupales
 
     def _consultar_integrantes_prestamos(self, filas):
-        # Identificar los préstamos grupales que aparecen en el reporte.
         identificadores = sorted(
             {fila['id_prestamo'] for fila in filas if fila['tipo_prestamo'] == 'GRUPAL'}
         )
 
-        # Cada fila debe tener su campo de integrantes, aunque esté vacío.
         for fila in filas:
             fila['integrantes'] = ''
         if not identificadores:
@@ -479,7 +428,6 @@ class RepositorioReporteSQL(RepositorioSQL):
         """
         integrantes = self.consultar_sql(sql, identificadores)
 
-        # Agrupar los nombres según el préstamo al que pertenecen.
         por_prestamo = {identificador: [] for identificador in identificadores}
         for persona in integrantes:
             nombre = f'{persona["nombre"]} ({persona["dni_persona"]})'
