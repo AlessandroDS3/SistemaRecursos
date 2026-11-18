@@ -28,7 +28,11 @@ class ControladorReporte:
             **resultado,
             reportes=REPORTES,
             opciones_filtros=OPCIONES_FILTROS,
-            categorias=self.recursos.consultar_categorias(),
+            categorias=(
+                self.recursos.consultar_categorias()
+                if 'id_categoria' in resultado['reporte'].filtros
+                else []
+            ),
         )
 
     @requiere_permiso('REPORTES_CONSULTAR')

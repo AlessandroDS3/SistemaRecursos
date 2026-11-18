@@ -15,13 +15,12 @@ class ServicioAplicacionReporte:
 
     def consultar_reportes(self, datos):
         filtro = FiltroReporte.desde_datos(datos)
-        filas, resumen = self.repositorio.consultar_reportes(filtro)
+        filas = self.repositorio.consultar_filas_reporte(filtro)
         return dict(
             filtro=filtro,
             reporte=filtro.definicion,
             parametros=filtro.parametros,
             filas=filas,
-            resumen=resumen,
         )
 
     def consultar_exportacion_reporte(self, datos):

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from 'parciales/formularios.html' import campo %}
-{% from 'parciales/componentes.html' import indicador, estado %}
+{% from 'parciales/componentes.html' import estado %}
 
 {% macro filtro_opciones(nombre, etiqueta, valores, actual) %}
   <label>
@@ -51,9 +51,10 @@
       {% if "estado" in reporte.filtros %}
         {{ filtro_opciones('estado',reporte.etiqueta_estado,reporte.estados,filtro.estado) }}
       {% endif %}
-      {% for nombre, etiqueta in (('modalidad','Modalidad'),('tipo_persona','Tipo de solicitante'),('cumplimiento','Cumplimiento'),('tipo_gestion','Tipo de gestión')) if nombre in reporte.filtros %}
+      {% for nombre, etiqueta in (('modalidad','Modalidad'),('tipo_persona','Tipo de persona' if filtro.tipo == 'personas' else 'Tipo de solicitante'),('cumplimiento','Cumplimiento'),('tipo_gestion','Tipo de gestión')) if nombre in reporte.filtros %}
         {{ filtro_opciones(nombre,etiqueta,opciones_filtros[nombre],filtro[nombre]) }}
       {% endfor %}
+      {% if 'id_categoria' in reporte.filtros %}
       <label>
         Categoría
         <select name="id_categoria">
@@ -64,9 +65,11 @@
           {% endfor %}
         </select>
       </label>
+      {% endif %}
       {% if "ubicacion" in reporte.filtros %}
         {{ campo('ubicacion','Ubicación',filtro.ubicacion,maximo=120) }}
       {% endif %}
+      {% if 'q' in reporte.filtros %}
       <label class="busqueda-reporte">
         Buscar en reporte
         <input type="search"
@@ -75,6 +78,7 @@
                maxlength="120"
                placeholder="{{ reporte.busqueda }}">
       </label>
+      {% endif %}
     </div>
     {% if reporte.fecha %}
       <p class="suave">Fechas de {{ reporte.fecha }}. Se incluyen ambos días.</p>
@@ -84,12 +88,6 @@
       <a href="{{ url_for('reportes.consultar_reportes',tipo=filtro.tipo) }}">Limpiar filtros</a>
     </div>
   </form>
-  <section class="resumen-estadisticas indicadores-reportes indicadores-{{ reporte.indicadores|length }}"
-           aria-label="Resumen del reporte">
-    {% for campo_resumen in reporte.indicadores %}
-      {{ indicador(campo_resumen.etiqueta,resumen[campo_resumen.nombre]|valor_reporte(campo_resumen.formato)) }}
-    {% endfor %}
-  </section>
   <p class="suave">{{ filas|length }} {{ 'registro' if filas|length == 1 else 'registros' }}.</p>
   {% set columnas = reporte.columnas|selectattr('en_tabla')|list %}
   <section class="panel panel-tabla">

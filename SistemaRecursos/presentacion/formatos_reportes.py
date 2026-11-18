@@ -31,14 +31,10 @@ FORMATOS = {
     'estado_actual': 'estado',
     'condicion_devolucion': 'etiqueta',
     'tipo_gestion': 'etiqueta',
+    'tipo_persona': 'etiqueta',
     'retraso_minutos': 'duracion',
     'id_sancion': 'numero',
     'id_historial_estado': 'numero',
-}
-FORMATOS_INDICADORES = {
-    'porcentaje_puntual': 'porcentaje',
-    'retraso_promedio': 'duracion',
-    'retraso_maximo': 'duracion',
 }
 
 
@@ -49,8 +45,6 @@ def etiqueta_reporte(valor):
 def valor_reporte(valor, formato='texto'):
     if valor is None or valor == '':
         return '—'
-    if formato == 'porcentaje':
-        return f'{float(valor):.1f} %'
     if formato == 'duracion':
         if 0 < valor < 1:
             return 'Menos de 1 min'
@@ -95,9 +89,5 @@ def presentar_reporte(tipo):
                 c.nombre, c.etiqueta, formatos.get(c.nombre, 'texto'), c.nombre not in ocultos
             )
             for c in reporte.columnas
-        ),
-        indicadores=tuple(
-            CampoVistaReporte(c.nombre, c.etiqueta, FORMATOS_INDICADORES.get(c.nombre, 'texto'))
-            for c in reporte.indicadores
         ),
     )

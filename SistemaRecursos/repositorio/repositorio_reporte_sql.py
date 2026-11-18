@@ -1,25 +1,6 @@
-"""Consultas SQL de los reportes del sistema de préstamos escolares.
+"""Una consulta de filas por reporte, compartida por pantalla, CSV y PDF.
 
-RECORRIDO PARA EXPLICAR EN CLASE:
-    consultar_reportes(filtro)
-        -> _consulta_reporte(filtro)
-        -> _consulta_atrasados(filtro)  # O el reporte solicitado
-        -> consultar_sql(...)          # Ejecuta las consultas en MySQL
-        -> devuelve (filas, resumen)
-
-Cada reporte tiene su propia función y dos consultas DIFERENTES:
-    REPORTE: consulta SELECT que devuelve filas para la tabla y el CSV.
-    RESUMEN: consulta SELECT que calcula indicadores del resultado filtrado.
-
-En cada función se lee en este orden:
-    1. FILTROS (qué registros se incluyen).
-    2. TABLAS (FROM y JOIN).
-    3. REPORTE (SQL de las filas).
-    4. RESUMEN (SQL estadístico).
-    5. DEVOLVER (ambas consultas y parámetros).
-
-La consulta de RESUMEN se ejecuta solo al mostrar la pantalla; al exportar
-CSV se consulta únicamente el REPORTE. Ambos muestran todas las filas filtradas.
+Los préstamos grupales agregan una consulta de integrantes cuando corresponde.
 """
 
 from dataclasses import dataclass
@@ -27,8 +8,6 @@ from dataclasses import dataclass
 from repositorio.base_sql import RepositorioSQL
 from repositorio.repositorio_prestamo_sql import ESTADO_SQL
 from repositorio.repositorio_persona_sql import TABLAS_TIPO
-from dominio.gestion_prestamos.reserva import ESTADOS_PENDIENTES
-
 
 # Búsqueda reutilizada en los reportes que consultan préstamos.
 BUSQUEDA_PRESTAMO = """
@@ -61,7 +40,6 @@ JOINS_PRESTAMO = """
 @dataclass
 class ConsultaReporte:
     sql_reporte: str
-    sql_resumen: str
     parametros: list
 
 
@@ -79,31 +57,14 @@ class RepositorioReporteSQL(RepositorioSQL):
             'reservas': self._consulta_reservas,
             'sanciones': self._consulta_sanciones,
             'danos_perdidas': self._consulta_danos_perdidas,
+            'personas': self._consulta_personas,
         }
         if filtro.tipo not in funciones:
             raise ValueError(f'Tipo de reporte no válido: {filtro.tipo}')
         return funciones[filtro.tipo](filtro)
 
-    def consultar_reportes(self, filtro):
-        # Preparar el REPORTE y el RESUMEN correspondientes al tipo elegido.
-        consulta = self._consulta_reporte(filtro)
-
-        # RESUMEN: obtener indicadores y total de filas.
-        resumen = self.consultar_sql(consulta.sql_resumen, consulta.parametros, una=True)
-        resumen = {clave: valor if valor is not None else 0 for clave, valor in resumen.items()}
-        resumen['detalles'] = int(resumen['detalles'])
-
-        # REPORTE: obtener todas las filas que cumplen los filtros.
-        filas = self.consultar_sql(consulta.sql_reporte, consulta.parametros)
-
-        # Completar el REPORTE con integrantes si contiene préstamos grupales.
-        if filtro.tipo in ('prestamos', 'devoluciones', 'sanciones'):
-            self._consultar_integrantes_prestamos(filas)
-
-        return filas, resumen
-
     def consultar_filas_reporte(self, filtro):
-        """Ejecutar solo el REPORTE, con todas las filas, para el CSV."""
+        """Recuperar todas las filas filtradas para pantalla, CSV y PDF."""
         consulta = self._consulta_reporte(filtro)
         filas = self.consultar_sql(consulta.sql_reporte, consulta.parametros)
         if filtro.tipo in ('prestamos', 'devoluciones', 'sanciones'):
@@ -158,9 +119,7 @@ class RepositorioReporteSQL(RepositorioSQL):
 
         if filtro.tipo_persona:
             tabla = TABLAS_TIPO[filtro.tipo_persona]
-            condiciones.append(
-                f'EXISTS (SELECT 1 FROM {tabla} t WHERE t.dni = p.dni_persona)'
-            )
+            condiciones.append(f'EXISTS (SELECT 1 FROM {tabla} t WHERE t.dni = p.dni_persona)')
 
     # Préstamos
 
@@ -195,24 +154,8 @@ class RepositorioReporteSQL(RepositorioSQL):
             ORDER BY p.fecha_entrega DESC, p.id_prestamo DESC, d.id_detalle
         """
 
-        # Resumen de todo el resultado filtrado
-        # Los pendientes incluyen los vencidos (criterio original).
-        sql_resumen = f"""
-            SELECT
-                COUNT(*) AS detalles,
-                COUNT(DISTINCT p.id_prestamo) AS prestamos,
-                COALESCE(SUM(d.fecha_devolucion IS NOT NULL), 0) AS devueltos,
-                COALESCE(SUM(d.fecha_devolucion IS NULL), 0) AS pendientes,
-                COALESCE(SUM(
-                    d.fecha_devolucion IS NULL
-                    AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
-                ), 0) AS vencidos
-            {tablas}
-            {where_sql}
-        """
         return ConsultaReporte(
             sql_reporte=sql_reporte,
-            sql_resumen=sql_resumen,
             parametros=parametros,
         )
 
@@ -221,9 +164,8 @@ class RepositorioReporteSQL(RepositorioSQL):
     def _consulta_devoluciones(self, filtro):
         # Filtros
         condiciones, parametros = self._filtros_comunes(
-            filtro, BUSQUEDA_PRESTAMO, 'd.fecha_devolucion', ESTADO_SQL
+            filtro, BUSQUEDA_PRESTAMO, 'd.fecha_devolucion'
         )
-        self._filtros_personas(filtro, condiciones, parametros)
         condiciones.append('d.fecha_devolucion IS NOT NULL')
 
         if filtro.cumplimiento == 'A_TIEMPO':
@@ -232,7 +174,9 @@ class RepositorioReporteSQL(RepositorioSQL):
             condiciones.append('d.fecha_devolucion > d.fecha_limite_devolucion')
 
         where_sql = self._where(condiciones)
-        retraso = 'GREATEST(TIMESTAMPDIFF(MINUTE, d.fecha_limite_devolucion, d.fecha_devolucion), 0)'
+        retraso = (
+            'GREATEST(TIMESTAMPDIFF(MINUTE, d.fecha_limite_devolucion, d.fecha_devolucion), 0)'
+        )
         # Tablas
         tablas = JOINS_PRESTAMO
 
@@ -255,26 +199,8 @@ class RepositorioReporteSQL(RepositorioSQL):
             ORDER BY d.fecha_devolucion DESC, p.id_prestamo DESC, d.id_detalle
         """
 
-        # Resumen de todo el resultado filtrado
-        sql_resumen = f"""
-            SELECT
-                COUNT(*) AS detalles,
-                COALESCE(SUM(d.fecha_devolucion <= d.fecha_limite_devolucion), 0) AS puntuales,
-                COALESCE(SUM(d.fecha_devolucion > d.fecha_limite_devolucion), 0) AS tardias,
-                COALESCE(
-                    100.0 * SUM(d.fecha_devolucion <= d.fecha_limite_devolucion)
-                    / NULLIF(COUNT(*), 0), 0
-                ) AS porcentaje_puntual,
-                COALESCE(AVG(
-                    CASE WHEN d.fecha_devolucion > d.fecha_limite_devolucion
-                         THEN {retraso} END
-                ), 0) AS retraso_promedio
-            {tablas}
-            {where_sql}
-        """
         return ConsultaReporte(
             sql_reporte=sql_reporte,
-            sql_resumen=sql_resumen,
             parametros=parametros,
         )
 
@@ -285,7 +211,6 @@ class RepositorioReporteSQL(RepositorioSQL):
         condiciones, parametros = self._filtros_comunes(
             filtro, BUSQUEDA_PRESTAMO, 'd.fecha_limite_devolucion'
         )
-        self._filtros_personas(filtro, condiciones, parametros)
 
         # Reglas para considerar atrasado a un bien:
         #    no se ha devuelto y su plazo de devolución ya terminó.
@@ -318,20 +243,8 @@ class RepositorioReporteSQL(RepositorioSQL):
             ORDER BY d.fecha_limite_devolucion, p.id_prestamo, d.id_detalle
         """
 
-        # Resumen de todo el resultado filtrado
-        sql_resumen = f"""
-            SELECT
-                COUNT(*) AS detalles,
-                COUNT(DISTINCT p.id_prestamo) AS prestamos,
-                COUNT(DISTINCT p.dni_persona) AS responsables,
-                COALESCE(MAX({retraso}), 0) AS retraso_maximo
-            {tablas}
-            {where_sql}
-        """
-
         return ConsultaReporte(
             sql_reporte=sql_reporte,
-            sql_resumen=sql_resumen,
             parametros=parametros,
         )
 
@@ -343,9 +256,7 @@ class RepositorioReporteSQL(RepositorioSQL):
             b.codigo_inventario LIKE %s OR r.nombre LIKE %s
             OR r.marca LIKE %s OR r.modelo LIKE %s OR b.numero_serie LIKE %s
         """
-        condiciones, parametros = self._filtros_comunes(
-            filtro, busqueda, campo_estado='b.estado'
-        )
+        condiciones, parametros = self._filtros_comunes(filtro, busqueda, campo_estado='b.estado')
         if filtro.ubicacion:
             condiciones.append('b.ubicacion LIKE %s')
             parametros.append(f'%{filtro.ubicacion}%')
@@ -370,23 +281,8 @@ class RepositorioReporteSQL(RepositorioSQL):
             ORDER BY r.nombre, b.codigo_inventario, b.id_bien
         """
 
-        # Resumen de todo el resultado filtrado
-        sql_resumen = f"""
-            SELECT
-                COUNT(*) AS detalles,
-                COUNT(DISTINCT r.id_recurso) AS recursos,
-                COALESCE(SUM(b.estado = 'DISPONIBLE'), 0) AS disponibles,
-                COALESCE(SUM(b.estado = 'PRESTADO'), 0) AS prestados,
-                COALESCE(SUM(b.estado = 'RESERVADO'), 0) AS reservados,
-                COALESCE(SUM(b.estado = 'DANADO'), 0) AS danados,
-                COALESCE(SUM(b.estado = 'MANTENIMIENTO'), 0) AS mantenimiento,
-                COALESCE(SUM(b.estado = 'PERDIDO'), 0) AS perdidos
-            {tablas}
-            {where_sql}
-        """
         return ConsultaReporte(
             sql_reporte=sql_reporte,
-            sql_resumen=sql_resumen,
             parametros=parametros,
         )
 
@@ -416,7 +312,6 @@ class RepositorioReporteSQL(RepositorioSQL):
             JOIN recurso r ON r.id_recurso = p.id_recurso
             JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
         """
-        pendientes = ', '.join(f"'{estado}'" for estado in ESTADOS_PENDIENTES)
 
         # Filas para la tabla y el CSV
         sql_reporte = f"""
@@ -431,21 +326,8 @@ class RepositorioReporteSQL(RepositorioSQL):
             ORDER BY p.fecha_solicitud DESC, p.id_reserva DESC
         """
 
-        # Resumen de todo el resultado filtrado
-        sql_resumen = f"""
-            SELECT
-                COUNT(*) AS detalles,
-                COALESCE(SUM(p.estado IN ({pendientes})), 0) AS pendientes,
-                COALESCE(SUM(p.estado = 'ATENDIDA'), 0) AS atendidas,
-                COALESCE(SUM(p.estado = 'CANCELADA'), 0) AS canceladas,
-                COALESCE(SUM(p.estado = 'RECHAZADA'), 0) AS rechazadas,
-                COALESCE(SUM(p.estado = 'EXPIRADA'), 0) AS expiradas
-            {tablas}
-            {where_sql}
-        """
         return ConsultaReporte(
             sql_reporte=sql_reporte,
-            sql_resumen=sql_resumen,
             parametros=parametros,
         )
 
@@ -456,7 +338,6 @@ class RepositorioReporteSQL(RepositorioSQL):
         condiciones, parametros = self._filtros_comunes(
             filtro, BUSQUEDA_PRESTAMO, 's.fecha', 's.estado'
         )
-        self._filtros_personas(filtro, condiciones, parametros)
         where_sql = self._where(condiciones)
 
         # Tablas
@@ -479,20 +360,8 @@ class RepositorioReporteSQL(RepositorioSQL):
             ORDER BY s.fecha DESC, s.id_sancion DESC
         """
 
-        # Resumen de todo el resultado filtrado
-        sql_resumen = f"""
-            SELECT
-                COUNT(*) AS detalles,
-                COALESCE(SUM(s.estado = 'ACTIVA'), 0) AS activas,
-                COALESCE(SUM(s.estado = 'LEVANTADA'), 0) AS levantadas,
-                COALESCE(SUM(s.estado = 'CUMPLIDA'), 0) AS cumplidas,
-                COALESCE(SUM(s.estado = 'ANULADA'), 0) AS anuladas
-            {tablas}
-            {where_sql}
-        """
         return ConsultaReporte(
             sql_reporte=sql_reporte,
-            sql_resumen=sql_resumen,
             parametros=parametros,
         )
 
@@ -537,21 +406,50 @@ class RepositorioReporteSQL(RepositorioSQL):
             ORDER BY h.fecha DESC, h.id_historial_estado DESC
         """
 
-        # Resumen de todo el resultado filtrado
-        sql_resumen = f"""
-            SELECT
-                COUNT(*) AS detalles,
-                COUNT(DISTINCT b.id_bien) AS bienes,
-                COALESCE(SUM(h.estado_nuevo = 'DANADO'), 0) AS danos,
-                COALESCE(SUM(h.estado_nuevo = 'PERDIDO'), 0) AS perdidas
-            {tablas}
-            {where_sql}
-        """
         return ConsultaReporte(
             sql_reporte=sql_reporte,
-            sql_resumen=sql_resumen,
             parametros=parametros,
         )
+
+    def _consulta_personas(self, filtro):
+        condiciones, parametros = [], []
+        if filtro.tipo_persona:
+            condiciones.append('personas.tipo_persona = %s')
+            parametros.append(filtro.tipo_persona)
+        if filtro.estado:
+            condiciones.append('personas.estado = %s')
+            parametros.append(filtro.estado)
+        if filtro.q:
+            condiciones.append("""(
+                personas.dni LIKE %s
+                OR personas.nombres LIKE %s
+                OR personas.apellidos LIKE %s
+                OR CONCAT(personas.nombres, ' ', personas.apellidos) LIKE %s
+                OR personas.correo LIKE %s
+            )""")
+            parametros.extend([f'%{filtro.q}%'] * 5)
+        where_sql = self._where(condiciones)
+        # La misma prioridad de tipos que el listado de personas evita duplicados.
+        sql_reporte = f"""
+            SELECT personas.dni, personas.nombres, personas.apellidos,
+                personas.tipo_persona, personas.telefono, personas.correo, personas.estado
+            FROM (
+                SELECT per.dni, per.nombres, per.apellidos, per.telefono, per.correo, per.estado,
+                    CASE
+                        WHEN e.dni IS NOT NULL THEN 'ESTUDIANTE'
+                        WHEN doc.dni IS NOT NULL THEN 'DOCENTE'
+                        WHEN a.dni IS NOT NULL THEN 'ADMINISTRATIVO'
+                        ELSE 'SIN_TIPO'
+                    END AS tipo_persona
+                FROM persona per
+                LEFT JOIN estudiante e ON e.dni = per.dni
+                LEFT JOIN docente doc ON doc.dni = per.dni
+                LEFT JOIN administrativo a ON a.dni = per.dni
+            ) personas
+            {where_sql}
+            ORDER BY personas.apellidos, personas.nombres, personas.dni
+        """
+        return ConsultaReporte(sql_reporte=sql_reporte, parametros=parametros)
 
     # ================================================================
     # COMPLEMENTO: integrantes de préstamos grupales
@@ -559,11 +457,9 @@ class RepositorioReporteSQL(RepositorioSQL):
 
     def _consultar_integrantes_prestamos(self, filas):
         # Identificar los préstamos grupales que aparecen en el reporte.
-        identificadores = sorted({
-            fila['id_prestamo']
-            for fila in filas
-            if fila['tipo_prestamo'] == 'GRUPAL'
-        })
+        identificadores = sorted(
+            {fila['id_prestamo'] for fila in filas if fila['tipo_prestamo'] == 'GRUPAL'}
+        )
 
         # Cada fila debe tener su campo de integrantes, aunque esté vacío.
         for fila in filas:

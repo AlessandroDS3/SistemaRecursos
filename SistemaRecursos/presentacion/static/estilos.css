@@ -904,22 +904,6 @@ img {
     max-width: 1000px;
 }
 
-.indicadores-reportes {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.indicadores-reportes.indicadores-5 {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.indicadores-reportes.indicadores-6 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.indicadores-reportes article {
-    border-bottom: 1px solid var(--borde);
-}
-
 .tabla-reporte td {
     max-width: 300px;
 }
@@ -1518,10 +1502,6 @@ img {
 
 @media (max-width: 850px) {
 
-    .indicadores-reportes, .indicadores-reportes.indicadores-5, .indicadores-reportes.indicadores-6 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
     .prestamo-formulario {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -1624,10 +1604,6 @@ img {
 
     .selector-reporte label {
         flex-basis: 100%;
-    }
-
-    .indicadores-reportes, .indicadores-reportes.indicadores-5, .indicadores-reportes.indicadores-6 {
-        grid-template-columns: minmax(0, 1fr);
     }
 
     .dos-columnas, .tres-columnas, .cuatro-columnas, .filtros-tres, .filtros-cuatro, .filtros-reportes, .ficha-resumen {
