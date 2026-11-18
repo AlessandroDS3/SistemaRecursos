@@ -80,7 +80,18 @@ class ServicioAplicacionPoliticaPrestamo:
     def guardar_limite_articulos(self, tipo, cantidad, actor):
         if tipo not in TIPOS_PERSONA:
             raise ValueError('Tipo de persona inválido.')
-        cantidad = entero(cantidad, 'Máximo total de bienes')
+        self._guardar_limites({tipo: cantidad}, actor)
+
+    def guardar_limites_articulos(self, cantidades, actor):
+        if set(cantidades) != set(TIPOS_PERSONA):
+            raise ValueError('Indica el máximo para cada tipo de persona.')
+        self._guardar_limites(cantidades, actor)
+
+    def _guardar_limites(self, cantidades, actor):
+        cantidades = {
+            tipo: entero(cantidad, 'Máximo total de bienes')
+            for tipo, cantidad in cantidades.items()
+        }
         with self.repositorio.transaccion() as operacion:
             cuenta = exigir_permiso(
                 operacion.consultar_cuenta_actor(entero(actor)), 'POLITICAS_GESTIONAR'
@@ -89,7 +100,8 @@ class ServicioAplicacionPoliticaPrestamo:
                 raise PermissionError(
                     'Solo el administrador modifica el límite total de artículos.'
                 )
-            operacion.guardar_limite_articulos(tipo, cantidad)
+            for tipo, cantidad in cantidades.items():
+                operacion.guardar_limite_articulos(tipo, cantidad)
 
     def eliminar_politica_prestamo(self, identificador, actor):
         with self.repositorio.transaccion() as operacion:

@@ -2,6 +2,28 @@ from repositorio.base_sql import RepositorioSQL
 
 
 class RepositorioSancionSQL(RepositorioSQL):
+    def consultar_detalle_sancion(self, identificador):
+        fila = self.consultar_sql(
+            '''SELECT s.*,d.id_prestamo,b.codigo_inventario,r.nombre AS recurso,
+            pr.dni_persona,CONCAT(p.nombres,' ',p.apellidos) AS responsable
+            FROM sancion s JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
+            JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle
+            JOIN bien_material b ON b.id_bien=d.id_bien
+            JOIN recurso r ON r.id_recurso=b.id_recurso
+            JOIN prestamo pr ON pr.id_prestamo=d.id_prestamo
+            JOIN persona p ON p.dni=pr.dni_persona WHERE s.id_sancion=%s''',
+            (identificador,),
+            una=True,
+        )
+        if fila is not None:
+            fila['participantes'] = self.consultar_sql(
+                '''SELECT pp.dni_persona,CONCAT(p.nombres,' ',p.apellidos) AS nombre
+                FROM participante_prestamo pp JOIN persona p ON p.dni=pp.dni_persona
+                WHERE pp.id_prestamo=%s AND pp.dni_persona<>%s ORDER BY p.apellidos,p.nombres''',
+                (fila['id_prestamo'], fila['dni_persona']),
+            )
+        return fila
+
     def consultar_sanciones(self, filtros=None):
         filtros = filtros or {}
         sql = '''SELECT s.*,i.tipo,i.id_detalle,d.id_prestamo,

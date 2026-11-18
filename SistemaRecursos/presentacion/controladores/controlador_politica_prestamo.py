@@ -1,6 +1,7 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
 from presentacion.seguridad import requiere_permiso
+from presentacion.formularios import recuperar_formulario
 
 RUTA_POLITICAS = 'politicas.consultar_politicas_prestamo'
 
@@ -36,6 +37,7 @@ class ControladorPoliticaPrestamo:
                 ['POST'],
             ),
             ('/limite', 'guardar_limite_articulos', self.guardar_limite_articulos, ['POST']),
+            ('/limites', 'guardar_limites_articulos', self.guardar_limites_articulos, ['POST']),
         ):
             self.blueprint.add_url_rule(ruta, nombre, funcion, methods=metodos)
 
@@ -55,6 +57,9 @@ class ControladorPoliticaPrestamo:
         )
 
     @requiere_permiso('POLITICAS_GESTIONAR')
+    @recuperar_formulario(
+        lambda self, identificador=None: self._mostrar_formulario_politica(identificador)
+    )
     def gestionar_formulario_politica_prestamo(self, identificador=None):
         if request.method == 'POST':
             self.servicio.guardar_politica_prestamo(
@@ -62,6 +67,9 @@ class ControladorPoliticaPrestamo:
             )
             flash('Política guardada. Los préstamos anteriores conservan sus condiciones.')
             return redirect(url_for(RUTA_POLITICAS))
+        return self._mostrar_formulario_politica(identificador)
+
+    def _mostrar_formulario_politica(self, identificador=None):
         politica, version = (
             self.servicio.consultar_politica_prestamo(identificador)
             if identificador is not None
@@ -71,18 +79,21 @@ class ControladorPoliticaPrestamo:
             'vista_politica_prestamo.html',
             modo='formulario',
             politica=politica,
+            categoria_seleccionada=request.args.get('id_categoria', ''),
             version=version,
             tipos=TIPOS_PERSONA,
             categorias=self.recursos.consultar_categorias(),
         )
 
     @requiere_permiso('POLITICAS_GESTIONAR')
+    @recuperar_formulario(lambda self: self.consultar_politicas_prestamo())
     def guardar_configuracion_general(self):
         self.servicio.guardar_configuracion_general(request.form.to_dict(), g.usuario.id_usuario)
         flash('Horario y plazos de reserva guardados.')
         return redirect(url_for(RUTA_POLITICAS))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
+    @recuperar_formulario(lambda self: self.consultar_politicas_prestamo())
     def guardar_limite_articulos(self):
         self.servicio.guardar_limite_articulos(
             request.form.get('tipo_persona'),
@@ -90,6 +101,16 @@ class ControladorPoliticaPrestamo:
             g.usuario.id_usuario,
         )
         flash('Límite guardado.')
+        return redirect(url_for(RUTA_POLITICAS))
+
+    @requiere_permiso('POLITICAS_GESTIONAR')
+    @recuperar_formulario(lambda self: self.consultar_politicas_prestamo())
+    def guardar_limites_articulos(self):
+        self.servicio.guardar_limites_articulos(
+            {tipo: request.form.get('maximo_' + tipo) for tipo in TIPOS_PERSONA},
+            g.usuario.id_usuario,
+        )
+        flash('Máximos guardados.')
         return redirect(url_for(RUTA_POLITICAS))
 
     @requiere_permiso('POLITICAS_GESTIONAR')

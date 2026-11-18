@@ -1,6 +1,12 @@
 {% extends "base.html" %}
-{% from 'formularios.html' import csrf,campo,opciones,historial %}
-{% from 'componentes.html' import estado %}
+{% from 'parciales/formularios.html' import csrf,campo,opciones,historial %}
+{% from 'parciales/componentes.html' import estado %}
+{% block scripts %}
+  {% if modo == 'formulario' %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='prestamo.css') }}">
+    <script src="{{ url_for('static', filename='prestamo.js') }}" defer></script>
+  {% endif %}
+{% endblock %}
 {% block contenido %}
   {% if modo=="lista" %}
     <div class="cabecera">
@@ -11,7 +17,14 @@
     </div>
     <form class="filtros filtros-bloque">
       <div class="rejilla dos-columnas">
-        {{ campo('q','Buscar por nombre, DNI, CUI o n.º de préstamo',request.args.get('q',''),maximo=120) }}
+        <label>
+          Buscar préstamo
+          <input type="search"
+                 name="q"
+                 value="{{ request.args.get('q','') }}"
+                 maxlength="120"
+                 placeholder="Nombre, DNI, CUI o n.º de préstamo">
+        </label>
         <label>
           Estado<select name="estado">
           <option value="">Todos</option>
@@ -87,122 +100,227 @@
     {% endif %}
   {% elif modo=="formulario" %}
     <h1>Registrar préstamo</h1>
-    <form method="post"
-          class="prestamo-formulario"
-          data-condiciones-prestamo="{{ url_for('prestamos.consultar_condiciones_prestamo') }}"
-          data-buscar-personas="{{ url_for('personas.buscar_personas') }}">
-      {{ csrf() }}
-      <input type="hidden" name="volver" value="{{ volver }}">
-      <div class="pasos-prestamo">
-        <section class="panel">
-          <h2>
-            <span class="numero-paso">1</span>¿Quién recibe el préstamo?
-          </h2>
-          <label>
-            Buscar por apellidos, DNI o CUI<input type="search"
-                                                  data-busqueda-persona
-                                                  placeholder="Apellidos, DNI o CUI"
-                                                  autocomplete="off">
-          </label>
-          <div class="resultados-busqueda"
-               data-resultados-persona
-               aria-live="polite"></div>
-          {{ campo('dni_persona','DNI del solicitante',requerido=true,maximo=8) }}
-          <div class="rejilla dos-columnas">
-            <fieldset>
-              <legend>Modalidad</legend>
-              <div class="opciones-tarjeta">
-                <label class="check">
-                  <input type="radio" name="tipo_prestamo" value="INDIVIDUAL" checked>Individual
-                </label>
-                <label class="check">
-                  <input type="radio" name="tipo_prestamo" value="GRUPAL">Grupal
-                </label>
+    {% if politicas %}
+      <form method="post" action="{{ url_for('prestamos.registrar_prestamo') }}" class="formulario-prestamo prestamo-disposicion" id="form-prestamo" data-apertura="{{ horario.hora_apertura|hora if horario else '08:00' }}" data-cierre="{{ horario.hora_cierre|hora if horario else '16:00' }}" data-personas-url="{{ url_for('personas.buscar_personas') }}" data-bienes-url="{{ url_for('prestamos.consultar_bienes_disponibles') }}" data-recurso="{{ recurso_contexto.id_recurso if recurso_contexto else '' }}" data-bien='{{ bien_inicial|tojson }}' data-bienes-iniciales='{{ bienes|tojson }}'>
+        <input type="hidden" data-bienes-recuperados='{{ bienes_recuperados|tojson }}'>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="volver" value="{{ volver }}">
+        <input type="hidden" name="dni_persona" id="solicitante">
+        <input type="hidden" id="tipo-solicitante">
+        <div class="prestamo-campos">
+          <section class="seleccion-prestamo panel">
+            <h2>
+              <span class="paso-prestamo">
+                1
+              </span>
+              ¿Quién recibe el préstamo?
+            </h2>
+            <p class="suave">
+              Busca y selecciona a la persona registrada.
+            </p>
+            <div id="busqueda-solicitante">
+              <label for="buscar-solicitante">
+                Buscar por apellidos, DNI o CUI
+              </label>
+              <input type="search" id="buscar-solicitante" maxlength="120" placeholder="apellidos, DNI o CUI" autocomplete="off" aria-describedby="resultado-busqueda-persona">
+              <p class="suave" id="resultado-busqueda-persona" role="status" aria-live="polite">
+                Escribe al menos 2 caracteres.
+              </p>
+              <div class="resultados-prestamo" id="resultados-solicitante" role="listbox" aria-label="Personas encontradas" hidden>
               </div>
-            </fieldset>
-            <fieldset>
-              <legend>Uso de los bienes</legend>
-              <label class="check">
-                <input type="checkbox" name="salida_solicitada" value="1">Salida fuera de la institución
-              </label>
-            </fieldset>
-          </div>
-          <label data-integrantes-grupo hidden>
-            Otros integrantes (DNI separados por comas)<input name="participantes"
-                                                              placeholder="12345678, 87654321"
-                                                              maxlength="900"
-                                                              disabled>
-          </label>
-        </section>
-        <section class="panel">
-          <h2>
-            <span class="numero-paso">2</span>¿Qué bienes se llevará?
-          </h2>
-          <label>
-            Buscar bien disponible<input type="search"
-                                         data-buscar-bien
-                                         placeholder="Código de inventario o nombre del recurso">
-          </label>
-          <div class="lista-bienes-prestamo">
-            {% for b in bienes %}
-              <label class="check bien-seleccionable"
-                     data-bien-texto="{{ b.codigo_inventario }} {{ b.recurso }}">
-                <input type="checkbox"
-                       name="bienes"
-                       value="{{ b.id_bien }}"
-                       data-nombre-bien="{{ b.codigo_inventario }} · {{ b.recurso }}">
-                <span>{{ b.codigo_inventario }}
-                  <small>{{ b.recurso }}</small>
-                </span>
-              </label>
+            </div>
+            <div class="seleccion-resumen" id="persona-seleccionada" aria-live="polite" hidden>
+            </div>
+            <div class="rejilla dos-columnas prestamo-opciones">
+              <fieldset class="prestamo-opcion-grupo" id="modalidad">
+                <legend>
+                  Modalidad
+                </legend>
+                <div class="prestamo-opciones-radio">
+                  <label>
+                    <input type="radio" name="tipo_prestamo" value="INDIVIDUAL" checked>
+                    Individual
+                  </label>
+                  <label>
+                    <input type="radio" name="tipo_prestamo" value="GRUPAL">
+                    Grupal
+                  </label>
+                </div>
+              </fieldset>
+              <fieldset class="prestamo-opcion-grupo" id="uso-bienes">
+                <legend>
+                  Uso de los bienes
+                </legend>
+                <div class="prestamo-opciones-radio">
+                  <label>
+                    <input type="radio" name="salida_solicitada" value="0" checked>
+                    Dentro de la institución
+                  </label>
+                  <label>
+                    <input type="radio" name="salida_solicitada" value="1">
+                    Fuera
+                  </label>
+                </div>
+              </fieldset>
+            </div>
+          </section>
+          <fieldset class="panel" id="grupo" hidden disabled>
+            <legend>
+              Otros participantes
+            </legend>
+            <p>
+              Agrega a los demás participantes. El solicitante ya está incluido.
+              Las sanciones del préstamo afectarán a todos los integrantes del grupo.
+            </p>
+            <label for="buscar-participante">
+              Buscar participante por apellidos, DNI o CUI
+            </label>
+            <input type="search" id="buscar-participante" maxlength="120" placeholder="Apellidos, DNI o CUI" autocomplete="off">
+            <p class="suave" id="estado-participantes" role="status" aria-live="polite">
+              Escribe al menos 2 caracteres.
+            </p>
+            <div class="resultados-prestamo" id="resultados-participantes" role="listbox" aria-label="Personas encontradas" hidden>
+            </div>
+            <div class="selecciones-prestamo" id="participantes-seleccionados">
+            </div>
+          </fieldset>
+          <section class="seleccion-prestamo panel">
+            <h2>
+              <span class="paso-prestamo">
+                2
+              </span>
+              ¿Qué bienes se llevará?
+            </h2>
+            {% if recurso_contexto %}
+              <p class="suave">
+                Puedes agregar bienes de otros recursos.
+              </p>
             {% else %}
-              <p>No hay bienes disponibles.</p>
+              <p class="suave">
+                Busca por código de inventario, nombre, marca o modelo.
+              </p>
+            {% endif %}
+            <label for="buscar-bien">
+              Buscar bien disponible
+            </label>
+            <input type="search" id="buscar-bien" maxlength="120" placeholder="Código de inventario o nombre del recurso" autocomplete="off">
+            <p class="suave" id="estado-bienes" role="status" aria-live="polite">
+              Escribe al menos 2 caracteres para buscar.
+            </p>
+            <div class="resultados-prestamo" id="resultados-bienes" role="listbox" aria-label="Bienes disponibles" hidden>
+            </div>
+            <p class="etiqueta prestamo-cantidad" id="cantidad-bienes">
+              BIENES SELECCIONADOS · 0
+            </p>
+            <div class="selecciones-prestamo" id="bienes-seleccionados">
+              {% if bien_seleccionado %}<input type="hidden" name="bienes" value="{{ bien_seleccionado }}">{% endif %}
+            </div>
+            <p class="suave" id="bienes-vacios">
+              Agrega al menos un bien.
+            </p>
+          </section>
+          <p class="suave">Atención: {{ horario.hora_apertura|hora if horario else '08:00' }} a {{ horario.hora_cierre|hora if horario else '16:00' }}. Los préstamos por horas terminan como máximo al cierre.</p>
+          <p id="atencion-cerrada" class="aviso" tabindex="-1" hidden>La atención está cerrada. Registra la entrega dentro del horario indicado.</p>
+          <p id="politica-faltante" class="aviso" tabindex="-1" hidden>
+            Configura las políticas faltantes antes de prestar.
+          </p>
+          <p id="salida-no-permitida" class="aviso" tabindex="-1" hidden>
+            Hay un bien sin salida autorizada. Elige uso interno o retíralo de la selección.
+          </p>
+          <template id="reglas">
+            {% for p in politicas %}
+              <span data-persona="{{ p.tipo_persona }}" data-categoria="{{ p.id_categoria }}" data-unidad="{{ p.unidad_plazo }}" data-plazo="{{ p.plazo_maximo }} {{ p.unidad_plazo|lower }}" data-horas="{{ p.plazo_maximo * (1 if p.unidad_plazo == 'HORAS' else 24) }}" data-salida="{{ '1' if p.permite_salida else '0' }}">
+              </span>
             {% endfor %}
-          </div>
-        </section>
-        <section class="panel condiciones-prestamo"
-                 data-texto-condiciones-prestamo
-                 aria-live="polite">
-          <p>Ingresa el DNI para consultar las condiciones.</p>
-        </section>
-        <section class="panel">
-          <label>
-            Observaciones del préstamo<textarea name="observaciones" rows="3" maxlength="220">
-</textarea>
+          </template>
+          <section class="panel prestamo-observaciones">
+            <label>
+              Observaciones del préstamo
+              <textarea name="observaciones" maxlength="220" rows="2">
+              </textarea>
+            </label>
+          </section>
+        </div>
+        <aside class="panel prestamo-resumen" aria-labelledby="titulo-resumen-prestamo">
+          <h2 id="titulo-resumen-prestamo">
+            Resumen del préstamo
+          </h2>
+          <dl>
+            <div>
+              <dt>
+                Solicitante
+              </dt>
+              <dd id="resumen-persona">
+                Sin seleccionar
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Modalidad
+              </dt>
+              <dd id="resumen-modalidad">
+                Individual
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Uso
+              </dt>
+              <dd id="resumen-uso">
+                Dentro de la institución
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Bienes
+              </dt>
+              <dd id="resumen-bienes">
+                0
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Primera devolución
+              </dt>
+              <dd id="resumen-devolucion">
+                —
+              </dd>
+            </div>
+          </dl>
+          <p class="suave">
+            Las fechas se confirman al registrar la entrega.
+          </p>
+          <label class="check opcion-casilla">
+            <input type="checkbox" name="acepta_condiciones" value="1" required>
+            He comunicado el plazo y el permiso de salida al solicitante.
           </label>
-        </section>
-      </div>
-      <aside class="panel resumen-prestamo">
-        <h2>Resumen</h2>
-        <dl>
-          <dt>Solicitante</dt>
-          <dd data-resumen-solicitante>
-            Sin seleccionar
-          </dd>
-          <dt>Modalidad</dt>
-          <dd data-resumen-modalidad>
-            Individual
-          </dd>
-          <dt>Uso</dt>
-          <dd data-resumen-uso>
-            Dentro de la institución
-          </dd>
-          <dt>Bienes</dt>
-          <dd data-resumen-bienes>
-            0
-          </dd>
-        </dl>
-        <p class="suave">Las fechas se confirman al registrar la entrega.</p>
-        <label class="check">
-          <input type="checkbox"
-                 name="acepta_condiciones"
-                 value="1"
-                 required>He comunicado el plazo y el permiso de salida al solicitante.
-        </label>
-        <button type="submit" data-confirmar-prestamo>Registrar préstamo</button>
-        <a href="{{ volver }}">Cancelar</a>
-      </aside>
-    </form>
+          <button class="boton-principal" id="confirmar-prestamo" disabled>
+            Registrar préstamo
+          </button>
+          <a href="{{ cancelar_url }}">
+            Cancelar
+          </a>
+        </aside>
+      </form>
+    {% else %}
+      <section class="panel">
+        <h2>
+          Antes de registrar un préstamo
+        </h2>
+        <p>
+          El administrador debe configurar las políticas antes de prestar.
+        </p>
+        <a href="{{ cancelar_url }}">
+          Volver a préstamos
+        </a>
+        {% if g.usuario.permite("POLITICAS_GESTIONAR") %}
+          ·
+          <a href="{{ url_for('politicas.consultar_politicas_prestamo') }}">
+            Configurar políticas
+          </a>
+        {% endif %}
+      </section>
+    {% endif %}
   {% else %}
     <p class="etiqueta">{{ prestamo.tipo_prestamo|capitalize }}</p>
     <div class="cabecera">
@@ -265,7 +383,7 @@
             </thead>
             <tbody>
               {% for d in prestamo.detalles %}
-                <tr>
+                <tr data-fila-devolucion>
                   {% if gestionar %}
                     <td>
                       {% if not d.fecha_devolucion %}
@@ -287,7 +405,7 @@
             </td>
             <td>
               {% if d.estado_sancion %}{{ estado(d.estado_sancion) }}{% if gestionar %}
-                <a href="{{ url_for('sanciones.consultar_sanciones') }}">Gestionar sanción</a>
+                <a href="{{ url_for('sanciones.consultar_sancion', identificador=d.id_sancion, volver=volver) }}">Gestionar sanción</a>
               {% endif %}{% else %}Sin sanción{% endif %}
             </td>
             <td>
@@ -315,20 +433,25 @@
       <summary>Ampliar plazo</summary>
       <p class="suave">Máximo: otro plazo permitido. Los préstamos por horas terminan al cierre.</p>
       {% for d in prestamo.detalles if not d.fecha_devolucion and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora %}
+        {% set formulario_ampliacion = 'ampliacion-'~d.id_detalle %}
         <form method="post"
+              id="{{ formulario_ampliacion }}"
               action="{{ url_for('ampliaciones.ampliar_prestamo',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
+              data-ampliacion-previa="{{ url_for('ampliaciones.consultar_ampliacion_prestamo',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
               class="formulario operacion-bien">
           {{ csrf() }}
+          <input type="hidden" name="_formulario" value="{{ formulario_ampliacion }}">
           <input type="hidden" name="volver" value="{{ volver }}">
           <strong>{{ d.codigo_inventario }} · {{ d.recurso }}</strong>
           <input type="hidden"
                  name="fecha_actual"
                  value="{{ d.fecha_limite_devolucion.isoformat() }}">
           <div class="rejilla filtros-tres">
-            {{ campo('cantidad','Tiempo adicional',tipo='number',requerido=true) }}
-            {{ opciones('unidad','Unidad',('HORAS','DIAS'),d.unidad_plazo) }}
-            {{ campo('motivo','Motivo de ampliación',maximo=160) }}
+            {{ campo('cantidad','Tiempo adicional',tipo='number',requerido=true,formulario=formulario_ampliacion) }}
+            {{ opciones('unidad','Unidad',('HORAS','DIAS'),d.unidad_plazo,formulario=formulario_ampliacion) }}
+            {{ campo('motivo','Motivo de ampliación',maximo=120,formulario=formulario_ampliacion) }}
           </div>
+          <p class="suave" data-resultado-ampliacion role="status" aria-live="polite">Indica el tiempo adicional para ver la nueva fecha de devolución.</p>
           <button class="secundario">Ampliar plazo</button>
         </form>
       {% else %}
@@ -338,13 +461,16 @@
     <details class="panel">
       <summary>Reportar pérdida</summary>
       {% for d in prestamo.detalles if not d.fecha_devolucion and d.estado_bien=='PRESTADO' %}
+        {% set formulario_perdida = 'perdida-'~d.id_detalle %}
         <form method="post"
+              id="{{ formulario_perdida }}"
               action="{{ url_for('prestamos.registrar_perdida_bien_material',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
               class="formulario operacion-bien">
           {{ csrf() }}
+          <input type="hidden" name="_formulario" value="{{ formulario_perdida }}">
           <input type="hidden" name="volver" value="{{ volver }}">
           <strong>{{ d.codigo_inventario }} · {{ d.recurso }}
-          </strong>{{ campo('motivo','Descripción de la pérdida',requerido=true) }}
+          </strong>{{ campo('motivo','Descripción de la pérdida',requerido=true,formulario=formulario_perdida) }}
           <button class="secundario">Registrar pérdida</button>
         </form>
       {% else %}

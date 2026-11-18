@@ -11,6 +11,7 @@
     <link rel="stylesheet"
           href="{{ url_for('static', filename='estilos.css') }}">
     <script src="{{ url_for('static', filename='aplicacion.js') }}" defer></script>
+    {% block scripts %}{% endblock %}
   </head>
   <body class="{{ 'pagina-sistema' if g.usuario else 'pagina-acceso' }}">
     <a class="enlace-saltar-contenido" href="#contenido">Ir al contenido</a>
@@ -90,6 +91,10 @@
       {% for mensaje in get_flashed_messages() %}
         <p class="aviso" role="status">{{ mensaje }}</p>
       {% endfor %}
+      {% if g.error_formulario %}
+        <div class="aviso error-formulario" role="alert">{{ g.error_formulario }}</div>
+        <script type="application/json" id="datos-formulario">{{ dict(destino=request.path, valores=g.valores_formulario, errores=g.errores_campos)|tojson }}</script>
+      {% endif %}
       {% block contenido %}{% endblock %}
     </main>
     {% if g.usuario %}

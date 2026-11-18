@@ -57,6 +57,12 @@ class ServicioAplicacionSancion:
             dict(estado=estado, q=texto(filtros.get('q'), 'Búsqueda', 120))
         )
 
+    def consultar_sancion(self, identificador):
+        sancion = self.repositorio.consultar_detalle_sancion(entero(identificador))
+        if sancion is None:
+            raise NoEncontrado('Sanción inexistente.')
+        return sancion
+
     def levantar_sancion(self, identificador, justificacion, actor):
         identificador = entero(identificador)
         with self.repositorio.transaccion() as operacion:

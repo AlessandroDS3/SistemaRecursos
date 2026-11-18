@@ -1,16 +1,17 @@
 {% extends "base.html" %}
-{% from 'formularios.html' import csrf %}
-{% from 'componentes.html' import indicador, estado %}
-{% from 'fragmentos_recursos.html' import formulario_recurso, categorias_recursos, icono_recurso %}
+{% from 'parciales/formularios.html' import csrf %}
+{% from 'parciales/componentes.html' import indicador, estado %}
+{% from 'parciales/fragmentos_recursos.html' import formulario_recurso, categorias_recursos, icono_recurso, continuar_registro %}
 {% block titulo %}Administración de recursos · UNSA{% endblock %}
 {% block contenido %}
-  {% set vista_categorias = request.args.get('vista') == 'categorias' %}
+  {% set vista_categorias = vista_categorias_forzada|default(false) or request.args.get('vista') == 'categorias' %}
   {% set filtros = dict(q=request.args.get('q',''), id_categoria=request.args.get('id_categoria',''), estado=request.args.get('estado','')) %}
   <div class="administracion-recursos">
     <div class="cabecera">
       <h1>Administración de recursos</h1>
       <button type="button" data-abrir-dialogo="registro-recurso">+ Registrar recurso</button>
     </div>
+    {% if recurso_continuacion %}{{ continuar_registro(recurso_continuacion.id_recurso, recurso_continuacion.nombre) }}{% endif %}
     <section class="resumen-estadisticas resumen-recursos" aria-label="Resumen según los filtros de recursos">
       {{ indicador('Recursos', resumen.recursos) }}
       {{ indicador('Bienes', resumen.bienes) }}
@@ -27,9 +28,9 @@
     {% else %}
       <form class="filtros filtros-administracion" method="get">
         <label>
-          Buscar
+          Buscar recurso
           <input name="q" type="search" value="{{ filtros.q }}" maxlength="120"
-                 placeholder="Nombre, marca, modelo o inventario">
+                 placeholder="Nombre, marca, modelo o código de inventario">
         </label>
         <label>
           Categoría

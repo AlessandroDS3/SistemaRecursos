@@ -93,8 +93,12 @@ class RepositorioPersonaSQL(RepositorioSQL):
 
     def buscar_personas(self, termino: str) -> list[dict]:
         return self.consultar_sql(
-            '''SELECT p.dni,p.nombres,p.apellidos FROM persona p
+            '''SELECT p.dni,p.nombres,p.apellidos,p.estado,e.cui,e.estado_matricula,
+            CASE WHEN e.dni IS NOT NULL THEN 'ESTUDIANTE' WHEN d.dni IS NOT NULL THEN 'DOCENTE'
+                WHEN a.dni IS NOT NULL THEN 'ADMINISTRATIVO' END AS tipo FROM persona p
             LEFT JOIN estudiante e ON e.dni=p.dni
-            WHERE p.dni LIKE %s OR p.apellidos LIKE %s OR e.cui LIKE %s LIMIT 20''',
+            LEFT JOIN docente d ON d.dni=p.dni LEFT JOIN administrativo a ON a.dni=p.dni
+            WHERE p.dni LIKE %s OR CONCAT(p.nombres,' ',p.apellidos) LIKE %s OR e.cui LIKE %s
+            ORDER BY p.apellidos,p.nombres,p.dni LIMIT 20''',
             (f'%{termino}%',) * 3,
         )

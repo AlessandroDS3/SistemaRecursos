@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from 'formularios.html' import csrf %}
+{% from 'parciales/formularios.html' import csrf %}
 {% block contenido %}
   <h1>Cambiar mi contraseña</h1>
   {% if g.usuario.debe_cambiar_clave %}

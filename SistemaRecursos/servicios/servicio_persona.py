@@ -5,6 +5,7 @@ from dominio.gestion_personas_usuarios.persona import (
     IRepositorioPersona,
     Persona,
     TIPOS_PERSONA,
+    validar_elegibilidad,
 )
 from dominio.gestion_personas_usuarios.cuenta import proteger_administradores
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
@@ -88,4 +89,12 @@ class ServicioAplicacionPersona:
 
     def buscar_personas(self, termino: str) -> list[dict]:
         termino = texto(termino, 'Búsqueda', 120)
-        return self.repositorio.buscar_personas(termino) if len(termino) >= 2 else []
+        personas = self.repositorio.buscar_personas(termino) if len(termino) >= 2 else []
+        for persona in personas:
+            persona['nombre_completo'] = f'{persona["nombres"]} {persona["apellidos"]}'
+            try:
+                validar_elegibilidad(persona)
+                persona['elegible'] = True
+            except ValueError:
+                persona['elegible'] = False
+        return personas

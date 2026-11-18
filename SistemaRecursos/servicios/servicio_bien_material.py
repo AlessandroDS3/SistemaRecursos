@@ -3,6 +3,7 @@ from dominio.compartido.validacion import Conflicto, comprobar_version, entero, 
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 from dominio.gestion_recursos.bien_material import (
     BienMaterial,
+    ESTADOS_MANUALES,
     IRepositorioBienMaterial,
     validar_cambio_estado,
     validar_filtros_inventario,
@@ -22,6 +23,28 @@ class ServicioAplicacionBienMaterial:
 
     def consultar_bienes_materiales(self, filtros) -> list[dict]:
         return self.repositorio.consultar_bienes_materiales(validar_filtros_inventario(filtros))
+
+    def consultar_detalle_bien_material(self, identificador: int) -> dict:
+        bien = self.consultar_bien_material(identificador)
+        pendiente = self.repositorio.consultar_prestamo_pendiente(bien['id_bien'], bloquear=False)
+        relaciones = self.repositorio.consultar_relaciones_bien_material(
+            bien['id_bien'], bloquear=False
+        )
+        return dict(
+            bien=bien,
+            historial=self.consultar_historial_bien_material(bien['id_bien']),
+            prestamo_pendiente=pendiente['id_prestamo'] if pendiente else None,
+            permite_cambio_manual=bien['estado'] in ESTADOS_MANUALES and not pendiente,
+            permite_eliminar=bien['estado'] == 'DISPONIBLE' and not any(relaciones.values()),
+        )
+
+    def consultar_bien_disponible_para_prestamo(self, identificador: int) -> dict:
+        bien = self.consultar_bien_material(identificador)
+        if bien['estado'] != 'DISPONIBLE':
+            raise Conflicto(
+                'El bien ya no está disponible para préstamo. Selecciona otro ejemplar.'
+            )
+        return bien
 
     def guardar_bien_material(
         self, datos: dict, actor: int, identificador: int | None = None

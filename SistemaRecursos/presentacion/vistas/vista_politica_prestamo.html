@@ -1,43 +1,34 @@
 {% extends "base.html" %}
-{% from 'formularios.html' import csrf,campo,opciones %}
+{% from 'parciales/formularios.html' import csrf,campo,opciones %}
 {% block contenido %}
   {% if modo=="lista" %}
     <h1>Políticas de préstamo</h1>
-    <section class="panel">
-      <h2>Máximo general de artículos por persona</h2>
-      <div class="rejilla tres-columnas">
-        {% for tipo in tipos %}
-          {% set actual = limites|selectattr('tipo_persona','equalto',tipo)|first|default({}) %}
-          <form method="post"
-                action="{{ url_for('politicas.guardar_limite_articulos') }}"
-                class="formulario">
-            {{ csrf() }}
-            <input type="hidden" name="tipo_persona" value="{{ tipo }}">
-            {{ campo('maximo_articulos',tipo|capitalize,actual.maximo_articulos|default(''),tipo='number',requerido=true) }}
-            {% if g.usuario.rol=="ADMINISTRADOR" %}
-              <button class="secundario">Guardar máximo</button>
-            {% endif %}
-          </form>
-        {% endfor %}
-      </div>
-      <p class="suave">El máximo abarca los bienes pendientes de todas las categorías. Solo el administrador puede modificarlo.</p>
+    <section class="panel configuracion-compacta" aria-label="Límites y horario">
+      <form method="post" action="{{ url_for('politicas.guardar_limites_articulos') }}" class="bloque-maximos">
+        {{ csrf() }}
+        <h2>Máximo de artículos por persona</h2>
+        <div class="campos-configuracion-compacta">
+          {% for tipo in tipos %}
+            {% set actual = limites|selectattr('tipo_persona','equalto',tipo)|first|default({}) %}
+            <label>{{ tipo|capitalize }}
+              <input name="maximo_{{ tipo }}" type="number" min="1" step="1" required
+                     value="{{ actual.maximo_articulos|default('') }}"
+                     {% if g.usuario.rol != 'ADMINISTRADOR' %}readonly{% endif %}>
+            </label>
+          {% endfor %}
+          {% if g.usuario.rol == 'ADMINISTRADOR' %}<button class="secundario">Guardar</button>{% endif %}
+        </div>
+      </form>
+      <form method="post" action="{{ url_for('politicas.guardar_configuracion_general') }}" id="configuracion-general" class="bloque-horario">
+        {{ csrf() }}
+        <h2>Horario de atención</h2>
+        <div class="campos-configuracion-compacta">
+          {{ campo('hora_apertura','Apertura',configuracion.hora_apertura|hora,tipo='time',requerido=true) }}
+          {{ campo('hora_cierre','Cierre',configuracion.hora_cierre|hora,tipo='time',requerido=true) }}
+          <button>Guardar</button>
+        </div>
+      </form>
     </section>
-    <form method="post"
-          action="{{ url_for('politicas.guardar_configuracion_general') }}"
-          id="configuracion-general">
-      {{ csrf() }}
-      <section class="panel">
-        <h2>Horario general de atención</h2>
-        <div class="rejilla dos-columnas">
-          {{ campo('hora_apertura','Hora de apertura',configuracion.hora_apertura|hora,tipo='time',requerido=true) }}
-          {{ campo('hora_cierre','Hora de cierre',configuracion.hora_cierre|hora,tipo='time',requerido=true) }}
-        </div>
-        <div class="acciones acciones-configuracion">
-          <button>Guardar configuración</button>
-        </div>
-        <p class="suave">El horario y los vencimientos se guardan juntos.</p>
-      </section>
-    </form>
     <section class="panel politicas-panel">
       <h2>Plazos de préstamo</h2>
       <div class="busqueda-local">
@@ -127,7 +118,7 @@
         </fieldset>
       </div>
       <div class="acciones acciones-configuracion">
-        <button type="submit" form="configuracion-general">Guardar configuración</button>
+        <button type="submit" form="configuracion-general">Guardar</button>
       </div>
     </section>
     <a href="{{ url_for('prestamos.consultar_prestamos') }}">Ir a préstamos</a>
@@ -138,7 +129,7 @@
     </h1>
     <form method="post" class="formulario panel">
       {{ csrf() }}
-      <input type="hidden" name="version" value="{{ version }}">
+      <input type="hidden" name="version" value="{{ valor_formulario('version', version) }}">
       <div class="rejilla">
         {{ opciones('tipo_persona','Tipo de persona',tipos,politica.tipo_persona) }}
         <label>
@@ -146,7 +137,7 @@
           <select name="id_categoria" required>
             {% for c in categorias %}
               <option value="{{ c.id_categoria }}"
-                      {% if c.id_categoria==politica.id_categoria %}selected{% endif %}>{{ c.nombre }}
+                      {% if c.id_categoria|string == (politica.id_categoria|string if politica else categoria_seleccionada) %}selected{% endif %}>{{ c.nombre }}
               </option>
             {% endfor %}
           </select>
@@ -161,7 +152,7 @@
           Permite salida de la institución
         </label>
       </div>
-      <button>Guardar política</button>
+      <button>Guardar</button>
     </form>
     {% if politica %}
       <details class="panel">

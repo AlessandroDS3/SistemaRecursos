@@ -256,6 +256,10 @@ button:disabled {
     outline-offset: 3px;
 }
 
+.error-campo { display: block; color: var(--peligro-texto); font-size: var(--letra-pequena); margin-top: 6px; }
+.error-formulario { background: var(--peligro-fondo); color: var(--peligro-texto); }
+[aria-invalid="true"] { border-color: var(--peligro-texto); }
+
 /* ===== 03. Tablas, avisos y elementos comunes ===== */
 
 .filtros {
@@ -1305,6 +1309,26 @@ img {
 
 /* ===== 12. Fichas, políticas, permisos y utilidades ===== */
 
+.detalle-recurso-cabecera {
+    justify-content: space-between;
+}
+
+.resumen-inventario {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3rem;
+    border-bottom: 1px solid var(--borde);
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+.resumen-inventario strong {
+    display: block;
+    font-size: var(--letra-indicador);
+    font-weight: 500;
+    margin-top: 8px;
+}
+
 .ficha-resumen {
     display: grid;
     grid-template-columns: 1.3fr 1fr 1fr;
@@ -1741,3 +1765,17 @@ html [hidden], body[hidden] {
 .detalle-sancion { margin-top: 6px; color: var(--suave); font-size: var(--letra-micro); }
 .detalle-sancion summary { margin: 0; font-weight: 400; }
 .detalle-sancion p { max-width: 280px; margin: 6px 0 0; }
+/* Límites y horario en una sola franja compacta. */
+.configuracion-compacta { display: flex; flex-wrap: wrap; align-items: start; gap: 18px 28px; padding: 15px 20px; }
+.configuracion-compacta h2 { margin: 0 0 4px; color: var(--suave); font-size: var(--letra-normal); font-weight: 650; text-transform: uppercase; letter-spacing: .2px; }
+.configuracion-compacta form { margin: 0; flex: 1 1 420px; }
+.configuracion-compacta .bloque-horario { border-left: 1px solid var(--borde); padding-left: 28px; }
+.campos-configuracion-compacta { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.campos-configuracion-compacta label { gap: 1px; font-size: var(--letra-normal); }
+.campos-configuracion-compacta input { min-height: 35px; padding: 6px 10px; }
+.bloque-maximos input { width: 86px; }
+.bloque-horario input { width: 112px; }
+.campos-configuracion-compacta button { min-height: 35px; padding: 6px 14px; font-size: var(--letra-normal); white-space: nowrap; }
+@media (max-width: 1150px) {
+    .configuracion-compacta .bloque-horario { border-left: 0; padding-left: 0; }
+}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from 'formularios.html' import campo %}
-{% from 'componentes.html' import indicador, estado %}
+{% from 'parciales/formularios.html' import campo %}
+{% from 'parciales/componentes.html' import indicador, estado %}
 
 {% macro filtro_opciones(nombre, etiqueta, valores, actual) %}
   <label>
@@ -68,7 +68,7 @@
         {{ campo('ubicacion','Ubicación',filtro.ubicacion,maximo=120) }}
       {% endif %}
       <label class="busqueda-reporte">
-        Buscar
+        Buscar en reporte
         <input type="search"
                name="q"
                value="{{ filtro.q }}"

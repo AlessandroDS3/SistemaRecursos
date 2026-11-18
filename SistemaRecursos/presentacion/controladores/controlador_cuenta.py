@@ -11,6 +11,7 @@ from flask import (
 )
 from dominio.gestion_personas_usuarios.cuenta import ESTADOS_CUENTA
 from presentacion.seguridad import requiere_permiso
+from presentacion.formularios import recuperar_formulario
 
 
 class ControladorCuenta:
@@ -33,6 +34,7 @@ class ControladorCuenta:
             methods=['GET', 'POST'],
         )
 
+    @recuperar_formulario(lambda self: render_template('vista_cambiar_clave.html'))
     def cambiar_clave_propia(self):
         if request.method == 'POST':
             self.servicio.cambiar_clave_propia(
@@ -47,6 +49,7 @@ class ControladorCuenta:
         return render_template('vista_cambiar_clave.html')
 
     @requiere_permiso('USUARIOS_GESTIONAR')
+    @recuperar_formulario(lambda self, documento: self._mostrar_cuenta(documento, nueva=True))
     def registrar_cuenta(self, documento):
         if request.method == 'POST':
             creada = self.servicio.registrar_cuenta(
@@ -56,7 +59,8 @@ class ControladorCuenta:
             )
             respuesta = make_response(
                 render_template(
-                    'vista_cuenta_creada.html',
+                    'vista_cuenta.html',
+                    modo='creada',
                     creada=creada,
                     documento=documento,
                 ),
@@ -66,22 +70,28 @@ class ControladorCuenta:
             respuesta.headers['Pragma'] = 'no-cache'
             respuesta.headers['Referrer-Policy'] = 'no-referrer'
             return respuesta
-        propuesta = self.servicio.consultar_propuesta_cuenta(documento)
-        return render_template(
-            'vista_cuenta.html', documento=documento, cuenta=propuesta, nueva=True
-        )
+        return self._mostrar_cuenta(documento, nueva=True)
 
     @requiere_permiso('USUARIOS_GESTIONAR')
+    @recuperar_formulario(lambda self, documento: self._mostrar_cuenta(documento))
     def actualizar_cuenta(self, documento):
         if request.method == 'POST':
             self.servicio.actualizar_cuenta(documento, request.form.to_dict(), g.usuario.id_usuario)
             flash('Cuenta actualizada.')
             return redirect(url_for('personas.consultar_persona', documento=documento))
-        cuenta = self.servicio.consultar_cuenta(documento)
+        return self._mostrar_cuenta(documento)
+
+    def _mostrar_cuenta(self, documento, nueva=False):
+        cuenta = (
+            self.servicio.consultar_propuesta_cuenta(documento)
+            if nueva
+            else self.servicio.consultar_cuenta(documento)
+        )
         return render_template(
             'vista_cuenta.html',
+            modo='formulario',
             documento=documento,
             cuenta=cuenta,
-            nueva=False,
+            nueva=nueva,
             estados=ESTADOS_CUENTA,
         )

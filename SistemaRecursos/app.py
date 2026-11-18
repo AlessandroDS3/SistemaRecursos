@@ -39,6 +39,7 @@ from servicios.servicio_reporte import ServicioAplicacionReporte
 from servicios.procesador_vencimientos import iniciar_procesador_vencimientos
 
 from presentacion.seguridad import configurar_seguridad
+from presentacion.formularios import error_campo, identificador_campo, valor_formulario
 from presentacion.controladores.controlador_acceso import ControladorAcceso
 from presentacion.controladores.controlador_cuenta import ControladorCuenta
 from presentacion.controladores.controlador_persona import ControladorPersona
@@ -89,12 +90,14 @@ def registrar_controladores(app, servicios):
         ControladorCuenta(servicios['cuentas']),
         ControladorPersona(servicios['personas'], servicios['cuentas']),
         ControladorRol(servicios['roles'], servicios['cuentas']),
-        ControladorRecurso(servicios['recursos'], servicios['bienes']),
+        ControladorRecurso(servicios['recursos'], servicios['bienes'], servicios['politicas']),
         ControladorBienMaterial(servicios['bienes'], servicios['recursos']),
         ControladorPoliticaPrestamo(servicios['politicas'], servicios['recursos']),
-        ControladorPrestamo(servicios['prestamos'], servicios['bienes']),
+        ControladorPrestamo(
+            servicios['prestamos'], servicios['bienes'], servicios['recursos'], servicios['politicas']
+        ),
         ControladorReserva(servicios['reservas']),
-        ControladorAmpliacionPrestamo(servicios['ampliaciones']),
+        ControladorAmpliacionPrestamo(servicios['ampliaciones'], servicios['prestamos']),
         ControladorSancion(servicios['sanciones']),
         ControladorReporte(servicios['reportes'], servicios['recursos']),
     ]
@@ -205,6 +208,10 @@ def create_app(config=None):
     app.extensions['servicios'] = servicios
 
     configurar_seguridad(app, servicios['acceso'])
+    app.jinja_env.globals.update(
+        error_campo=error_campo, identificador_campo=identificador_campo,
+        valor_formulario=valor_formulario,
+    )
     registrar_controladores(app, servicios)
     registrar_inicio(app, servicios)
     registrar_filtros(app)

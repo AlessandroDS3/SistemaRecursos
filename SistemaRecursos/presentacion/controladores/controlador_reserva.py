@@ -1,6 +1,7 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from dominio.gestion_prestamos.reserva import ESTADOS_POR_ACCION, ESTADOS_RESERVA
 from presentacion.seguridad import requiere_permiso
+from presentacion.formularios import recuperar_formulario
 
 
 class ControladorReserva:
@@ -43,6 +44,7 @@ class ControladorReserva:
         )
 
     @requiere_permiso('RESERVAS_PROPIAS_GESTIONAR')
+    @recuperar_formulario(lambda self: self._mostrar_formulario_reserva())
     def registrar_reserva(self):
         if request.method == 'POST':
             identificador = self.servicio.registrar_reserva(
@@ -50,21 +52,34 @@ class ControladorReserva:
             )
             flash('Reserva registrada.')
             return redirect(url_for('reservas.consultar_reserva', identificador=identificador))
+        return self._mostrar_formulario_reserva()
+
+    def _mostrar_formulario_reserva(self):
         return render_template(
             'vista_reserva.html',
             modo='formulario',
             recursos=self.servicio.consultar_recursos_para_reserva(g.usuario.dni),
-            seleccionado=request.args.get('id_recurso', ''),
+            seleccionado=request.values.get('id_recurso', ''),
         )
 
     @requiere_permiso('RESERVAS_PROPIAS_GESTIONAR', 'PRESTAMOS_GESTIONAR')
     def consultar_reserva(self, identificador):
         gestionar = g.usuario.permite('PRESTAMOS_GESTIONAR')
+        reserva = self.servicio.consultar_reserva(identificador, g.usuario.dni, gestionar)
+        condiciones = next(
+            (
+                r
+                for r in self.servicio.consultar_recursos_para_reserva(reserva['dni_persona'])
+                if r['id_recurso'] == reserva['id_recurso']
+            ),
+            None,
+        )
         return render_template(
             'vista_reserva.html',
             modo='detalle',
             gestionar=gestionar,
-            reserva=self.servicio.consultar_reserva(identificador, g.usuario.dni, gestionar),
+            reserva=reserva,
+            condiciones=condiciones,
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
@@ -87,6 +102,9 @@ class ControladorReserva:
     def expirar_reserva(self, identificador):
         return self._resolver_reserva(identificador, self.servicio.expirar_reserva)
 
+    @recuperar_formulario(
+        lambda self, identificador, operacion: self.consultar_reserva(identificador)
+    )
     def _resolver_reserva(self, identificador, operacion):
         prestamo = operacion(identificador, request.form.to_dict(), g.usuario.id_usuario)
         mensajes = {

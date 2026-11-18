@@ -16,6 +16,9 @@ MENSAJES_DUPLICADOS = {
     'administrativo.codigo_empleado': 'Ese código de empleado ya está registrado.',
     'usuario_sistema.dni_persona': 'La persona ya tiene una cuenta de acceso.',
     'usuario_sistema.nombre_usuario': 'Ese nombre de usuario ya está registrado.',
+    'bien_material.codigo_inventario': 'Ya existe un bien con ese código de inventario.',
+    'categoria_recurso.nombre': 'Ya existe una categoría con ese nombre.',
+    'politica_prestamo.uq_politica_persona_categoria_vigente': 'Ya existe una política vigente para ese tipo de persona y categoría.',
 }
 
 

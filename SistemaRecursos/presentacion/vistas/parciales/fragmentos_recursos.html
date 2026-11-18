@@ -1,4 +1,15 @@
-{% from 'formularios.html' import csrf, campo %}
+{% from 'parciales/formularios.html' import csrf, campo %}
+
+{% macro continuar_registro(id_recurso, nombre) %}
+  <section class="panel" aria-label="Continuar registro">
+    <h2>{{ nombre }}</h2>
+    <p>El registro se guardó. Puedes continuar con el inventario.</p>
+    <div class="acciones">
+      <a class="boton" href="{{ url_for('bienes.gestionar_formulario_bien_material', id_recurso=id_recurso) }}">Agregar otro bien físico</a>
+      <a class="boton secundario" href="{{ url_for('recursos.gestionar_formulario_recurso', volver='administracion') }}">Registrar otro recurso</a>
+    </div>
+  </section>
+{% endmacro %}
 
 {% macro icono_recurso(tipo) %}
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -13,7 +24,7 @@
   <form method="post" action="{{ accion }}" class="formulario">
     {{ csrf() }}
     {% if datos.get("id_recurso") %}
-      <input type="hidden" name="version" value="{{ datos.version }}">
+      <input type="hidden" name="version" value="{{ valor_formulario('version', datos.version) }}">
     {% endif %}
     {% if volver %}
       <input type="hidden" name="volver" value="{{ volver }}">
@@ -54,7 +65,8 @@
     <div class="acciones">
       <button type="submit">Guardar</button>
       {% if en_dialogo %}<button type="button" class="secundario" data-cerrar-dialogo>Cancelar</button>
-      {% elif volver == 'administracion' %}<a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Cancelar</a>{% endif %}
+      {% elif volver == 'administracion' %}<a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Cancelar</a>
+      {% elif volver == 'catalogo' and datos.get('id_recurso') %}<a href="{{ url_for('recursos.consultar_recurso',identificador=datos.id_recurso) }}">Cancelar</a>{% endif %}
     </div>
   </form>
 {% endmacro %}
@@ -89,13 +101,14 @@
         <h2 id="titulo-categoria-{{ c.id_categoria }}">Editar categoría</h2>
         <button type="button" class="boton-icono" data-cerrar-dialogo aria-label="Cerrar formulario">{{ icono_recurso('cerrar') }}</button>
       </div>
-      <form method="post" action="{{ url_for('recursos.gestionar_categorias') }}" class="formulario">
+      <form method="post" action="{{ url_for('recursos.gestionar_categorias') }}" class="formulario" id="categoria-{{ c.id_categoria }}">
         {{ csrf() }}
+        <input type="hidden" name="_formulario" value="categoria-{{ c.id_categoria }}">
         <input type="hidden" name="volver" value="{{ volver }}">
         <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
-        <input type="hidden" name="version" value="{{ c.version }}">
-        {{ campo('nombre','Nombre',c.nombre,requerido=true,maximo=80) }}
-        {{ campo('descripcion','Descripción (opcional)',c.descripcion or '') }}
+        <input type="hidden" name="version" value="{{ valor_formulario('version', c.version, 'categoria-'~c.id_categoria) }}">
+        {{ campo('nombre','Nombre',c.nombre,requerido=true,maximo=80,formulario='categoria-'~c.id_categoria) }}
+        {{ campo('descripcion','Descripción (opcional)',c.descripcion or '',formulario='categoria-'~c.id_categoria) }}
         <div class="acciones"><button>Guardar</button><button type="button" class="secundario" data-cerrar-dialogo>Cancelar</button></div>
       </form>
     </dialog>
@@ -105,11 +118,12 @@
       <h2 id="titulo-nueva-categoria">Nueva categoría</h2>
       <button type="button" class="boton-icono" data-cerrar-dialogo aria-label="Cerrar formulario">{{ icono_recurso('cerrar') }}</button>
     </div>
-    <form method="post" action="{{ url_for('recursos.gestionar_categorias') }}" class="formulario">
+    <form method="post" action="{{ url_for('recursos.gestionar_categorias') }}" class="formulario" id="categoria-nueva">
       {{ csrf() }}
+      <input type="hidden" name="_formulario" value="categoria-nueva">
       <input type="hidden" name="volver" value="{{ volver }}">
-      {{ campo('nombre','Nombre',requerido=true,maximo=80) }}
-      {{ campo('descripcion','Descripción (opcional)') }}
+      {{ campo('nombre','Nombre',requerido=true,maximo=80,formulario='categoria-nueva') }}
+      {{ campo('descripcion','Descripción (opcional)',formulario='categoria-nueva') }}
       <div class="acciones"><button>Guardar</button><button type="button" class="secundario" data-cerrar-dialogo>Cancelar</button></div>
     </form>
   </dialog>

@@ -7,6 +7,7 @@ from dominio.gestion_personas_usuarios.persona import (
     TIPOS_PERSONA,
 )
 from presentacion.seguridad import requiere_permiso
+from presentacion.formularios import recuperar_formulario
 
 VISTA_PERSONA = 'vista_persona.html'
 
@@ -62,6 +63,7 @@ class ControladorPersona:
         )
 
     @requiere_permiso('PERSONAS_GESTIONAR')
+    @recuperar_formulario(lambda self, documento=None: self._mostrar_formulario_persona(documento))
     def gestionar_formulario_persona(self, documento=None):
         if request.method == 'POST':
             dni_guardado = self.servicio.guardar_persona(
@@ -69,6 +71,9 @@ class ControladorPersona:
             )
             flash('Ficha de persona guardada.')
             return redirect(url_for('personas.consultar_persona', documento=dni_guardado))
+        return self._mostrar_formulario_persona(documento)
+
+    def _mostrar_formulario_persona(self, documento=None):
         persona, version_actual = (
             self.servicio.consultar_persona(documento) if documento else ({}, '')
         )

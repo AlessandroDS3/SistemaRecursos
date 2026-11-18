@@ -1,6 +1,7 @@
-from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 from dominio.gestion_recursos.bien_material import ESTADOS_BIEN, ESTADOS_MANUALES
 from presentacion.seguridad import requiere_permiso
+from presentacion.formularios import recuperar_formulario
 
 
 class ControladorBienMaterial:
@@ -56,26 +57,37 @@ class ControladorBienMaterial:
         return render_template(
             'vista_bien_material.html',
             modo='detalle',
-            bien=self.servicio.consultar_bien_material(identificador),
-            historial=self.servicio.consultar_historial_bien_material(identificador),
+            **self.servicio.consultar_detalle_bien_material(identificador),
+            continuar_registro=session.pop('bien_recien_registrado', None) == identificador,
             estados=ESTADOS_MANUALES,
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
+    @recuperar_formulario(
+        lambda self, identificador=None: self._mostrar_formulario_bien_material(identificador)
+    )
     def gestionar_formulario_bien_material(self, identificador=None):
         if request.method == 'POST':
             id_bien_guardado = self.servicio.guardar_bien_material(
                 request.form.to_dict(), g.usuario.id_usuario, identificador
             )
             flash('Bien guardado.')
+            if identificador is None:
+                session['bien_recien_registrado'] = id_bien_guardado
             return redirect(
                 url_for('bienes.consultar_bien_material', identificador=id_bien_guardado)
             )
-        bien = (
-            self.servicio.consultar_bien_material(identificador)
-            if identificador is not None
-            else {'id_recurso': request.args.get('id_recurso')}
-        )
+        return self._mostrar_formulario_bien_material(identificador)
+
+    def _mostrar_formulario_bien_material(self, identificador=None):
+        bien = self.servicio.consultar_bien_material(identificador) if identificador else {}
+        if identificador is None and request.values.get('id_recurso'):
+            if request.method == 'GET':
+                bien['id_recurso'] = self.recursos.consultar_recurso(request.values['id_recurso'])[
+                    'id_recurso'
+                ]
+            else:
+                bien['id_recurso'] = request.form.get('id_recurso')
         return render_template(
             'vista_bien_material.html',
             modo='formulario',
@@ -84,6 +96,7 @@ class ControladorBienMaterial:
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
+    @recuperar_formulario(lambda self, identificador: self.consultar_bien_material(identificador))
     def cambiar_estado_bien_material(self, identificador):
         self.servicio.cambiar_estado_bien_material(
             identificador, request.form.to_dict(), g.usuario.id_usuario

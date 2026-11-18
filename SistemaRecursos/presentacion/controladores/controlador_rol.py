@@ -1,6 +1,7 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from dominio.gestion_personas_usuarios.rol import DEPENDENCIAS_PERMISOS, PERMISOS, ROLES
 from presentacion.seguridad import requiere_permiso
+from presentacion.formularios import recuperar_formulario
 
 
 class ControladorRol:
@@ -18,7 +19,7 @@ class ControladorRol:
     @requiere_permiso('ROLES_CONSULTAR')
     def consultar_roles(self):
         matriz, version = self.servicio.consultar_matriz_permisos()
-        busqueda = request.args.get('q', '').strip()
+        busqueda = (request.args.get('q') or request.form.get('dni', '')).strip()
         return render_template(
             'vista_rol.html',
             matriz=matriz,
@@ -30,6 +31,7 @@ class ControladorRol:
         )
 
     @requiere_permiso('ROLES_GESTIONAR')
+    @recuperar_formulario(lambda self: self.consultar_roles())
     def guardar_matriz_permisos(self):
         matriz = {rol: request.form.getlist('permisos_' + rol) for rol in ROLES}
         self.servicio.guardar_matriz_permisos(
@@ -39,6 +41,7 @@ class ControladorRol:
         return redirect(url_for('roles.consultar_roles'))
 
     @requiere_permiso('ROLES_GESTIONAR')
+    @recuperar_formulario(lambda self: self.consultar_roles())
     def asignar_rol_cuenta(self):
         self.cuentas.asignar_rol_cuenta(
             request.form.get('dni'), request.form.get('rol'), g.usuario.id_usuario

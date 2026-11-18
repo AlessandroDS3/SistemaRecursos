@@ -1,11 +1,12 @@
-from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 from dominio.gestion_recursos.bien_material import ESTADOS_BIEN
 from presentacion.seguridad import requiere_permiso
+from presentacion.formularios import recuperar_formulario
 
 
 class ControladorRecurso:
-    def __init__(self, servicio, bienes):
-        self.servicio, self.bienes = servicio, bienes
+    def __init__(self, servicio, bienes, politicas):
+        self.servicio, self.bienes, self.politicas = servicio, bienes, politicas
         self.blueprint = Blueprint('recursos', __name__, url_prefix='/recursos')
         for ruta, nombre, funcion, metodos in (
             ('', 'consultar_recursos', self.consultar_recursos, ['GET']),
@@ -50,34 +51,56 @@ class ControladorRecurso:
 
     @requiere_permiso('CATALOGO_CONSULTAR', 'RECURSOS_GESTIONAR')
     def consultar_recurso(self, identificador):
+        recurso = self.servicio.consultar_recurso(identificador)
+        bienes = self.bienes.consultar_bienes_materiales({'id_recurso': identificador})
         return render_template(
             'vista_recurso.html',
             modo='detalle',
-            recurso=self.servicio.consultar_recurso(identificador),
-            bienes=self.bienes.consultar_bienes_materiales({'id_recurso': identificador}),
+            recurso=recurso,
+            continuar_registro=session.pop('recurso_recien_registrado', None) == identificador,
+            categoria=self.servicio.consultar_categoria(recurso['id_categoria']),
+            bienes=bienes,
+            disponibles=sum(b['estado'] == 'DISPONIBLE' for b in bienes),
+            politicas=[
+                p
+                for p in self.politicas.consultar_politicas_prestamo()
+                if p['id_categoria'] == recurso['id_categoria']
+            ],
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
     def consultar_administracion_recursos(self):
         resultado = self.servicio.consultar_administracion_recursos(request.args)
+        recien_registrado = session.pop('recurso_recien_registrado', None)
         return render_template(
             'vista_administracion_recursos.html',
             **resultado,
             estados=ESTADOS_BIEN,
+            recurso_continuacion=(
+                self.servicio.consultar_recurso(recien_registrado) if recien_registrado else None
+            ),
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
+    @recuperar_formulario(
+        lambda self, identificador=None: self._mostrar_formulario_recurso(identificador)
+    )
     def gestionar_formulario_recurso(self, identificador=None):
         if request.method == 'POST':
             id_recurso_guardado = self.servicio.guardar_recurso(
                 request.form.to_dict(), g.usuario.id_usuario, identificador
             )
             flash('Recurso guardado.')
+            if identificador is None:
+                session['recurso_recien_registrado'] = id_recurso_guardado
             if request.form.get('volver') == 'administracion':
                 return redirect(url_for('recursos.consultar_administracion_recursos'))
             return redirect(
                 url_for('recursos.consultar_recurso', identificador=id_recurso_guardado)
             )
+        return self._mostrar_formulario_recurso(identificador)
+
+    def _mostrar_formulario_recurso(self, identificador=None):
         recurso = (
             self.servicio.consultar_recurso(identificador) if identificador is not None else {}
         )
@@ -86,7 +109,11 @@ class ControladorRecurso:
             modo='formulario',
             recurso=recurso,
             categorias=self.servicio.consultar_categorias(),
-            volver='administracion' if request.args.get('volver') == 'administracion' else '',
+            volver=(
+                request.values.get('volver')
+                if request.values.get('volver') in ('administracion', 'catalogo')
+                else ''
+            ),
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
@@ -98,6 +125,7 @@ class ControladorRecurso:
         return redirect(url_for('recursos.consultar_recursos'))
 
     @requiere_permiso('RECURSOS_GESTIONAR')
+    @recuperar_formulario(lambda self: self._mostrar_categorias())
     def gestionar_categorias(self):
         if request.method == 'POST':
             self.servicio.guardar_categoria(
@@ -115,6 +143,16 @@ class ControladorRecurso:
                     )
                 )
             return redirect(url_for('recursos.gestionar_categorias'))
+        return self._mostrar_categorias()
+
+    def _mostrar_categorias(self):
+        if request.form.get('volver') == 'administracion':
+            return render_template(
+                'vista_administracion_recursos.html',
+                **self.servicio.consultar_administracion_recursos({}),
+                estados=ESTADOS_BIEN,
+                vista_categorias_forzada=True,
+            )
         return render_template(
             'vista_recurso.html', modo='categorias', categorias=self.servicio.consultar_categorias()
         )

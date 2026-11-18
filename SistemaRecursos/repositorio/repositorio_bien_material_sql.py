@@ -5,7 +5,7 @@ from repositorio.base_sql import RepositorioSQL
 class RepositorioBienMaterialSQL(RepositorioSQL):
     def consultar_bien_material(self, identificador: int, bloquear: bool = False) -> dict | None:
         return self.consultar_sql(
-            '''SELECT b.*,r.nombre AS recurso,c.nombre AS categoria
+            '''SELECT b.*,r.nombre AS recurso,r.id_categoria,c.nombre AS categoria
             FROM bien_material b JOIN recurso r ON r.id_recurso=b.id_recurso
             JOIN categoria_recurso c ON c.id_categoria=r.id_categoria WHERE b.id_bien=%s'''
             + (' FOR UPDATE' if bloquear else ''),
@@ -29,7 +29,7 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
                 '(b.codigo_inventario LIKE %s OR r.nombre LIKE %s OR r.marca LIKE %s OR r.modelo LIKE %s)'
             )
             parametros.extend([f"%{filtros['q']}%"] * 4)
-        sql = '''SELECT b.*,r.nombre AS recurso FROM bien_material b
+        sql = '''SELECT b.*,r.nombre AS recurso,r.id_categoria FROM bien_material b
             JOIN recurso r ON r.id_recurso=b.id_recurso'''
         if condiciones:
             sql += ' WHERE ' + ' AND '.join(condiciones)
@@ -55,15 +55,16 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
             'BIEN_MATERIAL', identificador, anterior, nuevo, actor, motivo
         )
 
-    def consultar_prestamo_pendiente(self, identificador: int) -> dict | None:
+    def consultar_prestamo_pendiente(self, identificador: int, bloquear=True) -> dict | None:
         return self.consultar_sql(
             '''SELECT id_prestamo FROM detalle_prestamo
-            WHERE id_bien=%s AND fecha_devolucion IS NULL LIMIT 1 FOR UPDATE''',
+            WHERE id_bien=%s AND fecha_devolucion IS NULL LIMIT 1'''
+            + (' FOR UPDATE' if bloquear else ''),
             (identificador,),
             una=True,
         )
 
-    def consultar_relaciones_bien_material(self, identificador: int) -> dict:
+    def consultar_relaciones_bien_material(self, identificador: int, bloquear=True) -> dict:
         consultas = {
             'prestamos': 'SELECT id_detalle FROM detalle_prestamo WHERE id_bien=%s LIMIT 1 FOR UPDATE',
             'reservas': 'SELECT id_reserva FROM reserva WHERE id_bien=%s LIMIT 1 FOR UPDATE',
@@ -71,7 +72,10 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
                 WHERE entidad='BIEN_MATERIAL' AND id_entidad=%s LIMIT 1 FOR UPDATE""",
         }
         return {
-            relacion: self.consultar_sql(sql, (identificador,), una=True) is not None
+            relacion: self.consultar_sql(
+                sql if bloquear else sql.removesuffix(' FOR UPDATE'), (identificador,), una=True
+            )
+            is not None
             for relacion, sql in consultas.items()
         }
 

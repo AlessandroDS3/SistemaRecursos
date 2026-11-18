@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from 'formularios.html' import csrf, campo, opciones %}
-{% from 'componentes.html' import indicador, estado %}
+{% from 'parciales/formularios.html' import csrf, campo, opciones %}
+{% from 'parciales/componentes.html' import indicador, estado %}
 {% block contenido %}
   {% if modo == "lista" %}
     <div class="cabecera">
@@ -18,7 +18,14 @@
     </section>
     <form class="filtros filtros-bloque" method="get">
       <div class="rejilla filtros-cuatro">
-        {{ campo('q','Buscar persona',request.args.get('q',''),maximo=120) }}
+        <label>
+          Buscar persona
+          <input type="search"
+                 name="q"
+                 value="{{ request.args.get('q','') }}"
+                 maxlength="120"
+                 placeholder="DNI, CUI, nombres o apellidos">
+        </label>
         <label>
           Tipo<select name="tipo">
           <option value="">Todos</option>
@@ -153,7 +160,7 @@
     </h1>
     <form method="post" class="formulario panel">
       {{ csrf() }}
-      <input type="hidden" name="version" value="{{ version }}">
+      <input type="hidden" name="version" value="{{ valor_formulario('version', version) }}">
       <div class="rejilla">
         {{ campo('dni','DNI',persona.dni, requerido=true,maximo=8) }}
         {{ campo('nombres','Nombres',persona.nombres,requerido=true,maximo=100) }}
