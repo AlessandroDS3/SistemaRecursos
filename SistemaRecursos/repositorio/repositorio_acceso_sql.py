@@ -1,4 +1,5 @@
 from dominio.gestion_personas_usuarios.acceso import CuentaAcceso
+from dominio.gestion_personas_usuarios.rol import permisos_del_rol
 from repositorio.base_sql import RepositorioSQL
 
 
@@ -15,10 +16,7 @@ class RepositorioAccesoSQL(RepositorioSQL):
         )
         if fila_cuenta is None:
             return None
-        permisos = self.consultar_sql(
-            'SELECT permiso FROM rol_permiso WHERE rol=%s', (fila_cuenta['rol'],)
-        )
-        return CuentaAcceso(**fila_cuenta, permisos=frozenset(p['permiso'] for p in permisos))
+        return CuentaAcceso(**fila_cuenta, permisos=permisos_del_rol(fila_cuenta['rol']))
 
     def consultar_cuenta_por_usuario(self, nombre):
         return self._consultar_cuenta('u.nombre_usuario', nombre)

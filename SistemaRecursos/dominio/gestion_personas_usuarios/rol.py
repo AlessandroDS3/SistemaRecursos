@@ -1,7 +1,6 @@
-"""Catálogo fijo de roles y permisos; la asignación se administra en MySQL."""
+"""Los tres roles y sus permisos son fijos; las cuentas reciben uno de estos roles."""
 
-from typing import Protocol
-from dominio.compartido.contratos import IRepositorioTransaccional
+from types import MappingProxyType
 
 ROLES = ('USUARIO', 'ENCARGADO_PRESTAMOS', 'ADMINISTRADOR')
 PERSONAS_CONSULTAR = 'PERSONAS_CONSULTAR'
@@ -17,38 +16,30 @@ PERMISOS = {
     'PERSONAS_GESTIONAR': 'Gestionar personas',
     'USUARIOS_GESTIONAR': 'Administrar cuentas',
     ROLES_CONSULTAR: 'Consultar roles',
-    ROLES_GESTIONAR: 'Administrar roles y permisos',
+    ROLES_GESTIONAR: 'Asignar roles a cuentas',
     'RECURSOS_GESTIONAR': 'Gestionar recursos y bienes',
     'POLITICAS_GESTIONAR': 'Administrar políticas',
     'REPORTES_CONSULTAR': 'Consultar reportes y descargar CSV',
 }
 
-DEPENDENCIAS_PERMISOS = {
-    'PERSONAS_GESTIONAR': (PERSONAS_CONSULTAR,),
-    'USUARIOS_GESTIONAR': (PERSONAS_CONSULTAR,),
-    ROLES_GESTIONAR: (ROLES_CONSULTAR,),
-    'RECURSOS_GESTIONAR': ('CATALOGO_CONSULTAR',),
-}
+_PERMISOS_USUARIO = frozenset({
+    'CATALOGO_CONSULTAR',
+    'RESERVAS_PROPIAS_GESTIONAR',
+    'PRESTAMOS_PROPIOS_CONSULTAR',
+})
+
+PERMISOS_POR_ROL = MappingProxyType({
+    'USUARIO': _PERMISOS_USUARIO,
+    'ENCARGADO_PRESTAMOS': _PERMISOS_USUARIO | {
+        'PRESTAMOS_GESTIONAR',
+        PERSONAS_CONSULTAR,
+        'PERSONAS_GESTIONAR',
+        'REPORTES_CONSULTAR',
+    },
+    'ADMINISTRADOR': frozenset(PERMISOS),
+})
 
 
-def validar_matriz(matriz):
-    if set(matriz) != set(ROLES):
-        raise ValueError('Incluye los tres roles.')
-    if any(set(permisos) - PERMISOS.keys() for permisos in matriz.values()):
-        raise ValueError('La matriz contiene permisos inexistentes.')
-    if not {ROLES_CONSULTAR, ROLES_GESTIONAR} <= set(matriz['ADMINISTRADOR']):
-        raise ValueError('El administrador debe conservar la administración de roles.')
-    for rol, permisos in matriz.items():
-        for permiso, requeridos in DEPENDENCIAS_PERMISOS.items():
-            faltantes = [PERMISOS[p] for p in requeridos if p not in permisos]
-            if permiso in permisos and faltantes:
-                raise ValueError(
-                    f'{rol}: para «{PERMISOS[permiso]}» también debes marcar: '
-                    + ', '.join(faltantes)
-                    + '.'
-                )
-
-
-class IRepositorioRol(IRepositorioTransaccional, Protocol):
-    def consultar_matriz_permisos(self, bloquear=False) -> dict: ...
-    def guardar_matriz_permisos(self, matriz: dict): ...
+def permisos_del_rol(rol: str) -> frozenset[str]:
+    """Un rol desconocido no concede acceso a ninguna operación."""
+    return PERMISOS_POR_ROL.get(rol, frozenset())

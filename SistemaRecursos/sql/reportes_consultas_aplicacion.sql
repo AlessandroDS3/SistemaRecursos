@@ -163,10 +163,5 @@ JOIN persona p ON p.dni = u.dni_persona
 WHERE u.id_usuario = @id_usuario;
 
 
--- 11. Permisos
-SET @rol = 'ADMINISTRADOR';
-SELECT permiso FROM rol_permiso WHERE rol = @rol;
-
-
--- 12. Categorías del selector
+-- 11. Categorías del selector
 SELECT * FROM categoria_recurso ORDER BY nombre;

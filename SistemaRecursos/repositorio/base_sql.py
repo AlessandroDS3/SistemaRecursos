@@ -5,6 +5,7 @@ import re
 from mysql.connector import IntegrityError
 
 from dominio.compartido.validacion import Conflicto
+from dominio.gestion_personas_usuarios.rol import permisos_del_rol
 
 from repositorio.conexion_mysql import MySQLConnection
 
@@ -82,12 +83,7 @@ class RepositorioSQL:
             una=True,
         )
         if cuenta_actor:
-            cuenta_actor['permisos'] = {
-                p['permiso']
-                for p in self.consultar_sql(
-                    'SELECT permiso FROM rol_permiso WHERE rol=%s', (cuenta_actor['rol'],)
-                )
-            }
+            cuenta_actor['permisos'] = permisos_del_rol(cuenta_actor['rol'])
         return cuenta_actor
 
     def registrar_historial_estado(

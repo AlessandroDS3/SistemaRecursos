@@ -14,7 +14,6 @@ from repositorio.conexion_mysql import MySQLConnection
 from repositorio.repositorio_acceso_sql import RepositorioAccesoSQL
 from repositorio.repositorio_cuenta_sql import RepositorioCuentaSQL
 from repositorio.repositorio_persona_sql import RepositorioPersonaSQL
-from repositorio.repositorio_rol_sql import RepositorioRolSQL
 from repositorio.repositorio_recurso_sql import RepositorioRecursoSQL
 from repositorio.repositorio_bien_material_sql import RepositorioBienMaterialSQL
 from repositorio.repositorio_politica_prestamo_sql import RepositorioPoliticaPrestamoSQL
@@ -70,7 +69,7 @@ def crear_servicios(conexion, dominios_institucionales=('unsa.edu.pe',)):
             RepositorioCuentaSQL(conexion), dominios_institucionales
         ),
         'personas': ServicioAplicacionPersona(RepositorioPersonaSQL(conexion)),
-        'roles': ServicioAplicacionRol(RepositorioRolSQL(conexion)),
+        'roles': ServicioAplicacionRol(),
         'recursos': ServicioAplicacionRecurso(RepositorioRecursoSQL(conexion)),
         'bienes': ServicioAplicacionBienMaterial(RepositorioBienMaterialSQL(conexion)),
         'politicas': ServicioAplicacionPoliticaPrestamo(RepositorioPoliticaPrestamoSQL(conexion)),
