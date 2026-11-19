@@ -1,0 +1,23 @@
+{% if graficos %}
+<section class="estadisticas-reportes" aria-label="Gráficos estadísticos del resultado filtrado">
+  {% for titulo, serie in [(graficos.titulo, graficos.circular), (graficos.titulo_barras, graficos.barras)] %}
+  {% set circular = loop.first %}
+  <figure class="panel estadistica-reporte">
+    <figcaption>
+      <h2>{{ titulo }}</h2>
+    </figcaption>
+    {% if serie.total %}
+      <p class="estadistica-total"><strong>{{ serie.total }}</strong> {{ graficos.unidad }}</p>
+      <div class="estadistica-vector" role="img" aria-label="{{ titulo }}. Cantidades y porcentajes en la leyenda siguiente.">{{ graficos.svg[loop.index0]|safe }}</div>
+      <ul class="estadistica-leyenda">
+        {% for item in serie.elementos %}
+        <li><span><i style="background: {{ item.color if circular else '#287b78' }}" aria-hidden="true"></i>{{ loop.index }}. {{ item.etiqueta }}</span><span><strong>{{ item.cantidad }}</strong> · {{ item.porcentaje }} %</span></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="estadistica-vacia suave">No hay datos para graficar con estos filtros.</p>
+    {% endif %}
+  </figure>
+  {% endfor %}
+</section>
+{% endif %}

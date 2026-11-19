@@ -15,6 +15,10 @@
   </label>
 {% endmacro %}
 
+{% block scripts %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='graficos_reportes.css') }}">
+{% endblock %}
+
 {% block contenido %}
   <div class="cabecera">
     <div>
@@ -77,6 +81,7 @@
       <a href="{{ url_for('reportes.consultar_reportes',tipo=filtro.tipo) }}">Limpiar filtros</a>
     </div>
   </form>
+  {% include 'parciales/graficos_reportes.html' %}
   <p class="suave">{{ filas|length }} {{ 'registro' if filas|length == 1 else 'registros' }}.</p>
   {% set columnas = reporte.columnas|selectattr('en_tabla')|list %}
   <section class="panel panel-tabla">

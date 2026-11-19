@@ -7,6 +7,9 @@ from presentacion.formatos_reportes import (
     valor_reporte,
 )
 from presentacion.pdf_reportes import generar_pdf_historial, generar_pdf_reporte
+from presentacion.graficos_reportes import preparar_graficos
+from presentacion.dibujos_reportes import dibujos_graficos
+from reportlab.graphics import renderSVG
 
 
 class ControladorReporte:
@@ -42,6 +45,10 @@ class ControladorReporte:
     def consultar_reportes(self):
         resultado = self.servicio.consultar_reportes(request.args)
         resultado['reporte'] = presentar_reporte(resultado['filtro'].tipo)
+        if not resultado['filtro'].tipo.startswith('historial_'):
+            resultado['graficos'] = preparar_graficos(resultado['filtro'].tipo, resultado['filas'])
+            if resultado['graficos']:
+                resultado['graficos']['svg'] = [renderSVG.drawToString(d) for d in dibujos_graficos(resultado['graficos'])]
         return render_template(
             (
                 'vista_historial.html'

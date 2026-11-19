@@ -10,10 +10,12 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import (
-    CondPageBreak, LongTable, Paragraph, SimpleDocTemplate, Spacer, TableStyle,
+    CondPageBreak, LongTable, Paragraph, SimpleDocTemplate, Spacer, TableStyle, Table, PageBreak,
 )
 
 from dominio.compartido.validacion import LIMA
+from presentacion.graficos_reportes import preparar_graficos
+from presentacion.dibujos_reportes import dibujos_graficos
 from presentacion.formatos_reportes import (
     CampoVistaReporte, etiqueta_reporte, presentar_reporte, valor_reporte,
 )
@@ -167,6 +169,28 @@ def generar_pdf_reporte(filtro, filas, generado_en=None):
     reporte = presentar_reporte(filtro.tipo)
     titulo = 'Bienes prestados' if filtro.tipo == 'prestamos' else reporte.titulo
     documento, salida, contenido = _preparar_pdf(titulo, generado_en)
+    graficos = preparar_graficos(filtro.tipo, filas)
+    if graficos and filas:
+        tarjetas = []
+        for nombre, serie, dibujo in zip(
+            (graficos['titulo'], graficos['titulo_barras']),
+            (graficos['circular'], graficos['barras']), dibujos_graficos(graficos),
+        ):
+            leyenda = '<br/>'.join(
+                f'{i + 1}. {_texto_pdf(item["etiqueta"])}: <b>{item["cantidad"]}</b> ({item["porcentaje"]} %)'
+                for i, item in enumerate(serie['elementos'])
+            )
+            tarjetas.append([
+                Paragraph(_texto_pdf(nombre), SECCION),
+                Paragraph(f'Total: {serie["total"]} {_texto_pdf(graficos["unidad"])}', TEXTO),
+                dibujo, Paragraph(leyenda, CUERPO),
+            ])
+        contenido.append(Table([tarjetas], colWidths=[(documento.width - 12) / 2] * 2,
+                               style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')])))
+        contenido.append(PageBreak())
+    else:
+        contenido.append(Paragraph('No hay datos para graficar con estos filtros.', TEXTO))
+    contenido.append(Paragraph('Detalle de resultados', SECCION))
     columnas = [c for c in reporte.columnas if c.en_tabla]
     contenido.append(_tabla_pdf(columnas, filas, documento.width - 12))
     documento.build(contenido, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)
