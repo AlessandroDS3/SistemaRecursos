@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, TypedDict
 from datetime import datetime
 from dominio.compartido.contratos import IRepositorioTransaccional
-from dominio.gestion_control.sancion import IRepositorioSancion
+from dominio.gestion_control.sancion import IOperacionesSancion
 from dominio.compartido.validacion import Conflicto, NoEncontrado, dni, ids, texto
 from dominio.gestion_personas_usuarios.persona import validar_elegibilidad
 from dominio.gestion_control.politica_prestamo import HorarioAtencion, PoliticaPrestamo
@@ -13,6 +13,7 @@ ESTADOS_PRESTAMO = {
     'ACTIVO': 'Activos',
     'VENCIDO': 'Vencidos',
     'DEVUELTO': 'Devueltos',
+    'REGULARIZADO': 'Regularizados por reposición',
     'PARCIALMENTE_DEVUELTO': 'Parcialmente devueltos',
 }
 FILTROS_ESTADO_PRESTAMO = {
@@ -122,20 +123,21 @@ class SolicitudPrestamo:
 
 
 def estado_prestamo(detalles, ahora):
-    pendientes = [d for d in detalles if d['fecha_devolucion'] is None]
+    pendientes = [d for d in detalles if d['fecha_devolucion'] is None and not d.get('fecha_regularizacion')]
     if not pendientes:
-        return 'DEVUELTO'
+        return 'REGULARIZADO' if any(d.get('fecha_regularizacion') for d in detalles) else 'DEVUELTO'
     if any(d['fecha_limite_devolucion'] < ahora for d in pendientes):
         return 'VENCIDO'
     return 'PARCIALMENTE_DEVUELTO' if len(pendientes) < len(detalles) else 'ACTIVO'
 
 
 class IRepositorioPrestamo(IRepositorioTransaccional, Protocol):
+    def consultar_politica_aplicada(self, identificador: int) -> dict | None: ...
     def consultar_resumen_prestamos(self, documento: str | None = None) -> dict: ...
     def consultar_prestamo_para_actualizar(self, identificador: int) -> dict | None: ...
     def consultar_condiciones_prestamo(self, documento: str) -> dict: ...
     @property
-    def sanciones(self) -> IRepositorioSancion: ...
+    def sanciones(self) -> IOperacionesSancion: ...
     def consultar_prestamo(self, identificador: int, bloquear=False) -> dict | None: ...
     def consultar_prestamos(self, filtros: dict, documento: str | None = None) -> list[dict]: ...
     def consultar_contexto_entrega_prestamo(
@@ -143,6 +145,7 @@ class IRepositorioPrestamo(IRepositorioTransaccional, Protocol):
     ) -> ContextoEntrega: ...
     def registrar_entrega_prestamo(self, solicitud: SolicitudPrestamo, plan: list[dict], fecha): ...
     def registrar_devolucion(self, detalle: dict, devolucion, fecha, actor: str): ...
+    def cerrar_detalle_por_reposicion(self, detalle: int, fecha): ...
     def actualizar_estado_prestamo(self, prestamo: dict, nuevo: str, actor: str, motivo: str): ...
     def registrar_perdida_bien_material(
         self, prestamo: dict, detalle: dict, actor: str, motivo: str

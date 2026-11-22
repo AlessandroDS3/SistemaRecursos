@@ -1,7 +1,7 @@
 -- Datos ficticios para probar el sistema de recursos con MySQL 8.
 -- Crea una base de demostracion aislada y carga escenarios consistentes al 12-11-2026.
 -- Ejecutar SOLO en una instalacion nueva; NO ejecutar sobre una base con datos.
--- Incluye correo opcional y debe_cambiar_clave; no requiere migracion al crear la base.
+-- Si ya existe prestamos_escuela_pruebas, recrearla antes de importar estos datos.
 -- Las cuentas de demostracion usan debe_cambiar_clave=FALSE y las claves indicadas abajo.
 -- Cuentas locales de demostracion (no usar en produccion):
 -- admin / AdminPrueba2026!
@@ -97,6 +97,9 @@ CREATE TABLE IF NOT EXISTS configuracion_general (
   unidad_espera ENUM('HORAS','DIAS') NOT NULL DEFAULT 'DIAS',
   plazo_retiro INT NOT NULL,
   unidad_retiro ENUM('HORAS','DIAS') NOT NULL DEFAULT 'HORAS',
+  dias_leve INT NOT NULL DEFAULT 14 CHECK (dias_leve BETWEEN 1 AND 3650),
+  dias_grave INT NOT NULL DEFAULT 180 CHECK (dias_grave BETWEEN 1 AND 3650),
+  dias_espera_perdida INT NOT NULL DEFAULT 7 CHECK (dias_espera_perdida BETWEEN 1 AND 365),
   CHECK (hora_apertura >= '00:00:00' AND hora_apertura < hora_cierre AND hora_cierre < '24:00:00'),
   CHECK (plazo_espera BETWEEN 1 AND CASE WHEN unidad_espera='HORAS' THEN 720 ELSE 30 END),
   CHECK (plazo_retiro BETWEEN 1 AND CASE WHEN unidad_retiro='HORAS' THEN 720 ELSE 30 END)
@@ -125,7 +128,7 @@ CREATE TABLE IF NOT EXISTS prestamo (
   tipo_prestamo     ENUM('INDIVIDUAL','GRUPAL') NOT NULL DEFAULT 'INDIVIDUAL',
   fecha_solicitud   DATETIME NOT NULL,
   fecha_entrega     DATETIME,
-  estado            ENUM('ACTIVO','VENCIDO','DEVUELTO','PARCIALMENTE_DEVUELTO') NOT NULL DEFAULT 'ACTIVO',
+  estado            ENUM('ACTIVO','VENCIDO','DEVUELTO','PARCIALMENTE_DEVUELTO','REGULARIZADO') NOT NULL DEFAULT 'ACTIVO',
   observaciones     VARCHAR(255),
   INDEX idx_prestamo_fecha_id (fecha_entrega, id_prestamo),
   FOREIGN KEY (dni_persona)   REFERENCES persona(dni) ON UPDATE CASCADE,
@@ -140,6 +143,8 @@ CREATE TABLE IF NOT EXISTS detalle_prestamo (
   condicion_entrega ENUM('BUENO','DANADO') NOT NULL DEFAULT 'BUENO',
   observaciones_entrega VARCHAR(255),
   fecha_devolucion DATETIME NULL,
+  fecha_regularizacion DATETIME NULL,
+  CHECK (fecha_regularizacion IS NULL OR fecha_devolucion IS NULL),
   dni_encargado_devolucion VARCHAR(8) NULL,
   condicion_devolucion ENUM('BUENO','DANADO') NULL,
   observaciones_devolucion VARCHAR(255) NULL,
@@ -192,7 +197,7 @@ CREATE TABLE IF NOT EXISTS reserva (
 CREATE TABLE IF NOT EXISTS incidencia (
   id_incidencia   INT AUTO_INCREMENT PRIMARY KEY,
   id_detalle  INT NOT NULL,
-  tipo ENUM('RETRASO','DANIO','PERDIDA') NOT NULL,
+  tipo ENUM('RETRASO','DANIO','PERDIDA','SALIDA_NO_AUTORIZADA','CUSTODIA') NOT NULL,
   dni_registrador VARCHAR(8) NULL,
   retraso_unico TINYINT GENERATED ALWAYS AS (CASE WHEN tipo='RETRASO' THEN 1 ELSE NULL END) STORED,
   UNIQUE (id_detalle,retraso_unico),
@@ -212,13 +217,27 @@ CREATE TABLE IF NOT EXISTS sancion (
   fecha_levantamiento          DATETIME NULL,
   dni_levantamiento            VARCHAR(8) NULL,
   justificacion_levantamiento  VARCHAR(255) NULL,
+  gravedad ENUM('LEVE','GRAVE','MUY_GRAVE') NOT NULL DEFAULT 'LEVE',
+  dias_leve INT NOT NULL DEFAULT 14,
+  dias_grave INT NOT NULL DEFAULT 180,
+  dias_espera_perdida INT NOT NULL DEFAULT 7,
+  fecha_inicio_nivel DATETIME NULL,
+  fecha_fin DATETIME NULL,
+  fecha_revision DATETIME NULL,
+  fecha_regularizacion DATETIME NULL,
+  tipo_regularizacion ENUM('DEVOLUCION','RECUPERACION','REPARACION','REPOSICION','VERIFICACION') NULL,
+  dni_regularizacion VARCHAR(8) NULL,
+  observacion_regularizacion VARCHAR(255) NULL,
+  id_bien_reposicion INT NULL,
+  FOREIGN KEY (dni_regularizacion) REFERENCES persona(dni) ON UPDATE CASCADE,
+  FOREIGN KEY (id_bien_reposicion) REFERENCES bien_material(id_bien),
   FOREIGN KEY (dni_levantamiento) REFERENCES persona(dni) ON UPDATE CASCADE,
   FOREIGN KEY (id_incidencia_ref) REFERENCES incidencia(id_incidencia)
 ) ENGINE=InnoDB;
 -- 6. HISTORIALES
 CREATE TABLE IF NOT EXISTS historial_estado (
   id_historial_estado  INT AUTO_INCREMENT PRIMARY KEY,
-  entidad              ENUM('BIEN_MATERIAL','RESERVA','SANCION','PRESTAMO') NOT NULL,
+  entidad              ENUM('BIEN_MATERIAL','RESERVA','SANCION','PRESTAMO','CONFIGURACION_SANCIONES') NOT NULL,
   id_entidad           INT NOT NULL,
   estado_anterior      VARCHAR(30),
   estado_nuevo         VARCHAR(30) NOT NULL,
@@ -724,10 +743,27 @@ ORDER BY u.nombre_usuario;
 
 -- Comprobar que no hay un bien en dos prestamos abiertos.
 SELECT d.id_bien, COUNT(*) AS abiertos FROM detalle_prestamo d
-WHERE d.fecha_devolucion IS NULL
+WHERE d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL
 GROUP BY d.id_bien HAVING COUNT(*)>1;
 
 -- Comprobar que toda reserva con bien asignado corresponde al recurso.
 SELECT rv.id_reserva,rv.id_recurso,b.id_recurso AS recurso_del_bien
 FROM reserva rv JOIN bien_material b ON b.id_bien=rv.id_bien
 WHERE rv.id_recurso<>b.id_recurso;
+
+-- Conserva sanciones históricas y sus estados; completa los datos del nuevo modelo.
+UPDATE sancion s JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
+JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle
+SET s.gravedad=CASE WHEN i.tipo='RETRASO' THEN 'LEVE' ELSE 'GRAVE' END,
+    s.fecha_inicio_nivel=CASE WHEN i.tipo='RETRASO' THEN d.fecha_limite_devolucion ELSE s.fecha END,
+    s.fecha_fin=CASE WHEN i.tipo='RETRASO' THEN DATE_ADD(d.fecha_limite_devolucion, INTERVAL s.dias_leve DAY)
+                    ELSE DATE_ADD(s.fecha, INTERVAL s.dias_grave DAY) END,
+    s.fecha_revision=DATE_ADD(d.fecha_limite_devolucion, INTERVAL (s.dias_leve+s.dias_espera_perdida) DAY),
+    s.fecha_regularizacion=CASE
+        WHEN i.tipo='RETRASO' AND d.condicion_devolucion='BUENO' THEN d.fecha_devolucion
+        WHEN s.estado IN ('CUMPLIDA','LEVANTADA','ANULADA') THEN COALESCE(s.fecha_levantamiento,d.fecha_devolucion,s.fecha)
+        ELSE NULL END,
+    s.tipo_regularizacion=CASE
+        WHEN i.tipo='RETRASO' AND d.condicion_devolucion='BUENO' THEN 'DEVOLUCION'
+        WHEN s.estado IN ('CUMPLIDA','LEVANTADA','ANULADA') THEN 'VERIFICACION'
+        ELSE NULL END;

@@ -1,0 +1,25 @@
+{% from 'parciales/formularios.html' import csrf %}
+{% macro evaluacion_sancion(accion) %}
+  <form method="post" action="{{ accion }}" class="formulario">
+    {{ csrf() }}
+    <label>Causa confirmada
+      <select name="causa" required>
+        <option value="PERDIDA">Pérdida confirmada</option>
+        <option value="DANIO">Daño que requiere reparación o reposición</option>
+        <option value="SALIDA_NO_AUTORIZADA">Salida sin autorización</option>
+        <option value="CUSTODIA">Incumplimiento de custodia</option>
+      </select>
+    </label>
+    <label>Gravedad
+      <select name="gravedad" required>
+        <option value="GRAVE">Grave</option>
+        {% if g.usuario.rol == 'ADMINISTRADOR' %}<option value="MUY_GRAVE">Muy grave</option>{% endif %}
+      </select>
+    </label>
+    <label>Evaluación y justificación
+      <textarea name="motivo" maxlength="255" required></textarea>
+    </label>
+    <p class="suave">Confirma lo ocurrido antes de sancionar. El desgaste normal y los daños preexistentes no son faltas. Solo el administrador aplica una muy grave.</p>
+    <button>Registrar evaluación</button>
+  </form>
+{% endmacro %}

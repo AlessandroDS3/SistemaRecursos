@@ -23,6 +23,10 @@ FORMATOS = {
     'fecha_limite_vencimiento': 'fecha',
     'fecha': 'fecha',
     'fecha_levantamiento': 'fecha',
+    'fecha_fin': 'fecha',
+    'fecha_regularizacion': 'fecha',
+    'gravedad': 'estado',
+    'tipo_regularizacion': 'etiqueta',
     'fecha_adquisicion': 'dia',
     'estado': 'estado',
     'situacion': 'estado',
@@ -82,6 +86,9 @@ def presentar_reporte(tipo):
         ocultos.update(('recurso', 'categoria'))
     if tipo == 'atrasados':
         ocultos.add('recurso')
+    if tipo == 'sanciones':
+        # El CSV conserva todos los datos; el detalle de sanción muestra fechas y aceptación.
+        ocultos.update(('fecha_fin', 'fecha_regularizacion', 'tipo_regularizacion'))
     formatos = dict(
         FORMATOS,
         codigo_inventario='inventario' if tipo in ('inventario', 'danos_perdidas') else 'bien',

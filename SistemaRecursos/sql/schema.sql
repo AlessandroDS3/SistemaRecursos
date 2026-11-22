@@ -1,7 +1,7 @@
 -- Estructura del sistema de prestamos de recursos para MySQL 8.
 -- Crea prestamos_escuela sin registros: personas, cuentas y catalogo vacios.
 -- Acceso actualizado: persona.correo admite NULL y usuario_sistema incluye debe_cambiar_clave.
--- Al crear las tablas desde cero no se necesita una migracion adicional.
+-- Incluye la estructura de sanciones por gravedad. Ejecutar sobre una base nueva.
 -- CREATE TABLE IF NOT EXISTS no modifica la estructura de tablas ya existentes.
 SET NAMES utf8mb4;
 
@@ -107,6 +107,9 @@ CREATE TABLE IF NOT EXISTS configuracion_general (
   unidad_espera ENUM('HORAS','DIAS') NOT NULL DEFAULT 'DIAS',
   plazo_retiro INT NOT NULL,
   unidad_retiro ENUM('HORAS','DIAS') NOT NULL DEFAULT 'HORAS',
+  dias_leve INT NOT NULL DEFAULT 14 CHECK (dias_leve BETWEEN 1 AND 3650),
+  dias_grave INT NOT NULL DEFAULT 180 CHECK (dias_grave BETWEEN 1 AND 3650),
+  dias_espera_perdida INT NOT NULL DEFAULT 7 CHECK (dias_espera_perdida BETWEEN 1 AND 365),
   CHECK (hora_apertura >= '00:00:00' AND hora_apertura < hora_cierre AND hora_cierre < '24:00:00'),
   CHECK (plazo_espera BETWEEN 1 AND CASE WHEN unidad_espera='HORAS' THEN 720 ELSE 30 END),
   CHECK (plazo_retiro BETWEEN 1 AND CASE WHEN unidad_retiro='HORAS' THEN 720 ELSE 30 END)
@@ -139,7 +142,7 @@ CREATE TABLE IF NOT EXISTS prestamo (
   tipo_prestamo     ENUM('INDIVIDUAL','GRUPAL') NOT NULL DEFAULT 'INDIVIDUAL',
   fecha_solicitud   DATETIME NOT NULL,
   fecha_entrega     DATETIME,
-  estado            ENUM('ACTIVO','VENCIDO','DEVUELTO','PARCIALMENTE_DEVUELTO') NOT NULL DEFAULT 'ACTIVO',
+  estado            ENUM('ACTIVO','VENCIDO','DEVUELTO','PARCIALMENTE_DEVUELTO','REGULARIZADO') NOT NULL DEFAULT 'ACTIVO',
   observaciones     VARCHAR(255),
   INDEX idx_prestamo_fecha_id (fecha_entrega, id_prestamo),
   FOREIGN KEY (dni_persona)   REFERENCES persona(dni) ON UPDATE CASCADE,
@@ -155,6 +158,8 @@ CREATE TABLE IF NOT EXISTS detalle_prestamo (
   condicion_entrega ENUM('BUENO','DANADO') NOT NULL DEFAULT 'BUENO',
   observaciones_entrega VARCHAR(255),
   fecha_devolucion DATETIME NULL,
+  fecha_regularizacion DATETIME NULL,
+  CHECK (fecha_regularizacion IS NULL OR fecha_devolucion IS NULL),
   dni_encargado_devolucion VARCHAR(8) NULL,
   condicion_devolucion ENUM('BUENO','DANADO') NULL,
   observaciones_devolucion VARCHAR(255) NULL,
@@ -211,7 +216,7 @@ CREATE TABLE IF NOT EXISTS reserva (
 CREATE TABLE IF NOT EXISTS incidencia (
   id_incidencia   INT AUTO_INCREMENT PRIMARY KEY,
   id_detalle  INT NOT NULL,
-  tipo ENUM('RETRASO','DANIO','PERDIDA') NOT NULL,
+  tipo ENUM('RETRASO','DANIO','PERDIDA','SALIDA_NO_AUTORIZADA','CUSTODIA') NOT NULL,
   dni_registrador VARCHAR(8) NULL,
   retraso_unico TINYINT GENERATED ALWAYS AS (CASE WHEN tipo='RETRASO' THEN 1 ELSE NULL END) STORED,
   UNIQUE (id_detalle,retraso_unico),
@@ -232,6 +237,20 @@ CREATE TABLE IF NOT EXISTS sancion (
   fecha_levantamiento          DATETIME NULL,
   dni_levantamiento            VARCHAR(8) NULL,
   justificacion_levantamiento  VARCHAR(255) NULL,
+  gravedad ENUM('LEVE','GRAVE','MUY_GRAVE') NOT NULL DEFAULT 'LEVE',
+  dias_leve INT NOT NULL DEFAULT 14,
+  dias_grave INT NOT NULL DEFAULT 180,
+  dias_espera_perdida INT NOT NULL DEFAULT 7,
+  fecha_inicio_nivel DATETIME NULL,
+  fecha_fin DATETIME NULL,
+  fecha_revision DATETIME NULL,
+  fecha_regularizacion DATETIME NULL,
+  tipo_regularizacion ENUM('DEVOLUCION','RECUPERACION','REPARACION','REPOSICION','VERIFICACION') NULL,
+  dni_regularizacion VARCHAR(8) NULL,
+  observacion_regularizacion VARCHAR(255) NULL,
+  id_bien_reposicion INT NULL,
+  FOREIGN KEY (dni_regularizacion) REFERENCES persona(dni) ON UPDATE CASCADE,
+  FOREIGN KEY (id_bien_reposicion) REFERENCES bien_material(id_bien),
   FOREIGN KEY (dni_levantamiento) REFERENCES persona(dni) ON UPDATE CASCADE,
   FOREIGN KEY (id_incidencia_ref) REFERENCES incidencia(id_incidencia)
 ) ENGINE=InnoDB;
@@ -240,7 +259,7 @@ CREATE TABLE IF NOT EXISTS sancion (
 
 CREATE TABLE IF NOT EXISTS historial_estado (
   id_historial_estado  INT AUTO_INCREMENT PRIMARY KEY,
-  entidad              ENUM('BIEN_MATERIAL','RESERVA','SANCION','PRESTAMO') NOT NULL,
+  entidad              ENUM('BIEN_MATERIAL','RESERVA','SANCION','PRESTAMO','CONFIGURACION_SANCIONES') NOT NULL,
   id_entidad           INT NOT NULL,
   estado_anterior      VARCHAR(30),
   estado_nuevo         VARCHAR(30) NOT NULL,

@@ -38,7 +38,8 @@ class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
     def actualizar_plazo_prestamo(self, detalle, anterior, nueva):
         self.ejecutar(
             '''UPDATE detalle_prestamo SET fecha_limite_devolucion=%s
-            WHERE id_detalle=%s AND fecha_limite_devolucion=%s AND fecha_devolucion IS NULL''',
+            WHERE id_detalle=%s AND fecha_limite_devolucion=%s
+            AND fecha_devolucion IS NULL AND fecha_regularizacion IS NULL''',
             (nueva, detalle, anterior),
         )
         if self._cursor.rowcount != 1:

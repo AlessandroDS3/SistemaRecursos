@@ -64,6 +64,10 @@ def organizar_historial(datos):
                 estado_nuevo=d['condicion_devolucion'],
                 observacion=d.get('observaciones_devolucion'),
             )
+        if d.get('fecha_regularizacion'):
+            agregar(d, d['fecha_regularizacion'], 'Regularización por reposición', ref,
+                    estado_nuevo='REGULARIZADO',
+                    observacion='El pendiente se cerró por reposición; el bien original no fue devuelto.')
 
     for h in datos['historial_prestamos']:
         detalles = por_prestamo[h['id_prestamo']]
@@ -131,18 +135,18 @@ def organizar_historial(datos):
         )
         # Conserva levantamientos antiguos aunque no tengan una entrada de auditoría.
         auditada = any(
-            h['id_sancion'] == s['id_sancion'] and h['estado_nuevo'] == 'LEVANTADA'
+            h['id_sancion'] == s['id_sancion'] and h['estado_nuevo'] in ('LEVANTADA', 'CUMPLIDA')
             for h in datos['historial_sanciones']
         )
         if s.get('fecha_levantamiento') and not auditada:
             agregar(
                 s,
                 s['fecha_levantamiento'],
-                'Levantamiento de sanción',
+                'Cumplimiento de sanción' if s['estado'] == 'CUMPLIDA' else 'Levantamiento de sanción',
                 f'Sanción #{s["id_sancion"]}',
                 registrador=s.get('levantada_por'),
                 dni_registrador=s.get('dni_levantamiento'),
-                estado_nuevo='LEVANTADA',
+                estado_nuevo='CUMPLIDA' if s['estado'] == 'CUMPLIDA' else 'LEVANTADA',
                 observacion=s.get('justificacion_levantamiento'),
             )
     for h in datos['historial_sanciones']:
@@ -182,7 +186,8 @@ def organizar_historial(datos):
         prestamos_agrupados=prestamos,
         resumen=dict(
             prestamos=len(prestamos),
-            pendientes=sum(d['fecha_devolucion'] is None for d in datos['prestamos']),
+            pendientes=sum(d['fecha_devolucion'] is None and not d.get('fecha_regularizacion')
+                           for d in datos['prestamos']),
             eventos=len(filas),
         ),
     )

@@ -58,7 +58,7 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
     def consultar_prestamo_pendiente(self, identificador: int, bloquear=True) -> dict | None:
         return self.consultar_sql(
             '''SELECT id_prestamo FROM detalle_prestamo
-            WHERE id_bien=%s AND fecha_devolucion IS NULL LIMIT 1'''
+            WHERE id_bien=%s AND fecha_devolucion IS NULL AND fecha_regularizacion IS NULL LIMIT 1'''
             + (' FOR UPDATE' if bloquear else ''),
             (identificador,),
             una=True,

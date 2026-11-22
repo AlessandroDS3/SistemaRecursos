@@ -145,6 +145,10 @@ REPORTES = {
         estados=ESTADOS_SANCION,
         columnas=(
             CampoReporte('id_sancion', 'Sanción'),
+            CampoReporte('gravedad', 'Gravedad'),
+            CampoReporte('fecha_fin', 'Fin del periodo'),
+            CampoReporte('fecha_regularizacion', 'Regularización'),
+            CampoReporte('tipo_regularizacion', 'Forma de regularización'),
             CampoReporte('id_prestamo', 'Préstamo'),
             CampoReporte('dni_persona', 'DNI'),
             CampoReporte('solicitante', 'Responsable y grupo'),

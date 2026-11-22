@@ -95,7 +95,8 @@ class RepositorioHistorialSQL(RepositorioSQL):
             {CONTEXTO_DETALLE},{ESTADO_SQL} AS estado_prestamo,b.estado AS estado_bien,
             CONCAT(ent.nombres,' ',ent.apellidos) AS entregado_por,
             CONCAT(dev.nombres,' ',dev.apellidos) AS recibido_por,
-            CASE WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
+            CASE WHEN d.fecha_regularizacion IS NOT NULL THEN 'REGULARIZADO'
+                WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
                 WHEN b.estado='PERDIDO' THEN 'PERDIDO'
                 WHEN d.fecha_limite_devolucion<UTC_TIMESTAMP() THEN 'VENCIDO'
                 ELSE 'PENDIENTE' END AS situacion

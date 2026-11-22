@@ -109,7 +109,7 @@ JOIN persona per ON per.dni = p.dni_persona
 JOIN bien_material b ON b.id_bien = d.id_bien
 JOIN recurso r ON r.id_recurso = b.id_recurso
 JOIN categoria_recurso c ON c.id_categoria = r.id_categoria
-WHERE d.fecha_devolucion IS NULL AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
+WHERE d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
 ORDER BY d.fecha_limite_devolucion, p.id_prestamo, d.id_detalle;
 
 
@@ -137,7 +137,7 @@ WHERE d.fecha_devolucion IS NOT NULL
 ORDER BY d.fecha_devolucion DESC, p.id_prestamo DESC, d.id_detalle;
 
 
--- 08. VISTA: Préstamos (agrega estado_prestamo con los 4 estados reales)
+-- 08. VISTA: Préstamos (incluye el cierre por reposición sin devolución física)
 CREATE OR REPLACE VIEW reporte_prestamos AS
 SELECT
     p.id_prestamo, p.dni_persona,
@@ -147,6 +147,7 @@ SELECT
     c.nombre AS categoria,
     d.fecha_limite_devolucion, d.fecha_devolucion,
     CASE
+        WHEN d.fecha_regularizacion IS NOT NULL THEN 'REGULARIZADO'
         WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
         WHEN d.fecha_limite_devolucion < UTC_TIMESTAMP() THEN 'VENCIDO'
         ELSE 'PENDIENTE'
@@ -161,18 +162,20 @@ SELECT
         WHEN NOT EXISTS (
             SELECT 1 FROM detalle_prestamo x
             WHERE x.id_prestamo = p.id_prestamo
-              AND x.fecha_devolucion IS NULL
-        ) THEN 'DEVUELTO'
+              AND x.fecha_devolucion IS NULL AND x.fecha_regularizacion IS NULL
+        ) THEN CASE WHEN EXISTS(SELECT 1 FROM detalle_prestamo z
+            WHERE z.id_prestamo=p.id_prestamo AND z.fecha_regularizacion IS NOT NULL)
+            THEN 'REGULARIZADO' ELSE 'DEVUELTO' END
         WHEN EXISTS (
             SELECT 1 FROM detalle_prestamo x
             WHERE x.id_prestamo = p.id_prestamo
-              AND x.fecha_devolucion IS NULL
+              AND x.fecha_devolucion IS NULL AND x.fecha_regularizacion IS NULL
               AND x.fecha_limite_devolucion < UTC_TIMESTAMP()
         ) THEN 'VENCIDO'
         WHEN EXISTS (
             SELECT 1 FROM detalle_prestamo x
             WHERE x.id_prestamo = p.id_prestamo
-              AND x.fecha_devolucion IS NOT NULL
+              AND (x.fecha_devolucion IS NOT NULL OR x.fecha_regularizacion IS NOT NULL)
         ) THEN 'PARCIALMENTE_DEVUELTO'
         ELSE 'ACTIVO'
     END AS estado_prestamo

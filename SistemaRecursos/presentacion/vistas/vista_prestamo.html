@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'parciales/formularios_sancion.html' import evaluacion_sancion with context %}
 {% from 'parciales/formularios.html' import csrf,campo,opciones,historial %}
 {% from 'parciales/componentes.html' import estado %}
 {% block scripts %}
@@ -379,7 +380,7 @@
                 <th>Bien</th>
                 <th>Fecha límite</th>
                 <th>Seguimiento</th>
-                <th>Sanción por tardanza</th>
+                <th>Sanción</th>
                 <th>Estado al devolver</th>
                 <th>Observaciones</th>
               </tr>
@@ -389,7 +390,7 @@
                 <tr data-fila-devolucion>
                   {% if gestionar %}
                     <td>
-                      {% if not d.fecha_devolucion %}
+                      {% if not d.fecha_devolucion and not d.fecha_regularizacion %}
                         <input type="checkbox"
                                name="detalles"
                                value="{{ d.id_detalle }}"
@@ -402,20 +403,22 @@
                     <small>{{ d.recurso }}</small>
                   </td>
                   <td>{{ d.fecha_limite_devolucion|fecha }}</td>
-                  <td>{{ estado('DEVUELTO' if d.fecha_devolucion else d.estado_bien) }}{% if d.fecha_devolucion %}
+                  <td>{{ estado('REGULARIZADO' if d.fecha_regularizacion else 'DEVUELTO' if d.fecha_devolucion else d.estado_bien) }}{% if d.fecha_regularizacion %}
+                    <small>Reposición aceptada: {{ d.fecha_regularizacion|fecha }}. El original no fue devuelto.</small>
+                  {% elif d.fecha_devolucion %}
                     <small>{{ d.fecha_devolucion|fecha }}</small>
               {% endif %}
             </td>
             <td>
-              {% if d.estado_sancion %}{{ estado(d.estado_sancion) }}{% if gestionar %}
+              {% if d.estado_sancion %}{{ estado(d.gravedad) }} {{ estado(d.estado_sancion) }}{% if gestionar %}
                 <a href="{{ url_for('sanciones.consultar_sancion', identificador=d.id_sancion, volver=volver) }}">Gestionar sanción</a>
               {% endif %}{% else %}Sin sanción{% endif %}
             </td>
             <td>
-              {% if gestionar and not d.fecha_devolucion %}{{ opciones('condicion_'~d.id_detalle,'Condición',('BUENO','DANADO')) }}{% else %}{{ d.condicion_devolucion or 'Pendiente' }}{% endif %}
+              {% if gestionar and not d.fecha_devolucion and not d.fecha_regularizacion %}{{ opciones('condicion_'~d.id_detalle,'Condición',('BUENO','DANADO')) }}{% else %}{{ d.condicion_devolucion or ('Repuesto' if d.fecha_regularizacion else 'Pendiente') }}{% endif %}
             </td>
             <td>
-              {% if gestionar and not d.fecha_devolucion %}{{ campo('observacion_'~d.id_detalle,'Observación') }}{% else %}{{ d.observaciones_devolucion or '—' }}{% endif %}
+              {% if gestionar and not d.fecha_devolucion and not d.fecha_regularizacion %}{{ campo('observacion_'~d.id_detalle,'Observación') }}{% else %}{{ d.observaciones_devolucion or '—' }}{% endif %}
             </td>
           </tr>
   {% endfor %}
@@ -423,10 +426,11 @@
   </table>
   </div>
   {% if gestionar %}
-    {% if prestamo.estado_actual!="DEVUELTO" %}
+    {% if prestamo.estado_actual not in ('DEVUELTO', 'REGULARIZADO') %}
       <div class="acciones al-final">
         <button>Registrar devolución</button>
       </div>
+      <p class="suave">Marca DANADO solo para un daño nuevo que requiere reparación o reposición: se aplicará una grave. El desgaste normal o un daño ya registrado en la entrega no deben sancionarse.</p>
     {% endif %}
     </form>
   {% endif %}
@@ -435,7 +439,7 @@
     <details class="panel">
       <summary>Ampliar plazo</summary>
       <p class="suave">Máximo: otro plazo permitido. Los préstamos por horas terminan al cierre.</p>
-      {% for d in prestamo.detalles if not d.fecha_devolucion and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora %}
+      {% for d in prestamo.detalles if not d.fecha_devolucion and not d.fecha_regularizacion and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora %}
         {% set formulario_ampliacion = 'ampliacion-'~d.id_detalle %}
         <form method="post"
               id="{{ formulario_ampliacion }}"
@@ -463,7 +467,7 @@
     </details>
     <details class="panel">
       <summary>Reportar pérdida</summary>
-      {% for d in prestamo.detalles if not d.fecha_devolucion and d.estado_bien=='PRESTADO' %}
+      {% for d in prestamo.detalles if not d.fecha_devolucion and not d.fecha_regularizacion and d.estado_bien=='PRESTADO' %}
         {% set formulario_perdida = 'perdida-'~d.id_detalle %}
         <form method="post"
               id="{{ formulario_perdida }}"
@@ -474,11 +478,21 @@
           <input type="hidden" name="volver" value="{{ volver }}">
           <strong>{{ d.codigo_inventario }} · {{ d.recurso }}
           </strong>{{ campo('motivo','Descripción de la pérdida',requerido=true,formulario=formulario_perdida) }}
-          <button class="secundario">Registrar pérdida</button>
+          <p class="suave">Confirma la pérdida: se aplicará una grave y el bien seguirá pendiente de recuperación o reposición.</p>
+          <button class="secundario">Confirmar pérdida y aplicar grave</button>
         </form>
       {% else %}
         <p>No hay bienes prestados pendientes que se puedan reportar como perdidos.</p>
       {% endfor %}
+    </details>
+    <details class="panel">
+      <summary>Evaluar una falta de un bien</summary>
+      {% for d in prestamo.detalles if not d.fecha_regularizacion and not d.id_sancion %}
+        <details class="operacion-bien">
+          <summary>{{ d.codigo_inventario }} · {{ d.recurso }}</summary>
+          {{ evaluacion_sancion(url_for('sanciones.registrar_sancion_detalle', prestamo_id=prestamo.id_prestamo, detalle_id=d.id_detalle)) }}
+        </details>
+      {% else %}<p>Las faltas ya registradas se evalúan desde el enlace Gestionar sanción de cada bien.</p>{% endfor %}
     </details>
   {% endif %}
   <details class="panel">

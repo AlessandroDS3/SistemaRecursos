@@ -19,7 +19,7 @@ class Devolucion:
         return 'DISPONIBLE' if self.condicion == 'BUENO' else 'DANADO'
 
     def validar(self, detalle):
-        if detalle['fecha_devolucion'] is not None:
+        if detalle['fecha_devolucion'] is not None or detalle.get('fecha_regularizacion'):
             raise Conflicto('El bien ya fue recibido.')
         if detalle['estado_bien'] not in ('PRESTADO', 'PERDIDO'):
             raise Conflicto('El inventario no corresponde a una entrega pendiente.')

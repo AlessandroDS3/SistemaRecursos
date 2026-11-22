@@ -9,7 +9,10 @@ from dominio.gestion_prestamos.prestamo import (
     estado_prestamo,
 )
 from dominio.gestion_prestamos.devolucion import Devolucion
-from servicios.servicio_sancion import ServicioAplicacionSancion
+from servicios.operaciones_sancion import (
+    registrar_danio_devolucion, registrar_falta, registrar_sancion_por_retraso,
+    regularizar_devolucion,
+)
 
 
 class ServicioAplicacionPrestamo:
@@ -109,11 +112,20 @@ class ServicioAplicacionPrestamo:
             ahora = operacion.consultar_fecha_actual()
             for devolucion in devoluciones:
                 detalle = por_id[devolucion.id_detalle]
-                ServicioAplicacionSancion.registrar_sancion_por_retraso(
+                registrar_sancion_por_retraso(
                     operacion.sanciones, detalle, ahora
                 )
                 operacion.registrar_devolucion(detalle, devolucion, ahora, cuenta['dni_persona'])
                 detalle['fecha_devolucion'] = ahora
+                detalle['condicion_devolucion'] = devolucion.condicion
+                if devolucion.condicion == 'DANADO' and detalle['condicion_entrega'] == 'BUENO':
+                    registrar_danio_devolucion(
+                        operacion.sanciones, detalle, devolucion.observacion, cuenta, ahora,
+                    )
+                else:
+                    regularizar_devolucion(
+                        operacion.sanciones, detalle, devolucion.condicion, cuenta['dni_persona'], ahora,
+                    )
             nuevo = estado_prestamo(prestamo['detalles'], ahora)
             operacion.actualizar_estado_prestamo(
                 prestamo, nuevo, cuenta['dni_persona'], f'Recepción de {len(detalles)} bien(es).'
@@ -133,8 +145,13 @@ class ServicioAplicacionPrestamo:
             )
             if detalle is None:
                 raise NoEncontrado('El bien no pertenece al préstamo.')
-            if detalle['fecha_devolucion'] is not None or detalle['estado_bien'] != 'PRESTADO':
+            if (detalle['fecha_devolucion'] is not None or detalle['fecha_regularizacion'] is not None
+                    or detalle['estado_bien'] != 'PRESTADO'):
                 raise Conflicto('El bien debe estar prestado y pendiente para reportar su pérdida.')
+            registrar_falta(
+                operacion.sanciones, detalle, 'PERDIDA', 'GRAVE', motivo,
+                cuenta, operacion.consultar_fecha_actual(),
+            )
             operacion.registrar_perdida_bien_material(
                 prestamo, detalle, cuenta['dni_persona'], motivo
             )

@@ -60,7 +60,7 @@ JOIN prestamo p ON p.id_prestamo = d.id_prestamo
 JOIN persona per ON per.dni = p.dni_persona
 JOIN bien_material b ON b.id_bien = d.id_bien
 JOIN recurso r ON r.id_recurso = b.id_recurso
-WHERE d.fecha_devolucion IS NULL AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
+WHERE d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL AND d.fecha_limite_devolucion < UTC_TIMESTAMP()
 ORDER BY d.fecha_limite_devolucion, p.id_prestamo, d.id_detalle;
 
 

@@ -26,6 +26,7 @@ class AmpliacionPrestamo:
         if (
             actual <= ahora
             or detalle['fecha_devolucion'] is not None
+            or detalle.get('fecha_regularizacion') is not None
             or detalle['estado_bien'] != 'PRESTADO'
         ):
             raise Conflicto(

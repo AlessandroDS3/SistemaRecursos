@@ -9,11 +9,11 @@ from repositorio.repositorio_sancion_sql import RepositorioSancionSQL
 
 ESTADO_SQL = '''CASE
     WHEN NOT EXISTS(SELECT 1 FROM detalle_prestamo e WHERE e.id_prestamo=p.id_prestamo
-        AND e.fecha_devolucion IS NULL) THEN 'DEVUELTO'
+        AND e.fecha_devolucion IS NULL AND e.fecha_regularizacion IS NULL) THEN CASE WHEN EXISTS(SELECT 1 FROM detalle_prestamo z WHERE z.id_prestamo=p.id_prestamo AND z.fecha_regularizacion IS NOT NULL) THEN 'REGULARIZADO' ELSE 'DEVUELTO' END
     WHEN EXISTS(SELECT 1 FROM detalle_prestamo e WHERE e.id_prestamo=p.id_prestamo
-        AND e.fecha_devolucion IS NULL AND e.fecha_limite_devolucion<UTC_TIMESTAMP()) THEN 'VENCIDO'
+        AND e.fecha_devolucion IS NULL AND e.fecha_regularizacion IS NULL AND e.fecha_limite_devolucion<UTC_TIMESTAMP()) THEN 'VENCIDO'
     WHEN EXISTS(SELECT 1 FROM detalle_prestamo e WHERE e.id_prestamo=p.id_prestamo
-        AND e.fecha_devolucion IS NOT NULL) THEN 'PARCIALMENTE_DEVUELTO'
+        AND (e.fecha_devolucion IS NOT NULL OR e.fecha_regularizacion IS NOT NULL)) THEN 'PARCIALMENTE_DEVUELTO'
     ELSE 'ACTIVO' END'''
 
 
@@ -34,7 +34,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         pendientes = self.consultar_sql(
             '''SELECT COUNT(*) AS total FROM detalle_prestamo d
-            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE p.dni_persona=%s AND d.fecha_devolucion IS NULL''',
+            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE p.dni_persona=%s AND d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL''',
             (documento,),
             una=True,
         )
@@ -60,7 +60,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             {ESTADO_SQL} AS estado_actual,
             (SELECT COUNT(*) FROM detalle_prestamo d WHERE d.id_prestamo=p.id_prestamo) AS total_bienes,
             (SELECT COUNT(*) FROM detalle_prestamo d WHERE d.id_prestamo=p.id_prestamo AND d.fecha_devolucion IS NOT NULL) AS devueltos,
-            (SELECT MIN(d.fecha_limite_devolucion) FROM detalle_prestamo d WHERE d.id_prestamo=p.id_prestamo AND d.fecha_devolucion IS NULL) AS fecha_limite
+            (SELECT MIN(d.fecha_limite_devolucion) FROM detalle_prestamo d WHERE d.id_prestamo=p.id_prestamo AND d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL) AS fecha_limite
             FROM prestamo p JOIN persona per ON per.dni=p.dni_persona WHERE 1=1'''
         parametros = []
         if documento:
@@ -79,10 +79,10 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             ]
         if filtros.get('estado') == 'PENDIENTES':
             sql += ''' AND EXISTS(SELECT 1 FROM detalle_prestamo e
-                WHERE e.id_prestamo=p.id_prestamo AND e.fecha_devolucion IS NULL)'''
+                WHERE e.id_prestamo=p.id_prestamo AND e.fecha_devolucion IS NULL AND e.fecha_regularizacion IS NULL)'''
         elif filtros.get('estado') == 'PERDIDOS':
             sql += ''' AND EXISTS(SELECT 1 FROM detalle_prestamo e JOIN bien_material b ON b.id_bien=e.id_bien
-                WHERE e.id_prestamo=p.id_prestamo AND e.fecha_devolucion IS NULL AND b.estado='PERDIDO')'''
+                WHERE e.id_prestamo=p.id_prestamo AND e.fecha_devolucion IS NULL AND e.fecha_regularizacion IS NULL AND b.estado='PERDIDO')'''
         elif filtros.get('estado'):
             sql += ' AND (' + ESTADO_SQL + ')=%s'
             parametros.append(filtros['estado'])
@@ -93,8 +93,8 @@ class RepositorioPrestamoSQL(RepositorioSQL):
     def consultar_resumen_prestamos(self, documento=None):
         sql = '''SELECT COALESCE(SUM(d.pendientes>0),0) AS prestamos_pendientes,
             COALESCE(SUM(d.vencidos>0),0) AS prestamos_vencidos FROM prestamo p JOIN (
-                SELECT id_prestamo,SUM(fecha_devolucion IS NULL) AS pendientes,
-                SUM(fecha_devolucion IS NULL AND fecha_limite_devolucion<UTC_TIMESTAMP()) AS vencidos
+                SELECT id_prestamo,SUM(fecha_devolucion IS NULL AND fecha_regularizacion IS NULL) AS pendientes,
+                SUM(fecha_devolucion IS NULL AND fecha_regularizacion IS NULL AND fecha_limite_devolucion<UTC_TIMESTAMP()) AS vencidos
                 FROM detalle_prestamo GROUP BY id_prestamo
             ) d ON d.id_prestamo=p.id_prestamo'''
         parametros: tuple = ()
@@ -112,8 +112,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         if prestamo is not None:
             prestamo['detalles'] = self.consultar_sql(
-                '''SELECT d.id_detalle,d.id_prestamo,d.id_bien,d.fecha_limite_devolucion,
-                d.fecha_devolucion,b.estado AS estado_bien FROM detalle_prestamo d
+                '''SELECT d.*,b.estado AS estado_bien FROM detalle_prestamo d
                 JOIN bien_material b ON b.id_bien=d.id_bien
                 WHERE d.id_prestamo=%s ORDER BY b.id_bien FOR UPDATE''',
                 (identificador,),
@@ -132,11 +131,14 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             return None
         fila['detalles'] = self.consultar_sql(
             '''SELECT d.*,b.estado AS estado_bien,b.codigo_inventario,
-            r.nombre AS recurso,po.plazo_maximo,po.unidad_plazo,s.id_sancion,s.estado AS estado_sancion
+            r.nombre AS recurso,po.plazo_maximo,po.unidad_plazo,s.id_sancion,s.estado AS estado_sancion,
+            s.gravedad,s.fecha_fin AS fecha_fin_sancion
             FROM detalle_prestamo d JOIN bien_material b ON b.id_bien=d.id_bien
             JOIN recurso r ON r.id_recurso=b.id_recurso JOIN politica_prestamo po ON po.id_politica=d.id_politica
-            LEFT JOIN incidencia i ON i.id_detalle=d.id_detalle AND i.tipo='RETRASO'
-            LEFT JOIN sancion s ON s.id_incidencia_ref=i.id_incidencia
+            LEFT JOIN sancion s ON s.id_sancion=(SELECT sx.id_sancion FROM sancion sx
+                JOIN incidencia ix ON ix.id_incidencia=sx.id_incidencia_ref
+                WHERE ix.id_detalle=d.id_detalle
+                ORDER BY (sx.estado='ACTIVA') DESC,sx.id_sancion DESC LIMIT 1)
             WHERE d.id_prestamo=%s ORDER BY b.id_bien''' + (' FOR UPDATE' if bloquear else ''),
             (identificador,),
         )
@@ -161,7 +163,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         marcas_personas = ','.join(['%s'] * len(participantes))
         vencidos = self.consultar_sql(
             f'''SELECT d.id_detalle FROM detalle_prestamo d
-            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE d.fecha_devolucion IS NULL
+            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL
             AND d.fecha_limite_devolucion<UTC_TIMESTAMP() AND (p.dni_persona IN ({marcas_personas})
             OR EXISTS(SELECT 1 FROM participante_prestamo pp WHERE pp.id_prestamo=p.id_prestamo
                 AND pp.dni_persona IN ({marcas_personas}))) LIMIT 1''',
@@ -175,7 +177,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         pendientes = self.consultar_sql(
             '''SELECT COUNT(*) AS total FROM detalle_prestamo d
-            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE p.dni_persona=%s AND d.fecha_devolucion IS NULL''',
+            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE p.dni_persona=%s AND d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL''',
             (solicitud.dni_persona,),
             una=True,
         )['total']
@@ -189,7 +191,8 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         entregas = self.consultar_sql(
             f'''SELECT id_detalle FROM detalle_prestamo
-            WHERE id_bien IN ({marcas_bienes}) AND fecha_devolucion IS NULL FOR UPDATE''',
+            WHERE id_bien IN ({marcas_bienes}) AND fecha_devolucion IS NULL
+            AND fecha_regularizacion IS NULL FOR UPDATE''',
             ids,
         )
         politicas = self.consultar_sql(
@@ -266,10 +269,15 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         return identificador
 
+    def consultar_politica_aplicada(self, identificador):
+        return self.consultar_sql('SELECT * FROM politica_prestamo WHERE id_politica=%s',
+                                  (identificador,), una=True)
+
     def registrar_devolucion(self, detalle, devolucion, fecha, actor):
         self.ejecutar(
             '''UPDATE detalle_prestamo SET fecha_devolucion=%s,dni_encargado_devolucion=%s,
-            condicion_devolucion=%s,observaciones_devolucion=%s WHERE id_detalle=%s AND fecha_devolucion IS NULL''',
+            condicion_devolucion=%s,observaciones_devolucion=%s WHERE id_detalle=%s
+            AND fecha_devolucion IS NULL AND fecha_regularizacion IS NULL''',
             (
                 fecha,
                 actor,
@@ -291,6 +299,13 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             devolucion.estado_bien,
             actor,
             f'Recepción del préstamo #{detalle["id_prestamo"]}.',
+        )
+
+    def cerrar_detalle_por_reposicion(self, detalle, fecha):
+        self.ejecutar(
+            '''UPDATE detalle_prestamo SET fecha_regularizacion=%s
+            WHERE id_detalle=%s AND fecha_devolucion IS NULL AND fecha_regularizacion IS NULL''',
+            (fecha, detalle),
         )
 
     def actualizar_estado_prestamo(self, prestamo, nuevo, actor, motivo):

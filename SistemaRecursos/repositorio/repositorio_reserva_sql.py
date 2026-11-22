@@ -89,7 +89,7 @@ class RepositorioReservaSQL(RepositorioSQL):
         )
         vencido = self.consultar_sql(
             '''SELECT d.id_detalle FROM detalle_prestamo d
-            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE d.fecha_devolucion IS NULL
+            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL
             AND d.fecha_limite_devolucion<UTC_TIMESTAMP() AND (p.dni_persona=%s OR EXISTS(
                 SELECT 1 FROM participante_prestamo pp WHERE pp.id_prestamo=p.id_prestamo
                 AND pp.dni_persona=%s)) LIMIT 1''',
@@ -154,7 +154,7 @@ class RepositorioReservaSQL(RepositorioSQL):
         return self.consultar_sql(
             '''SELECT b.* FROM bien_material b WHERE b.id_recurso=%s
             AND b.estado='DISPONIBLE' AND NOT EXISTS(SELECT 1 FROM detalle_prestamo d
-                WHERE d.id_bien=b.id_bien AND d.fecha_devolucion IS NULL)
+                WHERE d.id_bien=b.id_bien AND d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL)
             ORDER BY b.id_bien LIMIT 1 FOR UPDATE''',
             (recurso,),
             una=True,

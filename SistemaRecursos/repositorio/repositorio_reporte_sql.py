@@ -127,6 +127,7 @@ class RepositorioReporteSQL(RepositorioSQL):
                 c.nombre AS categoria,
                 d.fecha_limite_devolucion, d.fecha_devolucion,
                 CASE
+                    WHEN d.fecha_regularizacion IS NOT NULL THEN 'REGULARIZADO'
                     WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
                     WHEN d.fecha_limite_devolucion < UTC_TIMESTAMP() THEN 'VENCIDO'
                     ELSE 'PENDIENTE'
@@ -190,7 +191,7 @@ class RepositorioReporteSQL(RepositorioSQL):
         condiciones, parametros = self._filtros_comunes(
             filtro, BUSQUEDA_PRESTAMO, 'd.fecha_limite_devolucion'
         )
-        condiciones.append('d.fecha_devolucion IS NULL')
+        condiciones.append('d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL')
         condiciones.append('d.fecha_limite_devolucion < UTC_TIMESTAMP()')
         where_sql = self._where(condiciones)
 
@@ -312,7 +313,8 @@ class RepositorioReporteSQL(RepositorioSQL):
 
         sql_reporte = f"""
             SELECT
-                s.id_sancion, p.id_prestamo, p.dni_persona,
+                s.id_sancion, s.gravedad, s.fecha_fin, s.fecha_regularizacion, s.tipo_regularizacion,
+                p.id_prestamo, p.dni_persona,
                 CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
                 p.tipo_prestamo, b.codigo_inventario,
                 r.nombre AS recurso, c.nombre AS categoria,

@@ -5,6 +5,8 @@ class TipoIncidencia(str, Enum):
     RETRASO = 'RETRASO'
     DANIO = 'DANIO'
     PERDIDA = 'PERDIDA'
+    SALIDA_NO_AUTORIZADA = 'SALIDA_NO_AUTORIZADA'
+    CUSTODIA = 'CUSTODIA'
 
 
 def hay_retraso(detalle, ahora):
