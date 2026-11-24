@@ -37,10 +37,11 @@ WHERE h.entidad = 'BIEN_MATERIAL' AND h.estado_nuevo IN ('DANADO', 'PERDIDO')
 ORDER BY h.fecha DESC, h.id_historial_estado DESC;
 
 
--- 03. VISTA: Sanciones (sin cambios)
+-- 03. VISTA: Sanciones
 CREATE OR REPLACE VIEW reporte_sanciones AS
 SELECT
-    s.id_sancion, p.id_prestamo, p.dni_persona,
+    s.id_sancion, s.gravedad, s.fecha_fin, s.fecha_regularizacion, s.tipo_regularizacion,
+    p.id_prestamo, p.dni_persona,
     CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
     p.tipo_prestamo, b.codigo_inventario,
     r.nombre AS recurso, c.nombre AS categoria,
@@ -149,6 +150,7 @@ SELECT
     CASE
         WHEN d.fecha_regularizacion IS NOT NULL THEN 'REGULARIZADO'
         WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
+        WHEN b.estado = 'PERDIDO' THEN 'PERDIDO'
         WHEN d.fecha_limite_devolucion < UTC_TIMESTAMP() THEN 'VENCIDO'
         ELSE 'PENDIENTE'
     END AS situacion,

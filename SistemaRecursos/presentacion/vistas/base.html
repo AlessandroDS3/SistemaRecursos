@@ -28,7 +28,7 @@
         ('reservas.consultar_reservas', 'Reservas' if gestiona_prestamos else 'Mis reservas', gestiona_prestamos or g.usuario.permite('RESERVAS_PROPIAS_GESTIONAR'), 'reservas'),
         ('politicas.consultar_politicas_prestamo', 'Políticas de préstamo', g.usuario.permite('POLITICAS_GESTIONAR'), 'politicas'),
         ('reportes.consultar_reportes', 'Reportes', g.usuario.permite('REPORTES_CONSULTAR'), 'reportes'),
-        ('reportes.consultar_historial_propio', 'Mi historial', g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'), 'mi_historial'),
+        ('reportes.consultar_historial_propio', 'Mi historial', gestiona_prestamos and g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'), 'mi_historial'),
         ('sanciones.consultar_sanciones', 'Sanciones', gestiona_prestamos, 'sanciones')
       ] %}
       <aside class="menu-lateral"
@@ -47,12 +47,20 @@
         </header>
         <p class="titulo-menu">SISTEMA DE RECURSOS</p>
         <nav aria-label="Navegación principal">
-          {% for endpoint, etiqueta, visible, grupo in navegacion if visible %}
+          {% for titulo, secciones in (('', ('inicio',)), ('Préstamos y reservas', ('recursos', 'prestamos', 'reservas', 'sanciones')), ('Administración', ('administracion_recursos', 'personas', 'politicas', 'roles')), ('Consultas', ('reportes', 'mi_historial'))) %}
+            {% set enlaces = navegacion|selectattr('3', 'in', secciones)|selectattr('2')|list %}
+            {% if enlaces %}
+              {% if titulo and gestiona_prestamos %}<p class="grupo-menu">{{ titulo }}</p>{% endif %}
+              {% for seccion in secciones %}
+                {% for endpoint, etiqueta, visible, grupo in enlaces if grupo == seccion %}
             {% set es_historial_propio = request.endpoint in ('reportes.consultar_historial_propio', 'reportes.exportar_historial_propio_csv', 'reportes.exportar_historial_propio_pdf') %}
-            {% set activa = (grupo == 'inicio' and request.endpoint == 'inicio') or (grupo == 'administracion_recursos' and administra_recursos) or (grupo == 'mi_historial' and es_historial_propio) or (request.blueprint == grupo and not administra_recursos and not es_historial_propio) %}
+            {% set activa = (grupo == 'inicio' and request.endpoint == 'inicio') or (grupo == 'administracion_recursos' and administra_recursos) or (es_historial_propio and grupo == ('mi_historial' if gestiona_prestamos else 'prestamos')) or (request.blueprint == grupo and not administra_recursos and not es_historial_propio) or (grupo == 'prestamos' and request.blueprint == 'ampliaciones') %}
             <a class="{{ 'enlace-menu-activo' if activa else 'enlace-menu' }}"
                href="{{ url_for(endpoint) }}"
                {% if activa %}aria-current="page"{% endif %}>{{ etiqueta }}</a>
+                {% endfor %}
+              {% endfor %}
+            {% endif %}
           {% endfor %}
         </nav>
         <section class="pie-menu" aria-label="Cuenta de usuario">
@@ -94,7 +102,7 @@
         <p class="aviso" role="status">{{ mensaje }}</p>
       {% endfor %}
       {% if g.error_formulario %}
-        <div class="aviso error-formulario" role="alert">{{ g.error_formulario }}</div>
+        <div class="aviso error-formulario" role="alert" tabindex="-1">{{ g.error_formulario }}</div>
         <script type="application/json" id="datos-formulario">{{ dict(destino=request.path, valores=g.valores_formulario, errores=g.errores_campos)|tojson }}</script>
       {% endif %}
       {% block contenido %}{% endblock %}

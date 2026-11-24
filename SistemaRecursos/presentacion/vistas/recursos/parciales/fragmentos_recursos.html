@@ -1,0 +1,130 @@
+{% from 'parciales/formularios.html' import csrf, campo %}
+
+{% macro continuar_registro(id_recurso, nombre) %}
+  <section class="panel" aria-label="Continuar registro">
+    <h2>{{ nombre }}</h2>
+    <p>El registro se guardó. Puedes continuar con el inventario.</p>
+    <div class="acciones">
+      <a class="boton" href="{{ url_for('bienes.registrar_bien_material', id_recurso=id_recurso) }}">Agregar otro bien físico</a>
+      <a class="boton secundario" href="{{ url_for('recursos.registrar_recurso', volver='administracion') }}">Registrar otro recurso</a>
+    </div>
+  </section>
+{% endmacro %}
+
+{% macro icono_recurso(tipo) %}
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    {% if tipo == 'editar' %}<path d="m16 3 5 5-12 12H4v-5L16 3Z M14 5l5 5"/>
+    {% elif tipo == 'eliminar' %}<path d="M3 6h18 M9 6V3h6v3 M6 6l1 15h10l1-15 M10 10v7 M14 10v7"/>
+    {% elif tipo == 'cerrar' %}<path d="m6 6 12 12 M18 6 6 18"/>
+    {% else %}<path d="m6 9 6 6 6-6"/>{% endif %}
+  </svg>
+{% endmacro %}
+
+{% macro formulario_recurso(datos, categorias, accion, primer_bien=false, volver='', en_dialogo=false) %}
+  <form method="post" action="{{ accion }}" class="formulario">
+    {{ csrf() }}
+    {% if datos.get("id_recurso") %}
+      <input type="hidden" name="version" value="{{ valor_formulario('version', datos.version) }}">
+    {% endif %}
+    {% if volver %}
+      <input type="hidden" name="volver" value="{{ volver }}">
+    {% endif %}
+    <div class="rejilla cuatro-columnas">
+      {{ campo('nombre','Nombre',datos.get('nombre',''),requerido=true,maximo=120) }}
+      <label>
+        Categoría<select name="id_categoria" required>
+        <option value="">Seleccione una categoría</option>
+        {% for c in categorias %}
+          <option value="{{ c.id_categoria }}"
+                  {% if c.id_categoria==datos.get('id_categoria') %}selected{% endif %}>{{ c.nombre }}
+          </option>
+        {% endfor %}
+        </select>
+      </label>
+      {{ campo('marca','Marca (opcional)',datos.get('marca',''),maximo=80) }}
+      {{ campo('modelo','Modelo (opcional)',datos.get('modelo',''),maximo=80) }}
+    </div>
+    <label>
+      Descripción general (opcional)<textarea name="descripcion" rows="3" maxlength="255">{{ datos.get('descripcion','') or '' }}
+</textarea>
+    </label>
+    {% if primer_bien %}
+      <fieldset>
+        <legend>Primer bien físico (opcional)</legend>
+        <p class="suave">Deja el código vacío si agregarás los bienes después.</p>
+        <div class="rejilla cuatro-columnas">
+          {{ campo('codigo_inventario','Código de inventario',maximo=40) }}
+          {{ campo('numero_serie','Número de serie (opcional)',maximo=60) }}
+          {{ campo('fecha_adquisicion','Fecha de adquisición (opcional)',tipo='date') }}
+          {{ campo('ubicacion','Ubicación (opcional)',maximo=120) }}
+        </div>
+        {{ campo('descripcion_bien','Descripción del bien (opcional)') }}
+        <p class="suave">Estado inicial: disponible.</p>
+      </fieldset>
+    {% endif %}
+    <div class="acciones">
+      <button type="submit">Guardar</button>
+      {% if en_dialogo %}<button type="button" class="secundario" data-cerrar-dialogo>Cancelar</button>
+      {% elif volver == 'administracion' %}<a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Cancelar</a>
+      {% elif volver == 'catalogo' and datos.get('id_recurso') %}<a href="{{ url_for('recursos.consultar_recurso',identificador=datos.id_recurso) }}">Cancelar</a>{% endif %}
+    </div>
+  </form>
+{% endmacro %}
+
+{% macro categorias_recursos(categorias, volver='') %}
+  <section class="categorias-administracion" id="categorias">
+    <div class="encabezado-categorias">
+      <small>{{ categorias|length }} {{ 'categoría registrada' if categorias|length == 1 else 'categorías registradas' }}</small>
+      <button type="button" class="secundario" data-abrir-dialogo="nueva-categoria">+ Nueva categoría</button>
+    </div>
+    <div class="lista-categorias-admin">
+      {% for c in categorias %}
+        <article class="categoria-admin">
+          <div><strong>{{ c.nombre }}</strong>{% if c.descripcion %}<small>{{ c.descripcion }}</small>{% endif %}</div>
+          <div class="acciones-fila">
+            <button type="button" class="boton-icono" data-abrir-dialogo="editar-categoria-{{ c.id_categoria }}"
+                    aria-label="Editar categoría {{ c.nombre }}" title="Editar categoría">{{ icono_recurso('editar') }}</button>
+            <form method="post" action="{{ url_for('recursos.eliminar_categoria', identificador=c.id_categoria) }}"
+                  data-confirmar="¿Deseas eliminar la categoría {{ c.nombre }}?">
+              {{ csrf() }}
+              <input type="hidden" name="volver" value="{{ volver }}">
+              <button class="boton-icono" aria-label="Eliminar categoría {{ c.nombre }}" title="Eliminar categoría">{{ icono_recurso('eliminar') }}</button>
+            </form>
+          </div>
+        </article>
+      {% else %}<p class="sin-recursos">Aún no hay categorías. Crea la primera para registrar recursos.</p>{% endfor %}
+    </div>
+  </section>
+  {% for c in categorias %}
+    <dialog id="editar-categoria-{{ c.id_categoria }}" class="dialogo-recursos" aria-labelledby="titulo-categoria-{{ c.id_categoria }}">
+      <div class="cabecera-dialogo">
+        <h2 id="titulo-categoria-{{ c.id_categoria }}">Editar categoría</h2>
+        <button type="button" class="boton-icono" data-cerrar-dialogo aria-label="Cerrar formulario">{{ icono_recurso('cerrar') }}</button>
+      </div>
+      <form method="post" action="{{ url_for('recursos.gestionar_categorias') }}" class="formulario" id="categoria-{{ c.id_categoria }}">
+        {{ csrf() }}
+        <input type="hidden" name="_formulario" value="categoria-{{ c.id_categoria }}">
+        <input type="hidden" name="volver" value="{{ volver }}">
+        <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
+        <input type="hidden" name="version" value="{{ valor_formulario('version', c.version, 'categoria-'~c.id_categoria) }}">
+        {{ campo('nombre','Nombre',c.nombre,requerido=true,maximo=80,formulario='categoria-'~c.id_categoria) }}
+        {{ campo('descripcion','Descripción (opcional)',c.descripcion or '',formulario='categoria-'~c.id_categoria) }}
+        <div class="acciones"><button>Guardar</button><button type="button" class="secundario" data-cerrar-dialogo>Cancelar</button></div>
+      </form>
+    </dialog>
+  {% endfor %}
+  <dialog id="nueva-categoria" class="dialogo-recursos" aria-labelledby="titulo-nueva-categoria">
+    <div class="cabecera-dialogo">
+      <h2 id="titulo-nueva-categoria">Nueva categoría</h2>
+      <button type="button" class="boton-icono" data-cerrar-dialogo aria-label="Cerrar formulario">{{ icono_recurso('cerrar') }}</button>
+    </div>
+    <form method="post" action="{{ url_for('recursos.gestionar_categorias') }}" class="formulario" id="categoria-nueva">
+      {{ csrf() }}
+      <input type="hidden" name="_formulario" value="categoria-nueva">
+      <input type="hidden" name="volver" value="{{ volver }}">
+      {{ campo('nombre','Nombre',requerido=true,maximo=80,formulario='categoria-nueva') }}
+      {{ campo('descripcion','Descripción (opcional)',formulario='categoria-nueva') }}
+      <div class="acciones"><button>Guardar</button><button type="button" class="secundario" data-cerrar-dialogo>Cancelar</button></div>
+    </form>
+  </dialog>
+{% endmacro %}

@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import Protocol
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -33,12 +32,6 @@ class CuentaAcceso:
 
     def permite(self, codigo):
         return not self.debe_cambiar_clave and codigo in self.permisos
-
-
-class IRepositorioAcceso(Protocol):
-    def consultar_cuenta_por_usuario(self, nombre: str) -> CuentaAcceso | None: ...
-    def consultar_cuenta_por_id(self, identificador: int) -> CuentaAcceso | None: ...
-    def registrar_acceso(self, identificador: int) -> None: ...
 
 
 def exigir_permiso(cuenta_actor, permiso):

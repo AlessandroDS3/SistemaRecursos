@@ -37,7 +37,7 @@
     --peligro-texto: #a24843;
 
     /* Tipografía: cambia estos tamaños para todo el sistema */
-    --letra-micro: 10px;            /* Etiquetas discretas */
+    --letra-micro: 12px;            /* Etiquetas discretas */
     --letra-pequena: 12px;          /* Ayudas, tablas y botones compactos */
     --letra-normal: 14px;           /* Párrafos y formularios */
     --letra-subtitulo: 16px;        /* Nombres de tarjetas */
@@ -1026,7 +1026,7 @@ img {
     margin: 0 0 10px;
 }
 
-.cuerpo-tarjeta h3 {
+.cuerpo-tarjeta h2 {
     font-size: var(--letra-subtitulo);
     font-weight: 600;
     margin: 0;

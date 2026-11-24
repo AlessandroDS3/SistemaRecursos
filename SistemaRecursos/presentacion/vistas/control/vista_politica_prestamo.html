@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% from 'parciales/formularios.html' import csrf,campo,opciones %}
+{% block contenido %}
+  {% if modo=="lista" %}
+    <h1>Políticas de préstamo</h1>
+    <section class="panel configuracion-compacta" aria-label="Límites y horario">
+      <form method="post" action="{{ url_for('politicas.guardar_limites_articulos') }}" class="bloque-maximos">
+        {{ csrf() }}
+        <h2>Máximo de artículos por persona</h2>
+        <div class="campos-configuracion-compacta">
+          {% for tipo in tipos %}
+            {% set actual = limites|selectattr('tipo_persona','equalto',tipo)|first|default({}) %}
+            <label>{{ tipo|capitalize }}
+              <input name="maximo_{{ tipo }}" type="number" min="1" step="1" required
+                     value="{{ actual.maximo_articulos|default('') }}"
+                     {% if g.usuario.rol != 'ADMINISTRADOR' %}readonly{% endif %}>
+            </label>
+          {% endfor %}
+          {% if g.usuario.rol == 'ADMINISTRADOR' %}<button class="secundario">Guardar</button>{% endif %}
+        </div>
+      </form>
+      <form method="post" action="{{ url_for('politicas.guardar_configuracion_general') }}" id="configuracion-general" class="bloque-horario">
+        {{ csrf() }}
+        <h2>Horario de atención</h2>
+        <div class="campos-configuracion-compacta">
+          {{ campo('hora_apertura','Apertura',configuracion.hora_apertura|hora,tipo='time',requerido=true) }}
+          {{ campo('hora_cierre','Cierre',configuracion.hora_cierre|hora,tipo='time',requerido=true) }}
+          <button>Guardar</button>
+        </div>
+      </form>
+    </section>
+    <section class="panel politicas-panel">
+      <h2>Plazos de préstamo</h2>
+      <div class="busqueda-local">
+        <label>
+          Buscar categoría<input type="search"
+                                 data-filtrar-filas="politicas-matriz"
+                                 placeholder="Nombre de la categoría">
+        </label>
+        <button type="button"
+                class="secundario"
+                data-limpiar-busqueda="politicas-matriz">Limpiar</button>
+      </div>
+      <div class="tabla">
+        <table class="politicas-matriz" id="politicas-matriz">
+          <thead>
+            <tr>
+              <th>Categoría</th>
+              {% for tipo in tipos %}
+                <th>{{ tipo|capitalize }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in categorias %}
+              <tr data-busqueda="{{ c.nombre }}">
+                <th scope="row">{{ c.nombre }}</th>
+                {% for tipo in tipos %}
+                  {% set p = matriz.get((c.id_categoria,tipo),{}) %}
+                  <td>
+                    <form method="post"
+                          action="{{ url_for('politicas.editar_politica_prestamo',identificador=p.get('id_politica')) }}"
+                          class="formulario politica-celda" data-guardar-modificada>
+                      {{ csrf() }}
+                      <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
+                      <input type="hidden" name="tipo_persona" value="{{ tipo }}">
+                      <input type="hidden" name="version" value="{{ p.get('version', '') }}">
+                      <div class="politica-plazo">
+                        <label>
+                          <span class="solo-lectores">Plazo para {{ tipo|lower }} en {{ c.nombre }}</span>
+                          <input name="plazo_maximo" type="number" min="1" step="1" required value="{{ p.get('plazo_maximo','') }}">
+                        </label>
+                        <label>
+                          <span class="solo-lectores">Unidad para {{ tipo|lower }} en {{ c.nombre }}</span>
+                          <select name="unidad_plazo" required>
+                            <option value="HORAS" {% if p.get('unidad_plazo','DIAS') == 'HORAS' %}selected{% endif %}>Horas</option>
+                            <option value="DIAS" {% if p.get('unidad_plazo','DIAS') == 'DIAS' %}selected{% endif %}>Días</option>
+                          </select>
+                        </label>
+                      </div>
+                      <label class="check">
+                      <input type="checkbox"
+                             name="permite_salida"
+                             value="1"
+                             {% if p.get('permite_salida') %}checked{% endif %}>Fuera de la escuela</label>
+                      <button class="secundario" data-guardar-cambios>Guardar</button>
+                    </form>
+                  </td>
+                {% endfor %}
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="4">Registra categorías en Administración de recursos.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="suave">Los cambios se aplican a nuevas entregas. Los préstamos registrados conservan sus condiciones.</p>
+    </section>
+    <section class="panel">
+      <h2>Vencimiento de reservas</h2>
+      <p class="suave">Cada plazo admite hasta 30 días o 720 horas.</p>
+      <div class="rejilla dos-columnas">
+        <fieldset>
+          <legend>Reservas en espera</legend>
+          <div class="rejilla dos-columnas">
+            {{ campo('plazo_espera','Plazo',configuracion.plazo_espera|default(2),tipo='number',requerido=true,formulario='configuracion-general') }}
+            {{ opciones('unidad_espera','Unidad',('HORAS','DIAS'),configuracion.unidad_espera|default('DIAS'),formulario='configuracion-general') }}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Reservas listas para retiro</legend>
+          <div class="rejilla dos-columnas">
+            {{ campo('plazo_retiro','Plazo',configuracion.plazo_retiro|default(24),tipo='number',requerido=true,formulario='configuracion-general') }}
+            {{ opciones('unidad_retiro','Unidad',('HORAS','DIAS'),configuracion.unidad_retiro|default('HORAS'),formulario='configuracion-general') }}
+          </div>
+        </fieldset>
+      </div>
+      <div class="acciones acciones-configuracion">
+        <button type="submit" form="configuracion-general">Guardar</button>
+      </div>
+    </section>
+    <a href="{{ url_for('prestamos.consultar_prestamos') }}">Ir a préstamos</a>
+  {% else %}
+    <h1>
+      {{ 'Editar' if politica else 'Nueva' }}
+      política
+    </h1>
+    <form method="post" class="formulario panel">
+      {{ csrf() }}
+      <input type="hidden" name="version" value="{{ valor_formulario('version', version) }}">
+      <div class="rejilla">
+        {{ opciones('tipo_persona','Tipo de persona',tipos,politica.tipo_persona) }}
+        <label>
+          Categoría
+          <select name="id_categoria" required>
+            {% for c in categorias %}
+              <option value="{{ c.id_categoria }}"
+                      {% if c.id_categoria|string == (politica.id_categoria|string if politica else categoria_seleccionada) %}selected{% endif %}>{{ c.nombre }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        {{ campo('plazo_maximo','Plazo máximo',politica.plazo_maximo,tipo='number',requerido=true) }}
+        {{ opciones('unidad_plazo','Unidad',('HORAS','DIAS'),politica.unidad_plazo) }}
+        <label class="check">
+          <input name="permite_salida"
+                 type="checkbox"
+                 value="1"
+                 {% if politica.permite_salida %}checked{% endif %}>
+          Permite salida de la institución
+        </label>
+      </div>
+      <button>Guardar</button>
+    </form>
+    {% if politica %}
+      <details class="panel">
+        <summary>Eliminar política</summary>
+        <p class="suave">Solo se puede eliminar si no tiene préstamos asociados.</p>
+        <form method="post"
+              action="{{ url_for('politicas.eliminar_politica_prestamo',identificador=politica.id_politica) }}">
+          {{ csrf() }}
+          <button class="secundario">Eliminar política</button>
+        </form>
+      </details>
+    {% endif %}
+    <a href="{{ url_for('politicas.consultar_politicas_prestamo') }}">Volver a políticas</a>
+  {% endif %}
+{% endblock %}

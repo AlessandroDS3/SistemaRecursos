@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% from 'parciales/componentes.html' import estado, selector_reporte %}
+{% block titulo %}{{ 'Mi historial de préstamos' if propio else reporte.titulo }} · Sistema de Recursos{% endblock %}
+{% block contenido %}
+<div class="historial-completo">
+  <div class="cabecera">
+    <div>
+      <h1>{{ 'Mi historial de préstamos' if propio else reporte.titulo }}</h1>
+      <p class="suave">{{ 'Tus préstamos individuales y grupales, con sus entregas, devoluciones y seguimiento.' if propio else reporte.descripcion }}</p>
+    </div>
+    {% if sujeto %}
+    <div>
+      <div class="acciones">
+        <a class="boton secundario" href="{{ url_for('reportes.exportar_historial_propio_csv') if propio else url_for('reportes.exportar_reportes_csv', **parametros) }}">Descargar CSV</a>
+        <a class="boton secundario" href="{{ url_for('reportes.exportar_historial_propio_pdf') if propio else url_for('reportes.exportar_reportes_pdf', **parametros) }}">Descargar PDF</a>
+      </div>
+      <p class="suave">CSV de la cronología · PDF del historial completo</p>
+    </div>
+    {% endif %}
+  </div>
+  {% if not propio %}
+  {{ selector_reporte(reportes, filtro.tipo) }}
+  <form method="get" class="filtros busqueda-historial">
+    <input type="hidden" name="tipo" value="{{ filtro.tipo }}">
+    {% if filtro.tipo == 'historial_bien' %}
+    <label>Buscar objeto
+      <input type="search" name="q" value="{{ filtro.q or filtro.codigo_inventario }}" maxlength="120" placeholder="Nombre del recurso o código de inventario" required>
+    </label>
+    {% else %}
+    <label>Buscar persona
+      <input type="search" name="q" value="{{ filtro.q or filtro.dni_persona }}" maxlength="120" placeholder="Nombres, apellidos, DNI o CUI" required>
+    </label>
+    {% endif %}
+    <button>Buscar</button>
+    <a href="{{ url_for('reportes.consultar_reportes', tipo=filtro.tipo) }}">Limpiar</a>
+  </form>
+  {% endif %}
+
+  {% if sujeto %}
+  <section class="panel ficha-historial" aria-label="Sujeto del historial">
+    {% if filtro.tipo == 'historial_bien' %}
+    <div><span class="suave">Objeto</span><h2>{{ sujeto.codigo_inventario }} · {{ sujeto.recurso }}</h2>
+      <p>{{ sujeto.categoria }}{% if sujeto.numero_serie %} · Serie: {{ sujeto.numero_serie }}{% endif %}{% if sujeto.ubicacion %} · {{ sujeto.ubicacion }}{% endif %}</p></div>
+    {% else %}
+    <div><span class="suave">{{ 'Mi cuenta' if propio else 'Persona' }}</span><h2>{{ sujeto.nombre_completo }}</h2><p>DNI: {{ sujeto.dni }}{% if sujeto.cui %} · CUI: {{ sujeto.cui }}{% endif %}</p></div>
+    {% endif %}
+    <div><small class="suave">{{ 'Estado actual del bien' if filtro.tipo == 'historial_bien' else 'Estado de la persona' }}</small><p>{{ estado(sujeto.estado) }}</p></div>
+  </section>
+  <div class="resumen-historial">
+    <article class="panel"><span>Préstamos relacionados</span><strong>{{ resumen.prestamos }}</strong></article>
+    <article class="panel"><span>Bienes pendientes de devolución</span><strong>{{ resumen.pendientes }}</strong></article>
+    <article class="panel"><span>Eventos registrados</span><strong>{{ resumen.eventos }}</strong></article>
+  </div>
+  <nav class="acciones anclas-historial" aria-label="Secciones del historial">
+    <a href="#prestamos-historial">Préstamos</a><a href="#cronologia">Cronología</a>
+    {% if sanciones %}<a href="#sanciones-historial">Sanciones</a>{% endif %}
+    {% if not propio and reservas %}<a href="#reservas-historial">Solicitudes y reservas</a>{% endif %}
+  </nav>
+
+  <section id="prestamos-historial">
+    <h2>Préstamos relacionados</h2>
+    <p class="suave">El estado del préstamo corresponde al conjunto de sus bienes. Cada bien muestra su propia situación y el plazo vigente.</p>
+    {% for p in prestamos_agrupados %}
+    <details class="panel prestamo-historial" {% if loop.first %}open{% endif %}>
+      <summary><strong>Préstamo #{{ p.id_prestamo }}</strong><span>{{ p.solicitante }} · {{ p.tipo_prestamo|etiqueta_reporte }}</span>{{ estado(p.estado_prestamo) }}</summary>
+      <div class="contenido-prestamo-historial">
+        <p><strong>Solicitante:</strong> {{ p.solicitante }} · DNI: {{ p.dni_persona }}<br>
+          <strong>Entregado por:</strong> {{ p.entregado_por or 'No registrado' }} · DNI: {{ p.dni_encargado }}<br>
+          <strong>Fecha de entrega:</strong> {{ p.fecha_entrega|fecha }}</p>
+        {% if p.integrantes %}<p><strong>Integrantes:</strong> {{ p.integrantes }}</p>{% endif %}
+        {% if p.observaciones_prestamo %}<p><strong>Observaciones:</strong> {{ p.observaciones_prestamo }}</p>{% endif %}
+        {% if g.usuario.permite('PRESTAMOS_GESTIONAR') or (g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR') and (g.usuario.dni == p.dni_persona or ('(' ~ g.usuario.dni ~ ')') in p.integrantes)) %}
+        <a href="{{ url_for('prestamos.consultar_prestamo', identificador=p.id_prestamo) }}">Abrir préstamo #{{ p.id_prestamo }}</a>
+        {% endif %}
+        <div class="tabla"><table>
+          <thead><tr><th>Bien</th><th>Situación en este préstamo</th><th>Plazo vigente</th><th>Devolución</th><th>Recibida por</th><th>Condiciones y observaciones</th></tr></thead>
+          <tbody>{% for d in p.detalles %}<tr>
+            <td>{{ d.codigo_inventario }}<small>{{ d.recurso }}</small></td>
+            <td>{{ estado(d.situacion) }}</td><td>{{ d.fecha_limite_devolucion|fecha }}</td>
+            <td>{{ d.fecha_devolucion|fecha }}</td>
+            <td>{{ d.recibido_por or ('No registrado' if d.fecha_devolucion else 'Pendiente') }}{% if d.dni_encargado_devolucion %}<small>DNI: {{ d.dni_encargado_devolucion }}</small>{% endif %}</td>
+            <td>Entrega: {{ d.condicion_entrega|etiqueta_reporte }}{% if d.observaciones_entrega %}<small>{{ d.observaciones_entrega }}</small>{% endif %}
+              {% if d.condicion_devolucion %}<small>Devolución: {{ d.condicion_devolucion|etiqueta_reporte }}</small>{% endif %}{% if d.observaciones_devolucion %}<small>{{ d.observaciones_devolucion }}</small>{% endif %}</td>
+          </tr>{% endfor %}</tbody>
+        </table></div>
+      </div>
+    </details>
+    {% else %}<p class="panel suave">No hay préstamos registrados {{ 'para este objeto' if filtro.tipo == 'historial_bien' else 'para esta persona' }}.</p>{% endfor %}
+  </section>
+
+  {% if sanciones %}
+  <section id="sanciones-historial"><h2>Sanciones vinculadas a los préstamos</h2>
+    <div class="tabla panel"><table><thead><tr><th>Sanción</th><th>Préstamo y bien</th><th>Fecha</th><th>Estado actual</th><th>Motivo y levantamiento</th></tr></thead><tbody>
+    {% for s in sanciones %}<tr><td>#{{ s.id_sancion }}</td><td>#{{ s.id_prestamo }} · {{ s.codigo_inventario }}</td><td>{{ s.fecha|fecha }}</td><td>{{ estado(s.estado) }}</td><td>{{ s.motivo }}{% if s.descripcion %}<small>{{ s.descripcion }}</small>{% endif %}{% if s.fecha_levantamiento %}<small>Levantada: {{ s.fecha_levantamiento|fecha }} · {{ s.levantada_por or 'No registrado' }}</small><small>{{ s.justificacion_levantamiento or '' }}</small>{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
+  {% if not propio and reservas %}
+  <section id="reservas-historial"><h2>Solicitudes y reservas</h2>
+    {% if filtro.tipo == 'historial_bien' %}<p class="suave">Solicitudes que conservan una asignación registrada a este bien.</p>{% endif %}
+    <div class="tabla panel"><table><thead><tr><th>Solicitud</th><th>Recurso</th><th>Solicitante</th><th>Registrada</th><th>Retiro solicitado</th><th>Estado actual</th></tr></thead><tbody>
+    {% for r in reservas %}<tr><td>#{{ r.id_reserva }}<small>{{ r.tipo_gestion|etiqueta_reporte }}</small></td><td>{{ r.recurso }}<small>{{ r.codigo_inventario or 'Sin bien asignado' }}</small></td><td>{{ r.solicitante }}<small>DNI: {{ r.dni_persona }}</small></td><td>{{ r.fecha_solicitud|fecha }}</td><td>{{ r.fecha_requerida|fecha }}</td><td>{{ estado(r.estado) }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
+
+  <section id="cronologia"><h2 id="titulo-cronologia">Cronología registrada</h2>
+    <p class="suave">Eventos del más reciente al más antiguo, en hora de Lima.</p>
+    <div class="tabla panel tabla-cronologia tabla-teclado" tabindex="0" role="region" aria-labelledby="titulo-cronologia"><table>
+      <thead><tr><th scope="col">Evento y fecha</th><th scope="col">Referencia</th><th scope="col">Cambio registrado</th><th scope="col">Registrado por</th><th scope="col">Observación</th></tr></thead><tbody>
+      {% for e in filas %}<tr>
+        <td><strong>{{ e.evento }}</strong><small>{{ e.fecha|fecha }}</small></td>
+        <td>{{ e.referencia }}{% if e.codigo_inventario %}<small>{{ e.codigo_inventario }} · {{ e.recurso or '' }}</small>{% endif %}{% if e.solicitante %}<small>{{ e.solicitante }} · {{ e.dni_persona }}</small>{% endif %}</td>
+        <td>{% if e.estado_anterior %}{{ estado(e.estado_anterior) }} <span aria-label="cambia a">→</span> {% endif %}{% if e.estado_nuevo %}{{ estado(e.estado_nuevo) }}{% else %}—{% endif %}</td>
+        <td>{{ e.registrador }}{% if e.dni_registrador %}<small>DNI: {{ e.dni_registrador }}</small>{% endif %}</td>
+        <td class="observacion-historial">{{ e.observacion or '—' }}</td>
+      </tr>{% else %}<tr><td colspan="5">No hay eventos registrados.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  {% else %}
+  {% if filtro.q %}
+  <section class="panel panel-tabla" aria-label="Resultados de búsqueda">
+    <h2>Resultados de búsqueda</h2>
+    <p class="suave">Selecciona {{ 'el objeto' if filtro.tipo == 'historial_bien' else 'la persona' }} para consultar su historial completo.</p>
+    {% if coincidencias|length == 50 %}<p class="suave">Se muestran hasta 50 coincidencias. Precisa la búsqueda para encontrar otros resultados.</p>{% endif %}
+    <div class="tabla"><table>
+      <thead><tr>{% if filtro.tipo == 'historial_bien' %}<th>Objeto</th><th>Ubicación</th>{% else %}<th>Persona</th><th>Identificación</th>{% endif %}<th>Estado actual</th><th>Acción</th></tr></thead>
+      <tbody>
+      {% for coincidencia in coincidencias %}
+        <tr>
+        {% if filtro.tipo == 'historial_bien' %}
+          <td>{{ coincidencia.codigo_inventario }}<small>{{ coincidencia.recurso }} · {{ coincidencia.categoria }}</small></td>
+          <td>{{ coincidencia.ubicacion or 'Sin registrar' }}</td>
+        {% else %}
+          <td>{{ coincidencia.nombre_completo }}</td>
+          <td>DNI: {{ coincidencia.dni }}{% if coincidencia.cui %}<small>CUI: {{ coincidencia.cui }}</small>{% endif %}</td>
+        {% endif %}
+          <td>{{ estado(coincidencia.estado) }}</td>
+          <td><a class="boton secundario" href="{{ url_for('reportes.consultar_reportes', tipo=filtro.tipo, q=filtro.q, codigo_inventario=coincidencia.codigo_inventario) if filtro.tipo == 'historial_bien' else url_for('reportes.consultar_reportes', tipo=filtro.tipo, q=filtro.q, dni_persona=coincidencia.dni) }}">Ver historial</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">No se encontraron {{ 'objetos' if filtro.tipo == 'historial_bien' else 'personas' }}. Prueba con {{ 'otro nombre o código' if filtro.tipo == 'historial_bien' else 'otros nombres, apellidos, DNI o CUI' }}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  {% else %}
+  <section class="panel vacio-historial"><h2>Busca {{ 'un objeto' if filtro.tipo == 'historial_bien' else 'una persona' }}</h2><p>Introduce {{ 'el nombre del recurso o su código de inventario' if filtro.tipo == 'historial_bien' else 'nombres, apellidos, DNI o CUI' }} y selecciona una coincidencia para consultar su historial completo, sin límite de fechas.</p></section>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

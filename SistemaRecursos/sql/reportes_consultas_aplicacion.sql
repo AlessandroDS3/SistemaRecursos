@@ -2,6 +2,8 @@
 USE prestamos_escuela_pruebas;
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Consultas de referencia. La aplicación ejecuta las consultas de repositorio/reportes,
+-- que aplican los filtros y completan las filas según el reporte seleccionado.
 
 -- 01. Préstamos
 SELECT
@@ -12,7 +14,9 @@ SELECT
     c.nombre AS categoria,
     d.fecha_limite_devolucion, d.fecha_devolucion,
     CASE
+        WHEN d.fecha_regularizacion IS NOT NULL THEN 'REGULARIZADO'
         WHEN d.fecha_devolucion IS NOT NULL THEN 'DEVUELTO'
+        WHEN b.estado = 'PERDIDO' THEN 'PERDIDO'
         WHEN d.fecha_limite_devolucion < UTC_TIMESTAMP() THEN 'VENCIDO'
         ELSE 'PENDIENTE'
     END AS situacion
@@ -92,7 +96,8 @@ ORDER BY p.fecha_solicitud DESC, p.id_reserva DESC;
 
 -- 06. Sanciones:
 SELECT
-    s.id_sancion, p.id_prestamo, p.dni_persona,
+    s.id_sancion, s.gravedad, s.fecha_fin, s.fecha_regularizacion, s.tipo_regularizacion,
+    p.id_prestamo, p.dni_persona,
     CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
     p.tipo_prestamo, b.codigo_inventario,
     r.nombre AS recurso, c.nombre AS categoria,

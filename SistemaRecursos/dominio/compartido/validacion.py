@@ -61,9 +61,11 @@ def fecha_local(valor):
         fecha = datetime.fromisoformat(valor)
         if fecha.tzinfo is not None:
             raise ValueError
+        return fecha.replace(tzinfo=LIMA).astimezone(timezone.utc).replace(tzinfo=None)
+    except OverflowError:
+        raise ValueError('La fecha y hora local de Lima está fuera de rango.') from None
     except (ValueError, TypeError):
         raise ValueError('Indica una fecha y hora local de Lima, sin zona horaria.') from None
-    return fecha.replace(tzinfo=LIMA).astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def ids(valores):

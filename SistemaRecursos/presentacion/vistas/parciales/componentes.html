@@ -22,7 +22,11 @@
   </form>
 {% endmacro %}
 
+{% macro texto_estado(valor) -%}
+  {{ {'DANADO': 'Dañado', 'DANIO': 'Daño', 'TARDIA': 'Tardía', 'REPARACION': 'Reparación', 'REPOSICION': 'Reposición', 'RECUPERACION': 'Recuperación', 'VERIFICACION': 'Verificación'}.get(valor, valor|replace('_', ' ')|capitalize) }}
+{%- endmacro %}
+
 {% macro estado(valor, texto='') %}
   {% set tono = 'positivo' if valor in ('ACTIVA','ACTIVO','DISPONIBLE','DEVUELTO','ATENDIDA','CON_ACCESO','A_TIEMPO','CUMPLIDA') else 'peligro' if valor in ('VENCIDO','PERDIDO','EXPIRADA','INACTIVA','BLOQUEADA','RECHAZADA','TARDIA','DANADO') else 'neutro' %}
-  <span class="estado estado-{{ tono }}">{{ texto or valor|replace('_', ' ')|capitalize }}</span>
+  <span class="estado estado-{{ tono }}">{{ texto or texto_estado(valor) }}</span>
 {% endmacro %}

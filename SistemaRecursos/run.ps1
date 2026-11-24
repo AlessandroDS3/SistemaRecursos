@@ -1,3 +1,5 @@
+param([switch]$MigrarSanciones)
+
 $ErrorActionPreference = 'Stop'
 
 $configLocal = Join-Path $PSScriptRoot 'config.local.ps1'
@@ -40,6 +42,12 @@ if ($LASTEXITCODE -ne 0) {
 
 Push-Location $PSScriptRoot
 try {
+    if ($MigrarSanciones) {
+        & $pythonProyecto -m arranque.esquema_sanciones
+        if ($LASTEXITCODE -ne 0) {
+            throw 'No se pudo actualizar el esquema de sanciones.'
+        }
+    }
     & $pythonProyecto (Join-Path $PSScriptRoot 'app.py')
     $codigoSalida = $LASTEXITCODE
 }

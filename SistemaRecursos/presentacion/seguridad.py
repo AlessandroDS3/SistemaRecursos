@@ -56,7 +56,14 @@ def configurar_seguridad(app, acceso):
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             recibido = request.form.get('csrf_token', '')
             esperado = session.get('csrf', '')
-            if not recibido or not esperado or not compare_digest(recibido, esperado):
+            if (
+                not recibido
+                or not recibido.isascii()
+                or not isinstance(esperado, str)
+                or not esperado
+                or not esperado.isascii()
+                or not compare_digest(recibido, esperado)
+            ):
                 abort(
                     400, description='El formulario caducó. Recarga la página e inténtalo otra vez.'
                 )

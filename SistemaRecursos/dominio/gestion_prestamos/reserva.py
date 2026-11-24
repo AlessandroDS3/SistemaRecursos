@@ -1,11 +1,8 @@
-from contextlib import AbstractContextManager
 from datetime import datetime
-from typing import Final, Mapping, Protocol, TypedDict
+from typing import Final, Mapping, TypedDict
 
-from dominio.compartido.contratos import IRepositorioTransaccional
 from dominio.compartido.validacion import Conflicto, NoEncontrado, entero, fecha_local, texto
 from dominio.gestion_personas_usuarios.persona import validar_elegibilidad
-from dominio.gestion_prestamos.prestamo import IRepositorioPrestamo
 
 EN_ESPERA: Final = 'EN_ESPERA'
 LISTA_PARA_RETIRO: Final = 'LISTA_PARA_RETIRO'
@@ -54,6 +51,7 @@ class Reserva(NuevaReserva):
 
 class HistorialReserva(TypedDict, total=False):
     historial: list[dict]
+    ventana_atencion: str
 
 
 class DetalleReserva(Reserva, HistorialReserva):
@@ -137,32 +135,17 @@ def validar_accion(
     if accion not in ('preparar', 'entregar'):
         return
 
-    limite = reserva['fecha_limite_vencimiento']
-    if limite is not None and limite <= ahora:
+    ventana = ventana_atencion_reserva(reserva, ahora)
+    if ventana == 'VENCIDA':
         raise Conflicto('El plazo de la reserva venció.')
-    if reserva['fecha_requerida'] > ahora:
+    if ventana == 'FUTURA':
         raise Conflicto('Todavía no llegó la fecha requerida.')
 
 
-class IRepositorioReserva(IRepositorioTransaccional, Protocol):
-    def transaccion(self) -> AbstractContextManager['IRepositorioReserva']: ...
-    def consultar_recursos_para_reserva(self, documento: str) -> list[dict]: ...
-    @property
-    def prestamos(self) -> IRepositorioPrestamo: ...
-    def consultar_reserva(
-        self, identificador: int, bloquear: bool = False
-    ) -> DetalleReserva | None: ...
-    def consultar_reservas(
-        self, documento: str | None = None, filtros: Mapping[str, str] | None = None
-    ) -> list[Reserva]: ...
-    def registrar_reserva(self, datos: NuevaReserva) -> int: ...
-    def actualizar_reserva(self, identificador: int, datos: CambiosReserva) -> None: ...
-    def consultar_contexto_reserva(self, documento: str, recurso: int) -> ContextoReserva: ...
-    def consultar_configuracion_general(self) -> dict | None: ...
-    def bloquear_recurso(self, identificador: int) -> dict | None: ...
-    def consultar_primera_reserva_en_espera(self, recurso: int, ahora: datetime) -> dict | None: ...
-    def consultar_bien_disponible(self, recurso: int) -> dict | None: ...
-    def cambiar_estado_bien_reservado(
-        self, bien: int, estado: str, esperado: str, actor: str | None, reserva: int
-    ): ...
-    def consultar_reservas_vencidas(self) -> list[dict]: ...
+def ventana_atencion_reserva(reserva: Reserva, ahora: datetime) -> str:
+    limite = reserva['fecha_limite_vencimiento']
+    if limite is not None and limite <= ahora:
+        return 'VENCIDA'
+    if reserva['fecha_requerida'] > ahora:
+        return 'FUTURA'
+    return 'ABIERTA'

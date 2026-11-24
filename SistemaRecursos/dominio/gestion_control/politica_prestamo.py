@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
-from typing import Protocol
-from dominio.compartido.contratos import IRepositorioTransaccional
+
 from dominio.compartido.validacion import LIMA, entero
 from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
 
@@ -107,16 +106,7 @@ class ConfiguracionReservas:
 
     def vencimiento(self, desde, etapa):
         unidad, cantidad = getattr(self, 'unidad_' + etapa), getattr(self, 'plazo_' + etapa)
-        return desde + timedelta(**{'hours' if unidad == 'HORAS' else 'days': cantidad})
-
-
-class IRepositorioPoliticaPrestamo(IRepositorioTransaccional, Protocol):
-    def consultar_politicas_prestamo(self) -> list[dict]: ...
-    def consultar_politica_prestamo(self, identificador: int, bloquear=False) -> dict | None: ...
-    def consultar_limites_articulos(self) -> list[dict]: ...
-    def desactivar_politica_prestamo(self, identificador: int): ...
-    def eliminar_politica_prestamo(self, identificador: int): ...
-    def consultar_configuracion_general(self, bloquear=False) -> dict | None: ...
-    def guardar_politica_prestamo(self, politica: PoliticaPrestamo): ...
-    def guardar_configuracion_general(self, datos: dict): ...
-    def guardar_limite_articulos(self, tipo: str, cantidad: int): ...
+        try:
+            return desde + timedelta(**{'hours' if unidad == 'HORAS' else 'days': cantidad})
+        except OverflowError:
+            raise ValueError('La fecha de vencimiento de la reserva está fuera de rango.') from None

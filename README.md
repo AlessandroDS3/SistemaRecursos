@@ -23,7 +23,24 @@ de MySQL. Puedes definir `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NA
 en el entorno o en `config.local.ps1`, que está excluido de Git.
 
 Abre http://127.0.0.1:5001. Los reportes permiten descargar CSV y PDF respetando los filtros.
-Las consultas de reportes están en `SistemaRecursos/sql/reportes_consultas_aplicacion.sql`.
+El repositorio de reportes ejecuta las consultas de la aplicación. El archivo
+`SistemaRecursos/sql/reportes_consultas_aplicacion.sql` contiene consultas de referencia.
+
+### Instalación sin datos de demostración
+
+Importa `SistemaRecursos/sql/schema.sql` y configura la conexión de MySQL en el
+entorno. Desde `SistemaRecursos`, con las dependencias ya instaladas, ejecuta:
+
+```powershell
+$env:DB_NAME = 'prestamos_escuela'
+..\.venv\Scripts\python.exe -m arranque.inicializar_administrador --dni 12345678 --nombres "Ana" --apellidos "Pérez" --correo "ana@unsa.edu.pe" --codigo-empleado ADM001 --area "Administración" --usuario ana
+.\run.ps1
+```
+
+Usa los datos reales del responsable. El comando crea su ficha administrativa y
+muestra una contraseña temporal que debe cambiar al entrar. Solo funciona cuando
+la base todavía no tiene cuentas. Conserva el mismo `DB_NAME` al iniciar el sistema
+y, si usas `config.local.ps1`, comprueba que apunte a esa base.
 
 ## Roles fijos
 
@@ -39,10 +56,21 @@ volver a importar los datos de prueba.
 
 ## Sanciones por gravedad
 
-Para probar esta versión con los datos de demostración, importa
-`SistemaRecursos/sql/datos_prueba.sql` en una base nueva. Si vas a reutilizar
-`prestamos_escuela_pruebas`, recréala antes de importar el archivo.
-Para partir de una base vacía, usa `SistemaRecursos/sql/schema.sql`.
+En otra máquina, para una base nueva, importa uno de los dos archivos SQL:
+`schema.sql` crea solo las tablas, sin registros; `datos_prueba.sql` crea una base
+separada con las mismas tablas y datos ficticios. Ambos incluyen las sanciones
+por gravedad y no necesitan ejecutar la migración.
+
+Para actualizar una instalación existente, detén la aplicación, haz una copia de
+seguridad y ejecuta `.\run.ps1 -MigrarSanciones` desde `SistemaRecursos`. El script
+actualiza la base configurada en `DB_NAME` y luego inicia la aplicación. Si usas
+MySQL Workbench, selecciona esa base y ejecuta
+`SistemaRecursos/sql/migraciones/20261123_sanciones_por_gravedad.sql`.
+La migración conserva las cuentas, préstamos, reservas, sanciones e historiales.
+Si aparece `Unknown column 'fecha_regularizacion'`, corresponde a esta actualización.
+
+Para una instalación nueva, usa `SistemaRecursos/sql/datos_prueba.sql` si quieres
+datos de demostración o `SistemaRecursos/sql/schema.sql` si prefieres partir de cero.
 
 En **Sanciones → Configurar plazos**, el administrador configura la leve
 (14 días iniciales), la grave (180 días como referencia inicial del semestre) y
@@ -71,6 +99,28 @@ bienes individuales, usando el inventario existente.
 
 Se mantienen cuatro capas: reglas en `dominio`, transacciones y casos de uso en
 `servicios`, SQL en `repositorio` y rutas/formularios en `presentacion`.
+
+## Cómo seguir una operación
+
+Dentro de `SistemaRecursos/`, los controladores, las vistas, los servicios y los
+repositorios se agrupan por módulo. En `dominio/`, los archivos
+`contratos_<modulo>.py` declaran las operaciones que necesitan los casos de uso.
+`crear_servicios()` y `registrar_controladores()` en [app.py](SistemaRecursos/app.py)
+muestran cómo se conectan las clases.
+
+| Acción | Controlador | Caso de uso | Dominio y persistencia |
+|---|---|---|---|
+| Registrar persona | [`ControladorPersona.registrar_persona()`](SistemaRecursos/presentacion/controladores/personas_usuarios/controlador_persona.py) | [`ServicioAplicacionPersona.registrar_persona()`](SistemaRecursos/servicios/personas_usuarios/servicio_persona.py) | [`Persona.desde_datos()`](SistemaRecursos/dominio/gestion_personas_usuarios/persona.py) y [`RepositorioPersonaSQL.guardar_persona()`](SistemaRecursos/repositorio/personas_usuarios/repositorio_persona_sql.py) |
+| Registrar bien material | [`ControladorBienMaterial.registrar_bien_material()`](SistemaRecursos/presentacion/controladores/recursos/controlador_bien_material.py) | [`ServicioAplicacionBienMaterial.registrar_bien_material()`](SistemaRecursos/servicios/recursos/servicio_bien_material.py) | [`BienMaterial.desde_datos()`](SistemaRecursos/dominio/gestion_recursos/bien_material.py) y [`RepositorioBienMaterialSQL.guardar_bien_material()`](SistemaRecursos/repositorio/recursos/repositorio_bien_material_sql.py) |
+| Consultar personas | [`ControladorPersona.consultar_personas()`](SistemaRecursos/presentacion/controladores/personas_usuarios/controlador_persona.py) | [`ServicioAplicacionPersona.consultar_personas()`](SistemaRecursos/servicios/personas_usuarios/servicio_persona.py) | [`RepositorioPersonaSQL.consultar_personas()`](SistemaRecursos/repositorio/personas_usuarios/repositorio_persona_sql.py) aplica los filtros, ordena y pagina. |
+
+Desde una pantalla, busca el botón en la plantilla y sigue `url_for()` hasta
+`add_url_rule()`. Por ejemplo, **Registrar persona** sale de
+[`vista_persona.html`](SistemaRecursos/presentacion/vistas/personas_usuarios/vista_persona.html)
+y llega a `personas.registrar_persona`. Para una consulta, vuelve a la plantilla
+después de ver el SQL para ubicar dónde se presenta cada dato.
+
+## Pruebas
 
 Pruebas desde `SistemaRecursos`: `..\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
 Para ejecutar también las pruebas MySQL, configura `TEST_MYSQL_PORT` y, si corresponde,

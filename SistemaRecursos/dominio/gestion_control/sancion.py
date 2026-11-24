@@ -4,14 +4,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import timedelta, timezone
-from typing import TYPE_CHECKING, Protocol
 
-from dominio.compartido.contratos import IRepositorioTransaccional
 from dominio.compartido.validacion import Conflicto, LIMA, entero, texto
-
-if TYPE_CHECKING:
-    from dominio.gestion_prestamos.prestamo import IRepositorioPrestamo
-    from dominio.gestion_recursos.bien_material import IRepositorioBienMaterial
 
 GRAVEDADES = ('LEVE', 'GRAVE', 'MUY_GRAVE')
 CAUSAS_GRAVES = ('DANIO', 'PERDIDA', 'SALIDA_NO_AUTORIZADA', 'CUSTODIA')
@@ -131,8 +125,8 @@ def validar_contexto_evaluacion(detalle, causa, sancion=None, politica=None):
 def validar_reparacion(detalle, bien):
     if not detalle['fecha_devolucion']:
         raise Conflicto('Registra primero la recepción física del bien.')
-    if bien['estado'] not in ('DANADO', 'MANTENIMIENTO'):
-        raise Conflicto('El bien debe estar dañado o en mantenimiento para aceptar su reparación.')
+    if bien['estado'] not in ('DANADO', 'MANTENIMIENTO', 'DISPONIBLE'):
+        raise Conflicto('El estado actual del bien impide aceptar su reparación.')
 
 
 def validar_verificacion(detalle):
@@ -169,32 +163,3 @@ def alertas_revision(sancion, ahora):
         revision_administrador=(sancion['estado'] == 'ACTIVA' and sancion['gravedad'] == 'GRAVE'
                                and not esta_regularizado(sancion) and sancion['fecha_fin'] <= ahora),
     )
-
-
-class IOperacionesSancion(Protocol):
-    """Operaciones compartidas con préstamos dentro de una transacción abierta."""
-
-    def consultar_configuracion(self, bloquear=False) -> dict | None: ...
-    def consultar_sancion(self, identificador: int, bloquear=False) -> dict | None: ...
-    def consultar_sancion_detalle(self, detalle: int) -> dict | None: ...
-    def existen_sanciones_activas(self, documentos: list[str]) -> bool: ...
-    def registrar_incidencia(self, detalle: int, tipo: str, descripcion: str, fecha) -> int: ...
-    def registrar_sancion(self, datos: dict) -> int: ...
-    def actualizar_sancion(self, identificador: int, datos: dict): ...
-    def actualizar_incidencia(self, identificador: int, datos: dict): ...
-    def registrar_historial_estado(
-        self, entidad: str, identificador: int, anterior: str | None,
-        nuevo: str, actor: str | None, observacion: str,
-    ): ...
-
-
-class IRepositorioSancion(IOperacionesSancion, IRepositorioTransaccional, Protocol):
-    def guardar_configuracion(self, datos: dict): ...
-    def consultar_detalle_sancion(self, identificador: int) -> dict | None: ...
-    def consultar_sanciones(self, filtros: dict | None = None) -> list[dict]: ...
-    def consultar_detalles_vencidos(self) -> list[dict]: ...
-    def consultar_sanciones_a_revisar(self) -> list[dict]: ...
-    @property
-    def prestamos(self) -> IRepositorioPrestamo: ...
-    @property
-    def bienes(self) -> IRepositorioBienMaterial: ...

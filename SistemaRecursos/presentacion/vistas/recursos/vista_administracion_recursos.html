@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% from 'parciales/formularios.html' import csrf %}
+{% from 'parciales/componentes.html' import indicador, estado %}
+{% from 'recursos/parciales/fragmentos_recursos.html' import formulario_recurso, categorias_recursos, icono_recurso, continuar_registro %}
+{% block titulo %}Administración de recursos · UNSA{% endblock %}
+{% block contenido %}
+  {% set vista_categorias = vista_categorias_forzada|default(false) or request.args.get('vista') == 'categorias' %}
+  {% set filtros = dict(q=request.args.get('q',''), id_categoria=request.args.get('id_categoria',''), estado=request.args.get('estado','')) %}
+  <div class="administracion-recursos">
+    <div class="cabecera">
+      <h1>Administración de recursos</h1>
+      <button type="button" data-abrir-dialogo="registro-recurso">+ Registrar recurso</button>
+    </div>
+    {% if recurso_continuacion %}{{ continuar_registro(recurso_continuacion.id_recurso, recurso_continuacion.nombre) }}{% endif %}
+    <section class="resumen-estadisticas resumen-recursos" aria-label="Resumen según los filtros de recursos">
+      {{ indicador('Recursos', resumen.recursos) }}
+      {{ indicador('Bienes', resumen.bienes) }}
+      {{ indicador('Disponibles', resumen.disponibles, clase='disponibilidad') }}
+    </section>
+    <nav class="pestanas-recursos" aria-label="Administración de recursos">
+      <a href="{{ url_for('recursos.consultar_administracion_recursos', **filtros) }}"
+         {% if not vista_categorias %}aria-current="page"{% endif %}>Recursos</a>
+      <a href="{{ url_for('recursos.consultar_administracion_recursos', vista='categorias', **filtros) }}"
+         {% if vista_categorias %}aria-current="page"{% endif %}>Categorías ({{ categorias|length }})</a>
+    </nav>
+    {% if vista_categorias %}
+      {{ categorias_recursos(categorias, volver='administracion') }}
+    {% else %}
+      <form class="filtros filtros-administracion" method="get">
+        <label>
+          Buscar recurso
+          <input name="q" type="search" value="{{ filtros.q }}" maxlength="120"
+                 placeholder="Nombre, marca, modelo o código de inventario">
+        </label>
+        <label>
+          Categoría
+          <select name="id_categoria" data-filtrar-al-cambiar>
+            <option value="">Todas</option>
+            {% for c in categorias %}
+              <option value="{{ c.id_categoria }}" {% if filtros.id_categoria == c.id_categoria|string %}selected{% endif %}>{{ c.nombre }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          Estado
+          <select name="estado" data-filtrar-al-cambiar>
+            <option value="">Todos</option>
+            {% for e in estados %}
+              <option value="{{ e }}" {% if filtros.estado == e %}selected{% endif %}>{{ e|replace('_', ' ')|capitalize }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="acciones">
+          <button class="secundario">Buscar</button>
+          <a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Limpiar</a>
+        </div>
+      </form>
+      <div class="tabla tabla-administracion">
+        <table>
+          <thead>
+            <tr><th scope="col">Recurso</th><th scope="col">Categoría</th><th scope="col">Bienes</th><th scope="col"><span class="solo-lectores">Acciones</span></th></tr>
+          </thead>
+          <tbody>
+            {% for grupo in grupos %}
+              {% set r = grupo.recurso %}
+              <tr>
+                <td>
+                  <a class="nombre-recurso" href="{{ url_for('recursos.consultar_recurso', identificador=r.id_recurso) }}">{{ r.nombre }}</a>
+                  {% if r.marca or r.modelo %}<small>{{ r.marca or '' }} {{ r.modelo or '' }}</small>{% endif %}
+                </td>
+                <td>{{ r.categoria }}</td>
+                <td>
+                  <button type="button" class="cantidad-bienes" data-desplegar-bienes="bienes-recurso-{{ r.id_recurso }}"
+                          aria-controls="bienes-recurso-{{ r.id_recurso }}" aria-expanded="false"
+                          aria-label="Ver bienes de {{ r.nombre }}">{{ grupo.bienes|length }} {{ icono_recurso('desplegar') }}</button>
+                </td>
+                <td>
+                  <div class="acciones-fila">
+                    <a class="boton-icono" href="{{ url_for('recursos.editar_recurso', identificador=r.id_recurso, volver='administracion') }}"
+                       aria-label="Editar {{ r.nombre }}" title="Editar recurso">{{ icono_recurso('editar') }}</a>
+                    <form method="post" action="{{ url_for('recursos.eliminar_recurso', identificador=r.id_recurso) }}"
+                          data-confirmar="¿Deseas eliminar el recurso {{ r.nombre }}?">
+                      {{ csrf() }}
+                      <input type="hidden" name="volver" value="administracion">
+                      <button class="boton-icono" aria-label="Eliminar {{ r.nombre }}" title="Eliminar recurso">{{ icono_recurso('eliminar') }}</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              <tr id="bienes-recurso-{{ r.id_recurso }}" class="fila-inventario" hidden>
+                <td colspan="4">
+                  <section class="inventario-desplegado" aria-label="Bienes de {{ r.nombre }}">
+                    <div class="encabezado-seccion">
+                      <h2>Bienes de {{ r.nombre }}</h2>
+                      <a class="boton secundario" href="{{ url_for('bienes.registrar_bien_material', id_recurso=r.id_recurso) }}">+ Agregar bien</a>
+                    </div>
+                    {% if grupo.bienes %}
+                      <table>
+                        <thead><tr><th scope="col">Inventario</th><th scope="col">Estado</th><th scope="col">Ubicación</th><th scope="col">Acciones</th></tr></thead>
+                        <tbody>
+                          {% for b in grupo.bienes %}
+                            <tr><td>{{ b.codigo_inventario }}</td><td>{{ estado(b.estado) }}</td><td>{{ b.ubicacion or '—' }}</td>
+                              <td><a href="{{ url_for('bienes.consultar_bien_material', identificador=b.id_bien) }}">Ver bien</a></td></tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    {% else %}<p class="suave">No hay bienes registrados para este recurso.</p>{% endif %}
+                  </section>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4" class="sin-recursos">No se encontraron recursos. Prueba otros filtros o registra uno nuevo.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="pie-administracion">
+        <small>{{ grupos|length }} {{ 'recurso encontrado' if grupos|length == 1 else 'recursos encontrados' }}</small>
+        <a href="{{ url_for('bienes.consultar_bienes_materiales') }}">Ver inventario completo</a>
+      </div>
+    {% endif %}
+  </div>
+  <dialog id="registro-recurso" class="dialogo-recursos dialogo-recurso-amplio" aria-labelledby="titulo-registro-recurso">
+    <div class="cabecera-dialogo">
+      <h2 id="titulo-registro-recurso">Registrar recurso</h2>
+      <button type="button" class="boton-icono" data-cerrar-dialogo aria-label="Cerrar formulario">{{ icono_recurso('cerrar') }}</button>
+    </div>
+    {% if categorias %}
+      {{ formulario_recurso({}, categorias, url_for('recursos.registrar_recurso'), primer_bien=true, volver='administracion', en_dialogo=true) }}
+    {% else %}
+      <p>Primero registra una categoría para organizar tus recursos.</p>
+      <a class="boton" href="{{ url_for('recursos.consultar_administracion_recursos', vista='categorias') }}">Ir a categorías</a>
+    {% endif %}
+  </dialog>
+{% endblock %}

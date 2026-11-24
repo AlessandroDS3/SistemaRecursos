@@ -1,8 +1,6 @@
 """Datos y reglas de una persona, incluidos sus datos institucionales."""
 
 from dataclasses import asdict, dataclass, fields
-from typing import Protocol
-from dominio.compartido.contratos import IRepositorioTransaccional
 import re
 
 from dominio.compartido.validacion import dni, entero, texto
@@ -88,11 +86,3 @@ def validar_elegibilidad(persona):
         raise ValueError('La persona no tiene un tipo institucional válido.')
     if persona['tipo'] == 'ESTUDIANTE' and persona.get('estado_matricula') != 'VIGENTE':
         raise ValueError('El estudiante debe tener matrícula vigente.')
-
-
-class IRepositorioPersona(IRepositorioTransaccional, Protocol):
-    def consultar_persona(self, documento: str, bloquear=False) -> dict | None: ...
-    def consultar_personas(self, filtros: dict) -> dict: ...
-    def guardar_persona(self, persona: Persona, documento_anterior: str | None = None) -> None: ...
-    def consultar_cuentas_para_actualizar(self) -> list[dict]: ...
-    def buscar_personas(self, termino: str) -> list[dict]: ...

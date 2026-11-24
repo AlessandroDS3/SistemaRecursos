@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% from 'parciales/formularios.html' import csrf, campo, opciones %}
+{% from 'parciales/componentes.html' import indicador, estado %}
+{% block contenido %}
+  {% if modo == "lista" %}
+    <div class="cabecera">
+      <h1>Personas</h1>
+      {% if g.usuario.permite("PERSONAS_GESTIONAR") %}
+        <a class="boton"
+           href="{{ url_for('personas.registrar_persona') }}">Registrar persona</a>
+      {% endif %}
+    </div>
+    <section class="resumen-estadisticas"
+             aria-label="Resumen de personas encontradas">
+      {{ indicador('Personas encontradas', resultado.total) }}
+      {{ indicador('Activas', resultado.activas) }}
+      {{ indicador('Inactivas', resultado.inactivas) }}
+    </section>
+    <form class="filtros filtros-bloque" method="get">
+      <div class="rejilla filtros-cuatro">
+        <label>
+          Buscar persona
+          <input type="search"
+                 name="q"
+                 value="{{ request.args.get('q','') }}"
+                 maxlength="120"
+                 placeholder="DNI, CUI, nombres o apellidos">
+        </label>
+        <label>
+          Tipo<select name="tipo">
+          <option value="">Todos</option>
+          {% for t in tipos %}
+            <option value="{{ t }}"
+                    {% if request.args.get('tipo')==t %}selected{% endif %}>{{ t|capitalize }}</option>
+          {% endfor %}
+          </select>
+        </label>
+        <label>
+          Estado<select name="estado">
+          <option value="">Todos</option>
+          {% for e in estados %}
+            <option value="{{ e }}"
+                    {% if request.args.get('estado')==e %}selected{% endif %}>{{ e|capitalize }}</option>
+          {% endfor %}
+          </select>
+        </label>
+        <label>
+          Cuenta<select name="cuenta">
+          <option value="">Todas</option>
+          <option value="CON_CUENTA"
+                  {% if request.args.get('cuenta')=='CON_CUENTA' %}selected{% endif %}>Con cuenta</option>
+          <option value="SIN_CUENTA"
+                  {% if request.args.get('cuenta')=='SIN_CUENTA' %}selected{% endif %}>Sin cuenta</option>
+          </select>
+        </label>
+      </div>
+      <div class="acciones">
+        <button>Aplicar filtros</button>
+        <a class="boton secundario"
+           href="{{ url_for('personas.consultar_personas') }}">Limpiar</a>
+      </div>
+    </form>
+    <section class="panel panel-tabla">
+      <div class="tabla">
+        <table>
+          <thead>
+            <tr>
+              <th>CUI</th>
+              <th>DNI</th>
+              <th>Persona</th>
+              <th>Correo</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+              <th>Cuenta de acceso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in resultado.personas %}
+              <tr>
+                <td>{{ p.cui or '—' }}</td>
+                <td>{{ p.dni }}</td>
+                <td>
+                  <a href="{{ url_for('personas.consultar_persona',documento=p.dni) }}">{{ p.nombres }} {{ p.apellidos }}
+                  </a>
+                </td>
+                <td>{{ p.correo or 'Sin correo' }}</td>
+                <td>{{ p.tipo|capitalize }}</td>
+                <td>{{ estado(p.estado) }}</td>
+                <td>
+                  {{ estado('SIN_CUENTA' if not p.id_usuario else 'INACTIVA' if p.estado=='INACTIVA' else 'CON_ACCESO' if p.estado_cuenta=='ACTIVA' else p.estado_cuenta) }}
+                  {% if g.usuario.permite("USUARIOS_GESTIONAR") %}
+                    {% if p.id_usuario or p.estado=="ACTIVA" %}
+                      <a href="{{ url_for('cuentas.actualizar_cuenta' if p.id_usuario else 'cuentas.registrar_cuenta',documento=p.dni) }}">{{ 'Ver cuenta' if p.id_usuario else 'Crear acceso' }}</a>
+                    {% endif %}
+                  {% endif %}
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="7">No se encontraron registros.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="acciones paginacion">
+      <small>Página {{ resultado.pagina }} de {{ resultado.paginas }}</small>
+      {% for numero, etiqueta in ((resultado.pagina-1,'Anterior'),(resultado.pagina+1,'Siguiente')) if numero>=1 and numero<=resultado.paginas %}
+        <a class="boton secundario"
+           href="{{ url_for('personas.consultar_personas',q=request.args.get('q',''),tipo=request.args.get('tipo',''),estado=request.args.get('estado',''),cuenta=request.args.get('cuenta',''),pagina=numero) }}">{{ etiqueta }}
+        </a>
+      {% endfor %}
+    </div>
+  {% elif modo == "detalle" %}
+    <h1>{{ persona.nombre_completo }}</h1>
+    <p>
+      {{ persona.dni }}
+      ·
+      {{ persona.tipo }}
+      ·
+      {{ persona.estado }}
+    </p>
+    <dl>
+      {% for nombre, valor in persona.datos().items() if valor is not none and valor != '' and nombre not in ('estado_matricula','dni','nombres','apellidos','tipo','estado') %}
+        <dt>{{ nombre|replace('_', ' ')|title }}</dt>
+        <dd>
+          {{ valor }}
+        </dd>
+      {% endfor %}
+      {% if persona.tipo=="ESTUDIANTE" %}
+        <dt>Matrícula</dt>
+        <dd>
+          {{ persona.estado_matricula }}
+        </dd>
+      {% endif %}
+    </dl>
+    <div class="acciones">
+      {% if g.usuario.permite('REPORTES_CONSULTAR') %}
+        <a class="boton secundario" href="{{ url_for('reportes.consultar_reportes', tipo='historial_persona', dni_persona=persona.dni) }}">Ver historial completo</a>
+      {% endif %}
+      {% if g.usuario.permite("PERSONAS_GESTIONAR") %}
+        <a class="boton"
+           href="{{ url_for('personas.editar_persona', documento=persona.dni) }}">Editar</a>
+        <form method="post"
+              action="{{ url_for('personas.desactivar_persona',documento=persona.dni) }}">
+          {{ csrf() }}
+          <button class="secundario">Desactivar persona</button>
+        </form>
+      {% endif %}
+      {% if g.usuario.permite("USUARIOS_GESTIONAR") %}
+        {% if tiene_cuenta %}
+          <a href="{{ url_for('cuentas.actualizar_cuenta',documento=persona.dni) }}">Editar cuenta</a>
+        {% elif persona.estado=="ACTIVA" %}
+          <a href="{{ url_for('cuentas.registrar_cuenta',documento=persona.dni) }}">Crear cuenta</a>
+        {% endif %}
+      {% endif %}
+    </div>
+  {% else %}
+    <h1>
+      {{ 'Editar' if persona else 'Registrar' }}
+      persona
+    </h1>
+    <form method="post" class="formulario panel">
+      {{ csrf() }}
+      <input type="hidden" name="version" value="{{ valor_formulario('version', version) }}">
+      <div class="rejilla">
+        {{ campo('dni','DNI',persona.dni, requerido=true,maximo=8) }}
+        {{ campo('nombres','Nombres',persona.nombres,requerido=true,maximo=100) }}
+        {{ campo('apellidos','Apellidos',persona.apellidos,requerido=true,maximo=100) }}
+        {{ campo('correo','Correo',persona.correo,tipo='email',maximo=120) }}
+        {{ campo('telefono','Teléfono',persona.telefono,maximo=20) }}
+        {% if persona %}
+          <input type="hidden" name="tipo" value="{{ persona.tipo }}">
+          <p>
+            Tipo:
+            {{ persona.tipo }}
+          </p>
+          {{ opciones('estado','Estado',estados,persona.estado) }}
+        {% else %}
+          {{ opciones('tipo','Tipo',tipos,'ESTUDIANTE') }}
+        {% endif %}
+      </div>
+      {% for tipo, campos in campos_tipo.items() %}
+        <fieldset data-tipo="{{ tipo }}">
+          <legend>{{ tipo|title }}</legend>
+          <div class="rejilla">
+            {% for nombre in campos %}
+              {% if nombre=="estado_matricula" %}
+                {{ opciones(nombre,'Matrícula',estados_matricula,persona[nombre]|default('VIGENTE')) }}
+              {% else %}
+                {{ campo(nombre,nombre|replace('_',' ')|title,persona[nombre],tipo='number' if nombre=='ciclo' else 'text',requerido=nombre!='ciclo',maximo=8 if nombre=='cui' else longitud_codigo if nombre.startswith('codigo_') else 100) }}
+              {% endif %}
+            {% endfor %}
+          </div>
+        </fieldset>
+      {% endfor %}
+      <div class="acciones">
+        <button>Guardar</button>
+        <a href="{{ url_for('personas.consultar_persona',documento=persona.dni) if persona else url_for('personas.consultar_personas') }}">Cancelar</a>
+      </div>
+    </form>
+  {% endif %}
+{% endblock %}

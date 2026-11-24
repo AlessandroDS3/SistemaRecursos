@@ -7,6 +7,7 @@
 -- admin / AdminPrueba2026!
 -- encargado1 y encargado2 / EncargadoPrueba2026!
 -- usuario1 y estudiante01 a estudiante08 / UsuarioPrueba2026!
+-- Incluye sanciones por gravedad; no requiere migraciones en una base nueva.
 -- Estructura del sistema de prestamos de recursos para MySQL 8.
 -- Crea prestamos_escuela_pruebas para cargar los datos de demostracion.
 SET NAMES utf8mb4;
@@ -491,8 +492,8 @@ INSERT INTO `bien_material` (`id_bien`, `id_recurso`, `codigo_inventario`, `nume
 (199, 42, 'PR-VR-CONTROL-002', NULL, '2026-09-04', 'DISPONIBLE', 'Laboratorio de simulación', NULL);
 
 -- REGLAS GENERALES Y LIMITES DEMOSTRATIVOS.
-INSERT INTO `configuracion_general` (`id_configuracion`, `hora_apertura`, `hora_cierre`, `plazo_espera`, `unidad_espera`, `plazo_retiro`, `unidad_retiro`) VALUES
-(1, '08:00:00', '16:00:00', 2, 'DIAS', 24, 'HORAS');
+INSERT INTO `configuracion_general` (`id_configuracion`, `hora_apertura`, `hora_cierre`, `plazo_espera`, `unidad_espera`, `plazo_retiro`, `unidad_retiro`, `dias_leve`, `dias_grave`, `dias_espera_perdida`) VALUES
+(1, '08:00:00', '16:00:00', 2, 'DIAS', 24, 'HORAS', 14, 180, 7);
 
 INSERT INTO `limite_articulos_prestamo` (`tipo_persona`, `maximo_articulos`) VALUES
 ('ESTUDIANTE', 3),
@@ -610,12 +611,12 @@ INSERT INTO `incidencia` (`id_incidencia`, `id_detalle`, `tipo`, `dni_registrado
 (6, 14, 'DANIO', '98000002', 'Bruno devolvió cargador con conector dañado', '2026-11-06 11:15:00', 'RESUELTA'),
 (7, 21, 'PERDIDA', '98000002', 'Pérdida confirmada del cargador prestado a Bruno', '2026-11-10 09:00:00', 'RESUELTA');
 
-INSERT INTO `sancion` (`id_sancion`, `id_incidencia_ref`, `motivo`, `fecha`, `descripcion`, `estado`, `fecha_levantamiento`, `dni_levantamiento`, `justificacion_levantamiento`) VALUES
-(1, 2, 'Mora de laptop', '2026-11-10 10:00:00', 'Debe regularizar la devolución', 'ACTIVA', NULL, NULL, NULL),
-(2, 3, 'Daño en visor de realidad virtual', '2026-11-11 11:00:00', 'Compensación acreditada', 'CUMPLIDA', NULL, NULL, NULL),
-(3, 4, 'Retraso de ajedrez', '2026-10-30 11:00:00', 'Medida levantada tras revisión', 'LEVANTADA', '2026-11-08 11:00:00', '98000002', 'Se revocó tras evaluar circunstancias'),
-(4, 6, 'Daño en cargador', '2026-11-06 12:00:00', 'Acta anulada por defecto de fábrica', 'ANULADA', '2026-11-09 10:00:00', '98000002', 'El daño ya existía antes del préstamo'),
-(5, 7, 'Pérdida de cargador', '2026-11-10 10:00:00', 'Pendiente de reposición del bien', 'ACTIVA', NULL, NULL, NULL);
+INSERT INTO `sancion` (`id_sancion`, `id_incidencia_ref`, `motivo`, `fecha`, `descripcion`, `estado`, `fecha_levantamiento`, `dni_levantamiento`, `justificacion_levantamiento`, `gravedad`, `dias_leve`, `dias_grave`, `dias_espera_perdida`, `fecha_inicio_nivel`, `fecha_fin`, `fecha_revision`, `fecha_regularizacion`, `tipo_regularizacion`) VALUES
+(1, 2, 'Mora de laptop', '2026-11-10 10:00:00', 'Debe regularizar la devolución', 'ACTIVA', NULL, NULL, NULL, 'LEVE', 14, 180, 7, '2026-11-09 16:00:00', '2026-11-23 16:00:00', '2026-11-30 16:00:00', NULL, NULL),
+(2, 3, 'Daño en visor de realidad virtual', '2026-11-11 11:00:00', 'Compensación acreditada', 'CUMPLIDA', NULL, NULL, NULL, 'GRAVE', 14, 180, 7, '2026-11-11 11:00:00', '2027-05-10 11:00:00', '2026-12-03 08:00:00', '2026-11-11 10:00:00', 'VERIFICACION'),
+(3, 4, 'Retraso de ajedrez', '2026-10-30 11:00:00', 'Medida levantada tras revisión', 'LEVANTADA', '2026-11-08 11:00:00', '98000002', 'Se revocó tras evaluar circunstancias', 'LEVE', 14, 180, 7, '2026-10-29 12:00:00', '2026-11-12 12:00:00', '2026-11-19 12:00:00', '2026-10-30 10:00:00', 'DEVOLUCION'),
+(4, 6, 'Daño en cargador', '2026-11-06 12:00:00', 'Acta anulada por defecto de fábrica', 'ANULADA', '2026-11-09 10:00:00', '98000002', 'El daño ya existía antes del préstamo', 'GRAVE', 14, 180, 7, '2026-11-06 12:00:00', '2027-05-05 12:00:00', '2026-11-27 12:00:00', '2026-11-09 10:00:00', 'VERIFICACION'),
+(5, 7, 'Pérdida de cargador', '2026-11-10 10:00:00', 'Pendiente de reposición del bien', 'ACTIVA', NULL, NULL, NULL, 'GRAVE', 14, 180, 7, '2026-11-10 10:00:00', '2027-05-09 10:00:00', '2026-11-28 13:00:00', NULL, NULL);
 
 -- AUDITORIA DE TRANSICIONES (ESTADOS ANTERIOR Y NUEVO).
 INSERT INTO `historial_estado` (`id_historial_estado`, `entidad`, `id_entidad`, `estado_anterior`, `estado_nuevo`, `fecha`, `observacion`, `dni_responsable`) VALUES
@@ -750,20 +751,3 @@ GROUP BY d.id_bien HAVING COUNT(*)>1;
 SELECT rv.id_reserva,rv.id_recurso,b.id_recurso AS recurso_del_bien
 FROM reserva rv JOIN bien_material b ON b.id_bien=rv.id_bien
 WHERE rv.id_recurso<>b.id_recurso;
-
--- Conserva sanciones históricas y sus estados; completa los datos del nuevo modelo.
-UPDATE sancion s JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
-JOIN detalle_prestamo d ON d.id_detalle=i.id_detalle
-SET s.gravedad=CASE WHEN i.tipo='RETRASO' THEN 'LEVE' ELSE 'GRAVE' END,
-    s.fecha_inicio_nivel=CASE WHEN i.tipo='RETRASO' THEN d.fecha_limite_devolucion ELSE s.fecha END,
-    s.fecha_fin=CASE WHEN i.tipo='RETRASO' THEN DATE_ADD(d.fecha_limite_devolucion, INTERVAL s.dias_leve DAY)
-                    ELSE DATE_ADD(s.fecha, INTERVAL s.dias_grave DAY) END,
-    s.fecha_revision=DATE_ADD(d.fecha_limite_devolucion, INTERVAL (s.dias_leve+s.dias_espera_perdida) DAY),
-    s.fecha_regularizacion=CASE
-        WHEN i.tipo='RETRASO' AND d.condicion_devolucion='BUENO' THEN d.fecha_devolucion
-        WHEN s.estado IN ('CUMPLIDA','LEVANTADA','ANULADA') THEN COALESCE(s.fecha_levantamiento,d.fecha_devolucion,s.fecha)
-        ELSE NULL END,
-    s.tipo_regularizacion=CASE
-        WHEN i.tipo='RETRASO' AND d.condicion_devolucion='BUENO' THEN 'DEVOLUCION'
-        WHEN s.estado IN ('CUMPLIDA','LEVANTADA','ANULADA') THEN 'VERIFICACION'
-        ELSE NULL END;

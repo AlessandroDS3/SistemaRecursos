@@ -27,6 +27,7 @@ if (recuperacionFormulario) {
 }
 
 let numeroErrorCampo = 0;
+let primerCampoConError;
 function mostrarErrorCampo(campo, mensaje) {
   const etiqueta = campo.closest('label');
   if (!etiqueta) return;
@@ -50,25 +51,44 @@ for (const formulario of document.querySelectorAll('form')) {
   });
   if (esFormularioRecuperado(formulario)) {
     for (const campo of formulario.elements) {
-      if (recuperacionFormulario.errores[campo.name]) mostrarErrorCampo(campo, recuperacionFormulario.errores[campo.name]);
+      if (recuperacionFormulario.errores[campo.name]) {
+        mostrarErrorCampo(campo, recuperacionFormulario.errores[campo.name]);
+        if (campo.getClientRects().length && !campo.disabled && campo.type !== 'hidden') {
+          primerCampoConError ??= campo;
+        }
+      }
     }
   }
+}
+if (recuperacionFormulario) {
+  const destinoError = primerCampoConError || document.querySelector('.error-formulario');
+  destinoError?.focus();
 }
 
 document.querySelectorAll('[data-fila-devolucion]').forEach(fila => {
   const seleccionar = fila.querySelector('[name="detalles"]');
   const condicion = fila.querySelector('select[name^="condicion_"]');
   const observacion = fila.querySelector('input[name^="observacion_"]');
+  const avisoDanio = fila.querySelector('[data-aviso-danio]');
   if (!seleccionar || !condicion || !observacion) return;
   const aviso = document.createElement('small');
   aviso.className = 'suave';
   aviso.textContent = 'Obligatoria para recibir un bien dañado.';
   observacion.closest('label').append(aviso);
+  if (avisoDanio) {
+    condicion.setAttribute('aria-describedby', [condicion.getAttribute('aria-describedby'), avisoDanio.id].filter(Boolean).join(' '));
+  }
   function actualizar() {
     observacion.required = seleccionar.checked && condicion.value === 'DANADO';
     observacion.setAttribute('aria-required', String(observacion.required));
     observacion.placeholder = condicion.value === 'DANADO' ? 'Describe el daño del bien' : 'Opcional';
     aviso.hidden = !observacion.required;
+    if (avisoDanio) {
+      avisoDanio.hidden = condicion.value !== 'DANADO';
+      avisoDanio.textContent = avisoDanio.hidden ? '' : fila.dataset.condicionEntrega === 'BUENO'
+        ? 'Al registrar un daño nuevo se aplica una sanción grave. Describe el daño observado.'
+        : 'Este bien se entregó con daño registrado. Describe su condición al recibirlo.';
+    }
     if (!observacion.required && !observacion.value) mostrarErrorCampo(observacion, '');
   }
   seleccionar.addEventListener('change', actualizar);
@@ -156,17 +176,37 @@ mostrarClave?.addEventListener('change', () => {
 
 const botonMenu = document.getElementById('menu-toggle');
 const sombraMenu = document.getElementById('menu-sombra');
+const menuPrincipal = document.getElementById('menu-principal');
+const vistaMenuMovil = window.matchMedia('(max-width: 1000px)');
 function cambiarMenu(abierto) {
+  if (!menuPrincipal || !botonMenu || !sombraMenu) return;
+  const estabaAbierto = document.body.classList.contains('menu-abierto');
+  if (estabaAbierto && !abierto && vistaMenuMovil.matches) botonMenu.focus();
   document.body.classList.toggle('menu-abierto', abierto);
-  botonMenu?.setAttribute('aria-expanded', String(abierto));
-  if (sombraMenu) sombraMenu.hidden = !abierto;
+  botonMenu.setAttribute('aria-expanded', String(abierto));
+  botonMenu.setAttribute('aria-label', abierto ? 'Cerrar menú' : 'Abrir menú');
+  sombraMenu.hidden = !abierto;
+  menuPrincipal.inert = vistaMenuMovil.matches && !abierto;
+  if (abierto) menuPrincipal.querySelector('nav a')?.focus();
 }
 botonMenu?.addEventListener('click', () => cambiarMenu(!document.body.classList.contains('menu-abierto')));
 sombraMenu?.addEventListener('click', () => cambiarMenu(false));
+vistaMenuMovil.addEventListener('change', () => cambiarMenu(false));
+cambiarMenu(false);
 document.addEventListener('keydown', evento => {
-  if (evento.key === 'Escape' && document.body.classList.contains('menu-abierto')) {
+  if (!document.body.classList.contains('menu-abierto')) return;
+  if (evento.key === 'Escape') {
+    evento.preventDefault();
     cambiarMenu(false);
-    botonMenu?.focus();
+  } else if (evento.key === 'Tab') {
+    const enlaces = menuPrincipal.querySelectorAll('a[href], button:not([disabled])');
+    const primero = enlaces[0];
+    const ultimo = enlaces[enlaces.length - 1];
+    if (!menuPrincipal.contains(document.activeElement) ||
+        (evento.shiftKey ? document.activeElement === primero : document.activeElement === ultimo)) {
+      evento.preventDefault();
+      (evento.shiftKey ? ultimo : primero)?.focus();
+    }
   }
 });
 

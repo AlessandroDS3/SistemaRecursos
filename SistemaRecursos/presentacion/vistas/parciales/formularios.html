@@ -1,3 +1,4 @@
+{% from 'parciales/componentes.html' import texto_estado %}
 {% macro csrf() %}
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 {% endmacro %}
@@ -32,7 +33,7 @@
             required>
       {% for valor in valores %}
         <option value="{{ valor }}" {% if actual|string == valor|string %}selected{% endif %}>
-          {{ valor|replace('_', ' ')|title }}
+          {{ texto_estado(valor) }}
         </option>
       {% endfor %}
     </select>

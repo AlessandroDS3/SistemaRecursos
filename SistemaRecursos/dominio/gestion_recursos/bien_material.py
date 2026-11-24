@@ -1,7 +1,6 @@
 from dataclasses import dataclass, fields
 from datetime import date
-from typing import Protocol
-from dominio.compartido.contratos import IRepositorioTransaccional
+
 from dominio.compartido.validacion import Conflicto, entero, texto, version
 
 ESTADOS_BIEN = ('DISPONIBLE', 'PRESTADO', 'RESERVADO', 'DANADO', 'MANTENIMIENTO', 'PERDIDO')
@@ -71,15 +70,3 @@ def validar_cambio_estado(actual, nuevo, esperado) -> None:
         raise Conflicto('Los estados de préstamo y reserva se cambian desde su operación.')
     if actual == nuevo:
         raise ValueError('Selecciona un estado diferente.')
-
-
-class IRepositorioBienMaterial(IRepositorioTransaccional, Protocol):
-    def consultar_bien_material(self, identificador: int, bloquear=False) -> dict | None: ...
-    def consultar_bienes_materiales(self, filtros: dict) -> list[dict]: ...
-    def guardar_bien_material(self, bien: BienMaterial) -> int: ...
-    def cambiar_estado_bien_material(
-        self, identificador: int, anterior: str, nuevo: str, motivo: str, actor: str
-    ) -> None: ...
-    def consultar_prestamo_pendiente(self, identificador: int, bloquear=True) -> dict | None: ...
-    def consultar_relaciones_bien_material(self, identificador: int, bloquear=True) -> dict: ...
-    def eliminar_bien_material(self, identificador: int) -> None: ...
