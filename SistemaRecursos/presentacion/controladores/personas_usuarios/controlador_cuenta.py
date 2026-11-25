@@ -10,13 +10,14 @@ from flask import (
     url_for,
 )
 from dominio.gestion_personas_usuarios.cuenta import ESTADOS_CUENTA
+from dominio.gestion_personas_usuarios.rol import PERMISOS, ROLES
 from presentacion.seguridad import requiere_permiso
 from presentacion.formularios import recuperar_formulario
 
 
 class ControladorCuenta:
-    def __init__(self, servicio):
-        self.servicio = servicio
+    def __init__(self, servicio, roles):
+        self.servicio, self.roles = servicio, roles
         self.blueprint = Blueprint('cuentas', __name__, url_prefix='/cuentas')
         self.blueprint.add_url_rule(
             '/mi-contrasena',
@@ -94,4 +95,10 @@ class ControladorCuenta:
             cuenta=cuenta,
             nueva=nueva,
             estados=ESTADOS_CUENTA,
+            roles=ROLES,
+            permisos=PERMISOS,
+            matriz=(
+                self.roles.consultar_matriz_permisos()
+                if not nueva and g.usuario.permite('ROLES_CONSULTAR') else None
+            ),
         )

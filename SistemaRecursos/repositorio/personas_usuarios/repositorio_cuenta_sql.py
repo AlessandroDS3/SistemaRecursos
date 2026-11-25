@@ -106,14 +106,3 @@ class RepositorioCuentaSQL(RepositorioSQL):
                 'UPDATE usuario_sistema SET ' + columnas + ' WHERE id_usuario=%s',
                 (*datos.values(), identificador),
             )
-
-    def buscar_cuentas(self, termino: str) -> list[dict]:
-        return self.consultar_sql(
-            '''SELECT u.id_usuario,u.dni_persona,u.nombre_usuario,u.rol,u.estado_cuenta,
-            CONCAT(p.nombres,' ',p.apellidos) AS persona FROM usuario_sistema u
-            JOIN persona p ON p.dni=u.dni_persona
-            WHERE p.dni LIKE %s OR p.apellidos LIKE %s OR u.nombre_usuario LIKE %s
-                OR EXISTS(SELECT 1 FROM estudiante e WHERE e.dni=p.dni AND e.cui LIKE %s)
-            ORDER BY p.apellidos,p.nombres LIMIT 50''',
-            (f'%{termino}%',) * 4,
-        )

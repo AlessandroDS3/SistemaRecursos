@@ -12,6 +12,11 @@ def registrar_inicio(app, servicios):
             dni = None if gestionar else usuario.dni
             resumen.update(servicios['prestamos'].consultar_resumen_prestamos(dni))
 
+        if gestionar or usuario.permite('RESERVAS_PROPIAS_GESTIONAR'):
+            resumen['reservas_pendientes'] = servicios['reservas'].contar_reservas_pendientes(
+                None if gestionar else usuario.dni
+            )
+
         if usuario.permite('CATALOGO_CONSULTAR'):
             resumen['bienes_disponibles'] = servicios['recursos'].consultar_disponibilidad()
 

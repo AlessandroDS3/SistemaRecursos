@@ -45,7 +45,6 @@ from presentacion.formularios import error_campo, identificador_campo, valor_for
 from presentacion.controladores.personas_usuarios.controlador_acceso import ControladorAcceso
 from presentacion.controladores.personas_usuarios.controlador_cuenta import ControladorCuenta
 from presentacion.controladores.personas_usuarios.controlador_persona import ControladorPersona
-from presentacion.controladores.personas_usuarios.controlador_rol import ControladorRol
 from presentacion.controladores.recursos.controlador_recurso import ControladorRecurso
 from presentacion.controladores.recursos.controlador_bien_material import ControladorBienMaterial
 from presentacion.controladores.control.controlador_politica_prestamo import ControladorPoliticaPrestamo
@@ -90,9 +89,8 @@ def crear_servicios(conexion, dominios_institucionales=('unsa.edu.pe',)):
 def registrar_controladores(app, servicios):
     controladores = [
         ControladorAcceso(servicios['acceso']),
-        ControladorCuenta(servicios['cuentas']),
+        ControladorCuenta(servicios['cuentas'], servicios['roles']),
         ControladorPersona(servicios['personas'], servicios['cuentas']),
-        ControladorRol(servicios['roles'], servicios['cuentas']),
         ControladorRecurso(servicios['recursos'], servicios['bienes'], servicios['politicas']),
         ControladorBienMaterial(servicios['bienes'], servicios['recursos']),
         ControladorPoliticaPrestamo(servicios['politicas'], servicios['recursos']),

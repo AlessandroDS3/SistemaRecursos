@@ -111,8 +111,8 @@ Además de todo lo anterior:
 
 - **Personas:** registrar, editar y desactivar estudiantes, docentes y administrativos.
   Desactivar una persona o su cuenta la expulsa del sistema al instante.
-- **Roles y permisos:** asignar a cada cuenta uno de los tres roles. Los permisos de cada rol
-  son fijos y se muestran como consulta.
+- **Personas → Editar cuenta y rol:** asignar a la cuenta uno de los tres roles. En el mismo
+  formulario puedes consultar los permisos fijos de cada rol.
 
 ### Inventario
 

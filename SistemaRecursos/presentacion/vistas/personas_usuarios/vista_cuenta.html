@@ -39,16 +39,31 @@
       {% endif %}
       {% if not nueva %}
         {{ opciones('estado_cuenta','Estado',estados,cuenta.estado_cuenta) }}
-        <p>
-          Rol:
-          {{ cuenta.rol }}
-          . Se modifica en Roles y permisos.
-        </p>
+        {% if g.usuario.permite('ROLES_GESTIONAR') %}
+          {{ opciones('rol', 'Rol de la cuenta', roles, cuenta.rol) }}
+        {% else %}
+          <p>Rol: {{ cuenta.rol|replace('_', ' ')|capitalize }}</p>
+        {% endif %}
       {% endif %}
       <div class="acciones">
         <button>Guardar</button>
         <a href="{{ url_for('personas.consultar_persona',documento=documento) }}">Cancelar</a>
       </div>
     </form>
+    {% if matriz %}
+      <details class="panel">
+        <summary>Permisos por rol</summary>
+        <div class="tabla">
+          <table>
+            <thead><tr><th scope="col">Permiso</th>{% for rol in roles %}<th scope="col">{{ rol|replace('_', ' ')|capitalize }}</th>{% endfor %}</tr></thead>
+            <tbody>
+              {% for codigo, descripcion in permisos.items() %}
+                <tr><th scope="row">{{ descripcion }}</th>{% for rol in roles %}<td>{{ 'Sí' if codigo in matriz[rol] else 'No' }}</td>{% endfor %}</tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    {% endif %}
   {% endif %}
 {% endblock %}

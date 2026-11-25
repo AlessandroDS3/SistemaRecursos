@@ -123,14 +123,6 @@ class ServicioAplicacionCuenta:
             )
         return CuentaCreada(identificador, nombre, clave)
 
-    def actualizar_cuenta(self, documento: str, datos: dict, actor: int) -> None:
-        if 'rol' in datos:
-            raise ValueError('Cambia el rol desde la sección Roles y permisos.')
-        self._actualizar_cuenta(documento, datos, actor, 'USUARIOS_GESTIONAR')
-
-    def asignar_rol_cuenta(self, documento: str, rol: str, actor: int) -> None:
-        self._actualizar_cuenta(documento, dict(rol=rol), actor, 'ROLES_GESTIONAR')
-
     def _preparar_cambios_cuenta(self, datos: dict) -> dict:
         clave = validar_clave(datos.get('clave', ''), permitir_vacia=True)
         cambios: dict = {}
@@ -149,11 +141,13 @@ class ServicioAplicacionCuenta:
             cambios['rol'] = datos['rol']
         return cambios
 
-    def _actualizar_cuenta(self, documento: str, datos: dict, actor: int, permiso: str) -> None:
+    def actualizar_cuenta(self, documento: str, datos: dict, actor: int) -> None:
         documento, actor = dni(documento), entero(actor)
         cambios = self._preparar_cambios_cuenta(datos)
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.consultar_cuenta_actor(actor), permiso)
+            cuenta = exigir_permiso(operacion.consultar_cuenta_actor(actor), 'USUARIOS_GESTIONAR')
+            if 'rol' in cambios:
+                exigir_permiso(cuenta, 'ROLES_GESTIONAR')
             cuentas = operacion.consultar_cuentas_para_actualizar()
             actual = next((c for c in cuentas if c['dni_persona'] == documento), None)
             if actual is None:
@@ -162,8 +156,7 @@ class ServicioAplicacionCuenta:
                 ocupado = operacion.consultar_id_por_nombre_usuario(cambios['nombre_usuario'])
                 if ocupado is not None and ocupado != actual['id_usuario']:
                     raise Conflicto('El nombre de usuario ya está registrado.')
-            if permiso == 'USUARIOS_GESTIONAR':
-                comprobar_version(datos.get('version'), version_cuenta(actual))
+            comprobar_version(datos.get('version'), version_cuenta(actual))
             cuenta_actor = next((c for c in cuentas if c['id_usuario'] == actor), None)
             administrador = (
                 cuenta_actor is not None
@@ -183,6 +176,3 @@ class ServicioAplicacionCuenta:
                 raise ValueError('La persona debe estar activa para habilitar la cuenta.')
             proteger_administradores(cuentas, actual, nueva, actor)
             operacion.actualizar_cuenta(actual['id_usuario'], cambios)
-
-    def buscar_cuentas(self, termino: str = '') -> list[dict]:
-        return self.repositorio.buscar_cuentas(termino.strip())

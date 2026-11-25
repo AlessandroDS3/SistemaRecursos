@@ -7,6 +7,7 @@ from dominio.gestion_prestamos.reserva import (
     DetalleReserva,
     EN_ESPERA,
     ESTADOS_PENDIENTES,
+    FILTRO_PENDIENTES,
     NuevaReserva,
     Reserva,
 )
@@ -15,6 +16,8 @@ from repositorio.personas_usuarios.repositorio_persona_sql import CONSULTA as PE
 from repositorio.prestamos.repositorio_prestamo_sql import RepositorioPrestamoSQL
 
 MARCAS_PENDIENTES = ','.join(['%s'] * len(ESTADOS_PENDIENTES))
+RESERVAS_PENDIENTES_SQL = f'''re.estado IN ({MARCAS_PENDIENTES})
+    AND (re.fecha_limite_vencimiento IS NULL OR re.fecha_limite_vencimiento>UTC_TIMESTAMP())'''
 
 
 class RepositorioReservaSQL(RepositorioSQL):
@@ -32,6 +35,14 @@ class RepositorioReservaSQL(RepositorioSQL):
     @property
     def prestamos(self):
         return RepositorioPrestamoSQL(self.conexion, self._cursor)
+
+    def contar_reservas_pendientes(self, documento: str | None = None) -> int:
+        sql = 'SELECT COUNT(*) AS total FROM reserva re WHERE ' + RESERVAS_PENDIENTES_SQL
+        parametros = ESTADOS_PENDIENTES
+        if documento is not None:
+            sql += ' AND re.dni_persona=%s'
+            parametros += (documento,)
+        return self.consultar_sql(sql, parametros, una=True)['total']
 
     def consultar_reservas(
         self, documento: str | None = None, filtros: Mapping[str, str] | None = None
@@ -53,10 +64,16 @@ class RepositorioReservaSQL(RepositorioSQL):
         if documento:
             sql += ' AND re.dni_persona=%s'
             parametros.append(documento)
-        for campo in ('estado', 'tipo_gestion'):
-            if filtros.get(campo):
-                sql += ' AND re.' + campo + '=%s'
-                parametros.append(filtros[campo])
+        estado = filtros.get('estado')
+        if estado == FILTRO_PENDIENTES:
+            sql += ' AND ' + RESERVAS_PENDIENTES_SQL
+            parametros.extend(ESTADOS_PENDIENTES)
+        elif estado:
+            sql += ' AND re.estado=%s'
+            parametros.append(estado)
+        if filtros.get('tipo_gestion'):
+            sql += ' AND re.tipo_gestion=%s'
+            parametros.append(filtros['tipo_gestion'])
         if filtros.get('q'):
             sql += " AND (re.dni_persona LIKE %s OR r.nombre LIKE %s OR CONCAT(p.nombres,' ',p.apellidos) LIKE %s)"
             parametros += [f"%{filtros['q']}%"] * 3

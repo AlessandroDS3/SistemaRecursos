@@ -150,7 +150,7 @@
       {% endif %}
       {% if g.usuario.permite("USUARIOS_GESTIONAR") %}
         {% if tiene_cuenta %}
-          <a href="{{ url_for('cuentas.actualizar_cuenta',documento=persona.dni) }}">Editar cuenta</a>
+          <a href="{{ url_for('cuentas.actualizar_cuenta',documento=persona.dni) }}">Editar cuenta y rol</a>
         {% elif persona.estado=="ACTIVA" %}
           <a href="{{ url_for('cuentas.registrar_cuenta',documento=persona.dni) }}">Crear cuenta</a>
         {% endif %}

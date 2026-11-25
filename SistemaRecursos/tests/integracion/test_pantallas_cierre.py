@@ -104,6 +104,7 @@ class PantallasCierreTest(unittest.TestCase):
     def test_inicio_avisa_solicitudes_y_procesador_detenido(self):
         cliente = self.cliente('ADMINISTRADOR')
         with patch.object(self.servicios['prestamos'], 'consultar_resumen_prestamos', return_value={}), \
+                patch.object(self.servicios['reservas'], 'contar_reservas_pendientes', return_value=2), \
                 patch.object(self.servicios['recursos'], 'consultar_disponibilidad', return_value=3), \
                 patch.object(self.servicios['ampliaciones'], 'consultar_solicitudes_ampliacion',
                              return_value=[solicitud()]), \
@@ -112,6 +113,8 @@ class PantallasCierreTest(unittest.TestCase):
                     ultimo_error_fecha=AHORA, fallos_consecutivos=3)):
             html = cliente.get('/').get_data(as_text=True)
         self.assertIn('1 solicitud de ampliación', html)
+        self.assertIn('Reservas pendientes', html)
+        self.assertIn('/reservas?estado=PENDIENTES', html)
         self.assertIn('no se está ejecutando', html)
         self.assertIn('sin conexión', html)
 

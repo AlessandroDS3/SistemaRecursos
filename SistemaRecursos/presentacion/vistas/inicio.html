@@ -26,7 +26,7 @@
     <h2>{{ 'Operaciones de préstamo' if encargado else 'Encuentra un recurso para reservar' }}</h2>
     <div class="acciones">
       {% if encargado %}
-        <a class="boton" href="{{ url_for('reservas.consultar_reservas', estado='EN_ESPERA') }}">Atender reservas</a>
+        <a class="boton" href="{{ url_for('reservas.consultar_reservas', estado='PENDIENTES') }}">Atender reservas</a>
         <a class="boton secundario" href="{{ url_for('prestamos.consultar_prestamos', estado='PENDIENTES') }}">Registrar devolución</a>
         <a class="boton secundario" href="{{ url_for('prestamos.registrar_prestamo') }}">Registrar préstamo</a>
       {% else %}
@@ -42,6 +42,9 @@
       {% if resumen.prestamos_pendientes is defined %}
         {{ indicador('Préstamos por devolver',resumen.prestamos_pendientes,url_for('prestamos.consultar_prestamos',estado='PENDIENTES'),'Ver préstamos') }}
         {{ indicador('Préstamos vencidos',resumen.prestamos_vencidos,url_for('prestamos.consultar_prestamos',estado='VENCIDO'),'Revisar vencidos','alerta' if resumen.prestamos_vencidos else '') }}
+      {% endif %}
+      {% if resumen.reservas_pendientes is defined %}
+        {{ indicador('Reservas pendientes' if encargado else 'Mis reservas pendientes',resumen.reservas_pendientes,url_for('reservas.consultar_reservas',estado='PENDIENTES'),'Atender reservas' if encargado else 'Ver mis reservas') }}
       {% endif %}
       {% if resumen.bienes_disponibles is defined %}
         {{ indicador('Bienes disponibles',resumen.bienes_disponibles,url_for('recursos.consultar_recursos',solo_disponibles='1'),'Consultar catálogo','disponibilidad') }}
@@ -61,9 +64,6 @@
         {% endif %}
         {% if g.usuario.permite('POLITICAS_GESTIONAR') %}
           <a href="{{ url_for('politicas.consultar_politicas_prestamo') }}">Configurar políticas</a>
-        {% endif %}
-        {% if g.usuario.permite('ROLES_GESTIONAR') %}
-          <a href="{{ url_for('roles.consultar_roles') }}">Asignar roles</a>
         {% endif %}
       </div>
     </section>

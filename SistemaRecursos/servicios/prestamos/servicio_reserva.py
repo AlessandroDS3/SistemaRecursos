@@ -16,6 +16,7 @@ from dominio.gestion_prestamos.reserva import (
     ESTADOS_POR_ACCION,
     ESTADOS_RESERVA,
     EXPIRADA,
+    FILTRO_PENDIENTES,
     LISTA_PARA_RETIRO,
     Reserva,
     nueva_reserva,
@@ -35,12 +36,15 @@ class ServicioAplicacionReserva:
     def consultar_recursos_para_reserva(self, documento: str) -> list[dict]:
         return self.repositorio.consultar_recursos_para_reserva(dni(documento))
 
+    def contar_reservas_pendientes(self, documento: str | None = None) -> int:
+        return self.repositorio.contar_reservas_pendientes(documento)
+
     def consultar_reservas(
         self, documento: str | None = None, filtros: Mapping[str, str] | None = None
     ) -> list[Reserva]:
         filtros = filtros or {}
         estado, tipo = filtros.get('estado', ''), filtros.get('tipo_gestion', '')
-        if estado not in ('', *ESTADOS_RESERVA) or tipo not in ('', 'PRESTAMO', 'RESERVA'):
+        if estado not in ('', FILTRO_PENDIENTES, *ESTADOS_RESERVA) or tipo not in ('', 'PRESTAMO', 'RESERVA'):
             raise ValueError('Estado o tipo de reserva inválidos.')
         return self.repositorio.consultar_reservas(
             documento,

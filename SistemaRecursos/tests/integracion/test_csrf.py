@@ -42,9 +42,9 @@ class CsrfTest(unittest.TestCase):
 
     def test_accion_autenticada_con_token_unicode_no_ejecuta_cambios(self):
         cliente = cliente_autenticado(self, self.app, cuenta('ADMINISTRADOR'))
-        with patch.object(self.app.extensions['servicios']['cuentas'], 'asignar_rol_cuenta') as asignar:
-            respuesta = cliente.post('/roles/asignar', data={
-                'csrf_token': 'ñ', 'dni': '20000002', 'rol': 'USUARIO',
+        with patch.object(self.app.extensions['servicios']['cuentas'], 'actualizar_cuenta') as actualizar:
+            respuesta = cliente.post('/cuentas/20000002/editar', data={
+                'csrf_token': 'ñ', 'rol': 'USUARIO',
             })
         self.assertEqual(respuesta.status_code, 400)
-        asignar.assert_not_called()
+        actualizar.assert_not_called()
