@@ -90,17 +90,17 @@ class RepositorioReservaSQL(RepositorioSQL):
             CONCAT(p.nombres,' ',p.apellidos) AS solicitante FROM reserva re
             JOIN recurso r ON r.id_recurso=re.id_recurso JOIN persona p ON p.dni=re.dni_persona
             LEFT JOIN bien_material b ON b.id_bien=re.id_bien WHERE re.id_reserva=%s'''
-            + (' FOR UPDATE' if bloquear else ''),
+            + (' FOR UPDATE OF re' if bloquear else ''),
             (identificador,),
             una=True,
         )
 
     def consultar_contexto_reserva(self, documento: str, recurso: int) -> ContextoReserva:
-        persona = self.consultar_sql(
-            PERSONAS + ' WHERE p.dni=%s FOR UPDATE', (documento,), una=True
-        )
         fila = self.consultar_sql(
             'SELECT * FROM recurso WHERE id_recurso=%s FOR UPDATE', (recurso,), una=True
+        )
+        persona = self.consultar_sql(
+            PERSONAS + ' WHERE p.dni=%s FOR UPDATE', (documento,), una=True
         )
         politica = self.consultar_sql(
             '''SELECT * FROM politica_prestamo
@@ -160,6 +160,9 @@ class RepositorioReservaSQL(RepositorioSQL):
             (identificador,),
             una=True,
         )
+
+    def bloquear_persona(self, documento: str) -> None:
+        self.consultar_sql('SELECT dni FROM persona WHERE dni=%s FOR UPDATE', (documento,), una=True)
 
     def consultar_primera_reserva_en_espera(self, recurso: int, ahora: datetime) -> dict | None:
         return self.consultar_sql(

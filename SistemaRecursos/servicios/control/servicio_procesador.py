@@ -13,11 +13,13 @@ class ServicioAplicacionProcesador:
     def __init__(self, repositorio):
         self.repositorio = repositorio
 
-    def ejecutar_revision(self, operaciones) -> str:
+    def ejecutar_revision(self, operaciones, *, intervalo_minimo=None) -> str:
         """Devuelve 'ok', 'omitida' (otro proceso la está haciendo) o 'error'."""
         try:
             with self.repositorio.bloqueo_exclusivo() as obtenido:
                 if not obtenido:
+                    return 'omitida'
+                if intervalo_minimo is not None and self._revisado_recientemente(intervalo_minimo):
                     return 'omitida'
                 errores = []
                 for operacion in operaciones:
@@ -35,6 +37,12 @@ class ServicioAplicacionProcesador:
             registro.exception('No se pudo ejecutar la revisión de vencimientos.')
             self._registrar_error(str(error))
             return 'error'
+
+    def _revisado_recientemente(self, intervalo):
+        estado = self.repositorio.consultar_estado() or {}
+        ultimo = max((estado[campo] for campo in ('ultima_ejecucion_correcta', 'ultimo_error_fecha')
+                      if estado.get(campo) is not None), default=None)
+        return ultimo is not None and self.repositorio.consultar_fecha_actual() - ultimo < intervalo
 
     def _registrar_error(self, mensaje):
         try:

@@ -24,7 +24,7 @@ class CuentaAcceso:
 
     @property
     def version_credenciales(self):
-        datos = f'{self.contrasena_hash}:{int(self.debe_cambiar_clave)}'
+        datos = f'{self.contrasena_hash}:{int(self.debe_cambiar_clave)}:{self.rol}:{self.dni}'
         return sha256(datos.encode()).hexdigest()
 
     def puede_acceder(self):

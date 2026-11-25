@@ -28,6 +28,7 @@
     </div>
     <div class="institucion-acceso">Universidad Nacional de San Agustín de Arequipa</div>
   </section>
+  {% block panel_acceso %}
   <section class="panel-acceso">
     <div class="contenido-panel-acceso">
       <h2>Iniciar sesión</h2>
@@ -62,6 +63,8 @@
         </label>
         <button type="submit">Iniciar sesión</button>
       </form>
+      <a href="{{ url_for('cuentas.activar_cuenta') }}">Activar cuenta con un código</a>
     </div>
   </section>
+  {% endblock %}
 {% endblock %}

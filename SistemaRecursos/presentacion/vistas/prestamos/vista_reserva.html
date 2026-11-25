@@ -109,7 +109,7 @@
     </div>
     <p class="aviso" data-texto-condiciones-reserva aria-live="polite"></p>
     <p>
-      Elige una fecha y hora futuras dentro del horario de atención. Podrás recoger el bien cuando la reserva figure como lista para retiro.
+      Elige una fecha y hora dentro del horario de atención, con hasta 7 días de anticipación. Podrás recoger el bien cuando la reserva figure como lista para retiro.
     </p>
     {{ campo('observaciones','Observaciones',maximo=220) }}
     <label class="check">
@@ -152,6 +152,9 @@
             <input type="checkbox" name="acepta_condiciones" value="1" required>
             Comuniqué al solicitante el plazo y las condiciones de entrega.
           </label>
+          {% if g.usuario.dni == reserva.dni_persona %}
+            {{ campo('autorizacion','Número de autorización de otro administrador',tipo='number',requerido=true) }}
+          {% endif %}
           <button>Entregar y registrar préstamo</button>
         </form>
       {% endif %}
@@ -218,7 +221,7 @@
       <button class="secundario">Rechazar reserva</button>
     </form>
   {% endif %}
-  {% if gestionar and reserva.estado in estados_por_accion.expirar %}
+  {% if gestionar and ventana == 'VENCIDA' and reserva.estado in estados_por_accion.expirar %}
     <details class="panel">
       <summary>Dar por vencida la reserva</summary>
       <form method="post"

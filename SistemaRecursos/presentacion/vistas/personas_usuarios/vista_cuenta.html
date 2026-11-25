@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% from 'parciales/formularios.html' import csrf,campo,opciones %}
 {% block contenido %}
-  {% if modo == 'creada' %}
-    <h1>Cuenta creada</h1>
-    <section class="panel estrecho" aria-label="Credenciales iniciales">
-      <p>Persona: {{ documento }} · Rol: Usuario</p>
+  {% if modo == 'codigo' %}
+    <h1>{{ 'Acceso restablecido' if restablecida else 'Cuenta creada' }}</h1>
+    <section class="panel estrecho" aria-label="Código de activación">
+      <p>Persona {{ documento }}</p>
       <dl>
         <dt>Nombre de usuario</dt>
         <dd><strong>{{ creada.nombre_usuario }}</strong></dd>
-        <dt>Contraseña temporal</dt>
-        <dd><code>{{ creada.clave_temporal }}</code></dd>
+        <dt>Código de activación</dt>
+        <dd><code>{{ creada.codigo_activacion }}</code></dd>
       </dl>
-      <p>Entrega estas credenciales a la persona. La contraseña temporal se muestra solo en esta respuesta y deberá cambiarse en el primer ingreso.</p>
+      <p>Entrega el código a la persona por un canal privado. Podrá usarlo una vez durante las próximas 24 horas para elegir su contraseña en «Activar cuenta».</p>
       <a class="boton" href="{{ url_for('personas.consultar_persona', documento=documento) }}">Volver a la persona</a>
     </section>
   {% else %}
@@ -28,14 +28,7 @@
       {% if not nueva %}<input type="hidden" name="version" value="{{ valor_formulario('version', cuenta.version) }}">{% endif %}
       {{ campo('nombre_usuario','Nombre de usuario',cuenta.nombre_usuario,requerido=true,maximo=50) }}
       {% if nueva %}
-        <p class="suave">Usuario sugerido por correo institucional o CUI. Puedes editarlo.</p>
-        <p>Se generará una contraseña temporal individual. Se mostrará una sola vez al crear la cuenta y deberá cambiarse en el primer ingreso.</p>
-      {% else %}
-        <label>
-          Nueva contraseña (deja vacío para conservar)
-          <input name="clave" type="password" minlength="12" maxlength="256" autocomplete="new-password">
-        </label>
-        <p class="suave">Si restableces la contraseña, la persona deberá cambiarla al iniciar sesión.</p>
+        <p class="suave">{{ 'Escribe un nombre de usuario para esta persona.' if cuenta.requiere_nombre else 'Puedes editar el nombre sugerido por correo institucional o CUI.' }}</p>
       {% endif %}
       {% if not nueva %}
         {{ opciones('estado_cuenta','Estado',estados,cuenta.estado_cuenta) }}
@@ -50,6 +43,18 @@
         <a href="{{ url_for('personas.consultar_persona',documento=documento) }}">Cancelar</a>
       </div>
     </form>
+    {% if not nueva and cuenta.rol != 'ADMINISTRADOR' and cuenta.estado_cuenta == 'ACTIVA' and cuenta.estado_persona == 'ACTIVA' %}
+      <details class="panel estrecho" {% if request.endpoint == 'cuentas.restablecer_clave' %}open{% endif %}>
+        <summary>Restablecer acceso</summary>
+        <form method="post" class="formulario" action="{{ url_for('cuentas.restablecer_clave', documento=documento) }}">
+          {{ csrf() }}
+          <input type="hidden" name="version" value="{{ cuenta.version }}">
+          {{ campo('motivo', 'Motivo del restablecimiento', requerido=true, maximo=255) }}
+          <p>Se cerrarán las sesiones de esta cuenta y se generará un código de activación.</p>
+          <button class="secundario">Generar código de activación</button>
+        </form>
+      </details>
+    {% endif %}
     {% if matriz %}
       <details class="panel">
         <summary>Permisos por rol</summary>

@@ -10,14 +10,14 @@ from flask import (
     url_for,
 )
 from dominio.gestion_personas_usuarios.cuenta import ESTADOS_CUENTA
-from dominio.gestion_personas_usuarios.rol import PERMISOS, ROLES
+from dominio.gestion_personas_usuarios.rol import PERMISOS, PERMISOS_POR_ROL, ROLES
 from presentacion.seguridad import requiere_permiso
 from presentacion.formularios import recuperar_formulario
 
 
 class ControladorCuenta:
-    def __init__(self, servicio, roles):
-        self.servicio, self.roles = servicio, roles
+    def __init__(self, servicio):
+        self.servicio = servicio
         self.blueprint = Blueprint('cuentas', __name__, url_prefix='/cuentas')
         self.blueprint.add_url_rule(
             '/mi-contrasena',
@@ -34,6 +34,10 @@ class ControladorCuenta:
             self.actualizar_cuenta,
             methods=['GET', 'POST'],
         )
+
+        self.blueprint.add_url_rule('/activar', 'activar_cuenta', self.activar_cuenta, methods=['GET', 'POST'])
+        self.blueprint.add_url_rule('/<documento>/restablecer', 'restablecer_clave', self.restablecer_clave,
+                                    methods=['POST'])
 
     @recuperar_formulario(lambda self: render_template('personas_usuarios/vista_cambiar_clave.html'))
     def cambiar_clave_propia(self):
@@ -58,19 +62,7 @@ class ControladorCuenta:
                 request.form.get('nombre_usuario', ''),
                 g.usuario.id_usuario,
             )
-            respuesta = make_response(
-                render_template(
-                    'personas_usuarios/vista_cuenta.html',
-                    modo='creada',
-                    creada=creada,
-                    documento=documento,
-                ),
-                201,
-            )
-            respuesta.headers['Cache-Control'] = 'no-store, private'
-            respuesta.headers['Pragma'] = 'no-cache'
-            respuesta.headers['Referrer-Policy'] = 'no-referrer'
-            return respuesta
+            return self._mostrar_codigo(documento, creada, 201)
         return self._mostrar_cuenta(documento, nueva=True)
 
     @requiere_permiso('USUARIOS_GESTIONAR')
@@ -81,6 +73,36 @@ class ControladorCuenta:
             flash('Cuenta actualizada.')
             return redirect(url_for('personas.consultar_persona', documento=documento))
         return self._mostrar_cuenta(documento)
+
+    def activar_cuenta(self):
+        if request.method == 'POST':
+            try:
+                self.servicio.activar_cuenta(*(request.form.get(campo, '') for campo in (
+                    'usuario', 'codigo', 'clave_nueva', 'confirmacion',
+                )))
+            except ValueError as error:
+                return render_template('personas_usuarios/vista_activar_cuenta.html', error=str(error)), 400
+            session.clear()
+            flash('Contraseña establecida. Ya puedes iniciar sesión.')
+            return redirect(url_for('auth.iniciar_sesion'))
+        return render_template('personas_usuarios/vista_activar_cuenta.html')
+
+    @requiere_permiso('USUARIOS_GESTIONAR')
+    @recuperar_formulario(lambda self, documento: self._mostrar_cuenta(documento))
+    def restablecer_clave(self, documento):
+        acceso = self.servicio.restablecer_clave(documento, request.form.get('motivo'),
+                                                  request.form.get('version'), g.usuario.id_usuario)
+        return self._mostrar_codigo(documento, acceso, 200)
+
+    @staticmethod
+    def _mostrar_codigo(documento, creada, codigo_http):
+        respuesta = make_response(render_template('personas_usuarios/vista_cuenta.html', modo='codigo',
+                                                  creada=creada, documento=documento,
+                                                  restablecida=codigo_http == 200), codigo_http)
+        respuesta.headers['Cache-Control'] = 'no-store, private'
+        respuesta.headers['Pragma'] = 'no-cache'
+        respuesta.headers['Referrer-Policy'] = 'no-referrer'
+        return respuesta
 
     def _mostrar_cuenta(self, documento, nueva=False):
         cuenta = (
@@ -98,7 +120,7 @@ class ControladorCuenta:
             roles=ROLES,
             permisos=PERMISOS,
             matriz=(
-                self.roles.consultar_matriz_permisos()
+                PERMISOS_POR_ROL
                 if not nueva and g.usuario.permite('ROLES_CONSULTAR') else None
             ),
         )

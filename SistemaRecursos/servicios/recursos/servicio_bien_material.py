@@ -91,6 +91,11 @@ class ServicioAplicacionBienMaterial:
                 id_recurso=id_recurso,
                 id_bien=identificador,
             )
+            if actual and bien.codigo_inventario != actual['codigo_inventario'] and (
+                actual['estado'] in ('PRESTADO', 'RESERVADO')
+                or operacion.consultar_prestamo_pendiente(identificador)
+            ):
+                raise Conflicto('El código de inventario se conserva mientras el bien tenga un préstamo o una reserva.')
             return operacion.guardar_bien_material(bien)
 
     def cambiar_estado_bien_material(self, identificador: int, datos: dict, actor: int) -> None:

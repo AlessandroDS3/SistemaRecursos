@@ -22,6 +22,8 @@ class ControladorSancion:
             ('/configuracion', 'guardar_configuracion_sanciones', self.guardar_configuracion_sanciones),
             ('/<int:identificador>/evaluar', 'evaluar_sancion', self.evaluar_sancion),
             ('/<int:identificador>/regularizar', 'regularizar_sancion', self.regularizar_sancion),
+            ('/<int:identificador>/anular', 'anular_sancion', self.anular_sancion),
+            ('/<int:identificador>/recuperar-original', 'registrar_original_recuperado', self.registrar_original_recuperado),
         ):
             self.blueprint.add_url_rule(ruta, nombre, funcion, methods=['POST'])
         self.blueprint.add_url_rule(
@@ -108,4 +110,18 @@ class ControladorSancion:
             prestamo_id, detalle_id, request.form, g.usuario.id_usuario,
         )
         flash('Falta evaluada y sanción registrada.')
+        return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))
+
+    @requiere_permiso('USUARIOS_GESTIONAR')
+    @recuperar_formulario(lambda self, identificador: self.consultar_sancion(identificador))
+    def anular_sancion(self, identificador):
+        self.servicio.anular_sancion(identificador, request.form.get('motivo'), g.usuario.id_usuario)
+        flash('Sanción anulada. El préstamo conserva sus pendientes de devolución o regularización.')
+        return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))
+
+    @requiere_permiso('USUARIOS_GESTIONAR')
+    @recuperar_formulario(lambda self, identificador: self.consultar_sancion(identificador))
+    def registrar_original_recuperado(self, identificador):
+        self.servicio.registrar_original_recuperado(identificador, request.form.get('motivo'), g.usuario.id_usuario)
+        flash('Original recuperado y enviado a revisión. El bien de reposición se conserva.')
         return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))

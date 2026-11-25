@@ -44,6 +44,7 @@ def configurar_seguridad(app, acceso):
     @app.before_request
     def recuperar_sesion():
         g.usuario = None
+        acceso_publico = ('auth.iniciar_sesion', 'cuentas.activar_cuenta', 'static')
         identificador = session.get('id_usuario')
         if identificador is not None:
             cuenta_acceso = acceso.consultar_cuenta_activa(identificador)
@@ -57,9 +58,9 @@ def configurar_seguridad(app, acceso):
                 g.usuario = cuenta_acceso
             else:
                 session.clear()
-                if request.endpoint not in ('auth.iniciar_sesion', 'static'):
+                if request.endpoint not in acceso_publico:
                     flash('Tu sesión terminó. Inicia sesión nuevamente.')
-        if request.endpoint not in ('auth.iniciar_sesion', 'static') and g.usuario is None:
+        if request.endpoint not in acceso_publico and g.usuario is None:
             return redirect(url_for('auth.iniciar_sesion'))
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             recibido = request.form.get('csrf_token', '')
@@ -83,6 +84,7 @@ def configurar_seguridad(app, acceso):
                 'cuentas.cambiar_clave_propia',
                 'auth.cerrar_sesion',
                 'auth.iniciar_sesion',
+                'cuentas.activar_cuenta',
                 'static',
             )
         ):

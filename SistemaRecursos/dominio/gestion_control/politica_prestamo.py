@@ -59,6 +59,15 @@ class HorarioAtencion:
             .replace(tzinfo=None)
         )
 
+    def siguiente_dia_de_atencion(self, fecha):
+        dia = fecha.replace(tzinfo=timezone.utc).astimezone(LIMA).weekday()
+        dias = dias_habilitados(self.dias_atencion)
+        desplazamiento = min((atencion - dia) % 7 for atencion in dias)
+        try:
+            return fecha + timedelta(days=desplazamiento)
+        except OverflowError:
+            raise ValueError('La fecha de devolución está fuera de rango.') from None
+
 
 @dataclass(kw_only=True)
 class PoliticaPrestamo:
@@ -95,7 +104,10 @@ class PoliticaPrestamo:
 
     def vencimiento(self, entrega, horario):
         fin = entrega + self.duracion
-        return min(fin, horario.cierre(entrega)) if self.unidad_plazo == 'HORAS' else fin
+        return (
+            min(fin, horario.cierre(entrega)) if self.unidad_plazo == 'HORAS'
+            else horario.siguiente_dia_de_atencion(fin)
+        )
 
 
 @dataclass(kw_only=True)

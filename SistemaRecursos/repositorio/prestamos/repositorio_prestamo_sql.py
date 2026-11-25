@@ -1,8 +1,11 @@
 """Datos de préstamos y sus escrituras atómicas; no decide elegibilidad ni plazos."""
 
+from collections import Counter
+
 from dominio.compartido.validacion import Conflicto
 from dominio.gestion_control.politica_prestamo import HorarioAtencion
 from dominio.gestion_prestamos.prestamo import ContextoEntrega
+from dominio.gestion_prestamos.reserva import EN_ESPERA, ESTADOS_PENDIENTES
 from repositorio.base_datos.base_sql import RepositorioSQL
 from repositorio.personas_usuarios.repositorio_persona_sql import CONSULTA as PERSONAS
 from repositorio.control.repositorio_sancion_sql import RepositorioSancionSQL
@@ -40,6 +43,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             una=True,
         )
         pendientes = self._consultar_bienes_pendientes((documento,))[documento]
+        reservas = self._contar_reservas_activas((documento,), bloquear=False)[documento]
         horario = self.consultar_sql(
             '''SELECT TIME_FORMAT(hora_apertura,'%H:%i') AS apertura,
             TIME_FORMAT(hora_cierre,'%H:%i') AS cierre FROM configuracion_general WHERE id_configuracion=1''',
@@ -50,6 +54,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             politicas=politicas,
             limite=limite['maximo_articulos'] if limite else None,
             pendientes=len(pendientes),
+            reservas=reservas,
             horario=horario,
         )
 
@@ -108,13 +113,13 @@ class RepositorioPrestamoSQL(RepositorioSQL):
 
     def consultar_prestamo_para_actualizar(self, identificador):
         prestamo = self.consultar_sql(
-            'SELECT id_prestamo,estado FROM prestamo WHERE id_prestamo=%s FOR UPDATE',
+            'SELECT id_prestamo,dni_persona,estado FROM prestamo WHERE id_prestamo=%s FOR UPDATE',
             (identificador,),
             una=True,
         )
         if prestamo is not None:
             prestamo['detalles'] = self.consultar_sql(
-                '''SELECT d.*,b.estado AS estado_bien FROM detalle_prestamo d
+                '''SELECT d.*,b.estado AS estado_bien,b.codigo_inventario FROM detalle_prestamo d
                 JOIN bien_material b ON b.id_bien=d.id_bien
                 WHERE d.id_prestamo=%s ORDER BY b.id_bien FOR UPDATE''',
                 (identificador,),
@@ -152,6 +157,45 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         return fila
 
+    def es_participante(self, prestamo, documento):
+        return self.consultar_sql('''SELECT id_participante FROM participante_prestamo
+            WHERE id_prestamo=%s AND dni_persona=%s FOR SHARE''', (prestamo, documento), una=True) is not None
+
+    def consultar_operador_autorizable(self, documento):
+        return self.consultar_sql('''SELECT u.id_usuario FROM usuario_sistema u
+            JOIN persona p ON p.dni=u.dni_persona WHERE u.dni_persona=%s AND p.estado='ACTIVA'
+            AND u.estado_cuenta='ACTIVA' AND u.rol IN ('ENCARGADO_PRESTAMOS','ADMINISTRADOR') FOR SHARE''',
+            (documento,), una=True) is not None
+
+    def guardar_autorizacion_propia(self, datos):
+        return self.registrar_historial_estado(
+            'AUTORIZACION_PROPIA', datos['id_prestamo_objetivo'], None, 'EMITIDA',
+            datos['dni_administrador'], datos['motivo'], dni_objetivo=datos['dni_operador'],
+            datos={'accion': datos['accion']},
+        )
+
+    def consultar_autorizacion_propia(self, identificador, documento, accion, prestamo):
+        return self.consultar_sql('''SELECT a.id_historial_estado AS id_registro,
+            a.dni_objetivo AS dni_operador,a.dni_responsable AS dni_administrador,a.observacion AS motivo
+            FROM historial_estado a
+            JOIN usuario_sistema administrador ON administrador.dni_persona=a.dni_responsable
+            JOIN persona p ON p.dni=a.dni_responsable AND p.dni<>a.dni_objetivo
+            WHERE a.entidad='AUTORIZACION_PROPIA' AND a.estado_nuevo='EMITIDA' AND a.dni_objetivo=%s
+            AND COALESCE(a.datos->>'$.codigo_anterior',CAST(a.id_historial_estado AS CHAR))=%s
+            AND a.datos->>'$.accion'=%s AND a.id_entidad<=>%s
+            AND a.fecha>UTC_TIMESTAMP()-INTERVAL 1 DAY AND administrador.rol='ADMINISTRADOR'
+            AND administrador.estado_cuenta='ACTIVA' AND p.estado='ACTIVA' FOR UPDATE OF a''',
+            (documento, str(identificador), accion, prestamo), una=True)
+
+    def consumir_autorizacion_propia(self, identificador, prestamo):
+        self.ejecutar('''UPDATE historial_estado
+            SET estado_anterior='EMITIDA',estado_nuevo='UTILIZADA',
+                datos=JSON_SET(datos,'$.fecha_uso',UTC_TIMESTAMP(),'$.id_prestamo_uso',%s)
+            WHERE id_historial_estado=%s AND entidad='AUTORIZACION_PROPIA' AND estado_nuevo='EMITIDA' ''',
+            (prestamo, identificador))
+        if self._cursor.rowcount != 1:
+            raise Conflicto('La autorización ya se utilizó.')
+
     def _consultar_bienes_pendientes(self, documentos, bloquear=False):
         pendientes = {documento: {} for documento in documentos}
         marcas = ','.join(['%s'] * len(documentos))
@@ -170,7 +214,51 @@ class RepositorioPrestamoSQL(RepositorioSQL):
                 pendientes[fila['dni_persona']][fila['id_detalle']] = fila['vencido']
         return pendientes
 
-    def consultar_contexto_entrega_prestamo(self, solicitud) -> ContextoEntrega:
+    def _contar_reservas_activas(self, documentos, reserva_origen=None, bloquear=True):
+        marcas = ','.join(['%s'] * len(documentos))
+        sql = f'''SELECT dni_persona FROM reserva WHERE dni_persona IN ({marcas})
+            AND estado IN (%s,%s)
+            AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>UTC_TIMESTAMP())'''
+        parametros = (*documentos, *ESTADOS_PENDIENTES)
+        if reserva_origen is not None:
+            sql += ' AND id_reserva<>%s'
+            parametros += (reserva_origen,)
+        conteo = dict.fromkeys(documentos, 0)
+        for fila in self.consultar_sql(sql + (' FOR SHARE' if bloquear else ''), parametros):
+            conteo[fila['dni_persona']] += 1
+        return conteo
+
+    def consultar_cupo_persona(self, persona, reserva_origen=None) -> dict:
+        documento = persona['dni']
+        limite = self.consultar_sql('SELECT maximo_articulos FROM limite_articulos_prestamo '
+                                    'WHERE tipo_persona=%s FOR SHARE', (persona['tipo'],), una=True)
+        return dict(limite=limite['maximo_articulos'] if limite else None,
+                    pendientes=len(self._consultar_bienes_pendientes((documento,), bloquear=True)[documento]),
+                    reservas=self._contar_reservas_activas((documento,), reserva_origen)[documento])
+
+    def consultar_balance_cola(self, recurso, solo_en_turno=False) -> tuple[int, int]:
+        disponibles = self.consultar_sql(
+            "SELECT id_bien FROM bien_material WHERE id_recurso=%s AND estado='DISPONIBLE' FOR SHARE",
+            (recurso,),
+        )
+        esperas = self.consultar_sql(
+            '''SELECT id_reserva FROM reserva WHERE id_recurso=%s AND estado=%s
+            AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>UTC_TIMESTAMP())'''
+            + (' AND fecha_requerida<=UTC_TIMESTAMP()' if solo_en_turno else '') + ' FOR SHARE',
+            (recurso, EN_ESPERA),
+        )
+        return len(disponibles), len(esperas)
+
+    def consultar_contexto_entrega_prestamo(self, solicitud, reserva_origen=None) -> ContextoEntrega:
+        ids = tuple(sorted(solicitud.bienes))
+        marcas_bienes = ','.join(['%s'] * len(ids))
+        recursos = tuple(sorted({fila['id_recurso'] for fila in self.consultar_sql(
+            f'SELECT id_recurso FROM bien_material WHERE id_bien IN ({marcas_bienes})', ids
+        )}))
+        if recursos:
+            marcas_recursos = ','.join(['%s'] * len(recursos))
+            self.consultar_sql(f'SELECT id_recurso FROM recurso WHERE id_recurso IN ({marcas_recursos}) '
+                               'ORDER BY id_recurso FOR UPDATE', recursos)
         documentos = tuple(sorted(set([*solicitud.solicitantes, solicitud.dni_encargado])))
         marcas = ','.join(['%s'] * len(documentos))
         personas = {
@@ -181,19 +269,25 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         }
         participantes = tuple(sorted(set(solicitud.solicitantes)))
         pendientes = self._consultar_bienes_pendientes(participantes, bloquear=True)
+        reservas = self._contar_reservas_activas(participantes, reserva_origen)
         tipo = personas.get(solicitud.dni_persona, {}).get('tipo')
         limites = {
             fila['tipo_persona']: fila['maximo_articulos']
             for fila in self.consultar_sql('SELECT * FROM limite_articulos_prestamo FOR SHARE')
         }
-        ids = tuple(sorted(solicitud.bienes))
-        marcas_bienes = ','.join(['%s'] * len(ids))
         bienes = self.consultar_sql(
             f'''SELECT b.*,r.id_categoria FROM bien_material b
             JOIN recurso r ON r.id_recurso=b.id_recurso WHERE b.id_bien IN ({marcas_bienes})
             ORDER BY b.id_bien FOR UPDATE''',
             ids,
         )
+        cola_prioritaria = False
+        if reserva_origen is None:
+            for recurso, cantidad in sorted(Counter(bien['id_recurso'] for bien in bienes).items()):
+                disponibles, en_espera = self.consultar_balance_cola(recurso, solo_en_turno=True)
+                if en_espera and disponibles - cantidad < en_espera:
+                    cola_prioritaria = True
+                    break
         entregas = self.consultar_sql(
             f'''SELECT id_detalle FROM detalle_prestamo
             WHERE id_bien IN ({marcas_bienes}) AND fecha_devolucion IS NULL
@@ -215,8 +309,10 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             vencido=any(any(bienes.values()) for bienes in pendientes.values()),
             limites_por_persona={dni: limites.get(personas.get(dni, {}).get('tipo')) for dni in participantes},
             pendientes_por_persona={dni: len(bienes) for dni, bienes in pendientes.items()},
+            reservas_por_persona=reservas,
             bienes=bienes,
             entregas_pendientes=bool(entregas),
+            cola_prioritaria=cola_prioritaria,
             politicas={p['id_categoria']: p for p in politicas},
             horario=HorarioAtencion(**configuracion) if configuracion else None,
             ahora=self.consultar_fecha_actual(),
@@ -313,6 +409,29 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             WHERE id_detalle=%s AND fecha_devolucion IS NULL AND fecha_regularizacion IS NULL''',
             (fecha, detalle),
         )
+
+    def consultar_ultimo_movimiento_bien(self, bien):
+        return self.consultar_sql('''SELECT * FROM historial_estado WHERE entidad='BIEN_MATERIAL'
+            AND id_entidad=%s ORDER BY id_historial_estado DESC LIMIT 1 FOR SHARE''', (bien,), una=True)
+
+    def rectificar_devolucion(self, detalle, movimiento, motivo, actor):
+        if self.consultar_sql('''SELECT id_detalle FROM detalle_prestamo WHERE id_bien=%s
+                AND fecha_devolucion IS NULL AND fecha_regularizacion IS NULL LIMIT 1 FOR UPDATE''',
+                (detalle['id_bien'],), una=True):
+            raise Conflicto('El bien tiene otro préstamo pendiente.')
+        self.registrar_historial_estado(
+            'RECTIFICACION_DEVOLUCION', detalle['id_detalle'], 'DEVUELTO', 'PENDIENTE', actor, motivo,
+            dni_objetivo=detalle['dni_encargado_devolucion'],
+            datos={'fecha_devolucion_original': detalle['fecha_devolucion'].isoformat(sep=' '),
+                   'condicion_original': detalle['condicion_devolucion'],
+                   'observacion_original': detalle['observaciones_devolucion']},
+        )
+        self.ejecutar('''UPDATE detalle_prestamo SET fecha_devolucion=NULL,dni_encargado_devolucion=NULL,
+            condicion_devolucion=NULL,observaciones_devolucion=NULL WHERE id_detalle=%s''', (detalle['id_detalle'],))
+        self.ejecutar('UPDATE bien_material SET estado=%s WHERE id_bien=%s',
+                      (movimiento['estado_anterior'], detalle['id_bien']))
+        self.registrar_historial_estado('BIEN_MATERIAL', detalle['id_bien'], detalle['estado_bien'],
+                                     movimiento['estado_anterior'], actor, f'Rectificación: {motivo}'[:255])
 
     def actualizar_estado_prestamo(self, prestamo, nuevo, actor, motivo):
         self.ejecutar(

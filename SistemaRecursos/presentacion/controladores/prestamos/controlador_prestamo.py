@@ -37,6 +37,11 @@ class ControladorPrestamo:
         for ruta, nombre, funcion, metodos in (
             ('', 'consultar_prestamos', self.consultar_prestamos, ['GET']),
             ('/nuevo', 'registrar_prestamo', self.registrar_prestamo, ['GET', 'POST']),
+            ('/autorizaciones', 'autorizar_operacion_propia', self.autorizar_operacion_propia, ['POST']),
+            ('/<int:identificador>/detalles/<int:detalle_id>/discrepancia',
+             'registrar_discrepancia_devolucion', self.registrar_discrepancia_devolucion, ['POST']),
+            ('/<int:identificador>/detalles/<int:detalle_id>/rectificar',
+             'rectificar_devolucion', self.rectificar_devolucion, ['POST']),
             ('/<int:identificador>', 'consultar_prestamo', self.consultar_prestamo, ['GET']),
             (
                 '/<int:identificador>/devolver',
@@ -82,6 +87,13 @@ class ControladorPrestamo:
         return jsonify(
             self.servicio.consultar_condiciones_prestamo(request.args.get('dni_persona', ''))
         )
+
+    @requiere_permiso('USUARIOS_GESTIONAR')
+    @recuperar_formulario(lambda self: self.consultar_prestamos())
+    def autorizar_operacion_propia(self):
+        identificador = self.servicio.autorizar_operacion_propia(request.form, g.usuario.id_usuario)
+        flash(f'Autorización #{identificador}. Es válida para un uso durante 24 horas.')
+        return redirect(url_for('prestamos.consultar_prestamos'))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     def consultar_bienes_disponibles(self):
@@ -177,6 +189,22 @@ class ControladorPrestamo:
         self.servicio.registrar_devolucion(identificador, datos, g.usuario.id_usuario)
         flash('Devolución registrada.')
         return redirect(detalle_prestamo(identificador))
+
+    @requiere_permiso('PRESTAMOS_GESTIONAR')
+    @recuperar_formulario(lambda self, identificador, detalle_id: self.consultar_prestamo(identificador))
+    def registrar_discrepancia_devolucion(self, identificador, detalle_id):
+        self.servicio.registrar_discrepancia_devolucion(
+            identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario,
+        )
+        flash('Discrepancia anotada. El bien sigue pendiente de devolución.')
+        return redirect(detalle_prestamo(identificador) + '#devolucion')
+
+    @requiere_permiso('USUARIOS_GESTIONAR')
+    @recuperar_formulario(lambda self, identificador, detalle_id: self.consultar_prestamo(identificador))
+    def rectificar_devolucion(self, identificador, detalle_id):
+        self.servicio.rectificar_devolucion(identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario)
+        flash('Devolución rectificada. El bien vuelve a quedar pendiente y se conserva el registro anterior.')
+        return redirect(detalle_prestamo(identificador) + '#devolucion')
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     @recuperar_formulario(

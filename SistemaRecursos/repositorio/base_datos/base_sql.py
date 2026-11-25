@@ -1,6 +1,7 @@
 """Mecánica SQL compartida. Cada transacción entrega una instancia independiente."""
 
 from contextlib import contextmanager
+import json
 import re
 from mysql.connector import IntegrityError
 
@@ -89,13 +90,18 @@ class RepositorioSQL:
         return cuenta_actor
 
     def registrar_historial_estado(
-        self, entidad, identificador, anterior, nuevo, actor, observacion
+        self, entidad, identificador, anterior, nuevo, actor, observacion, *, dni_objetivo=None, datos=None
     ):
-        self.ejecutar(
-            '''INSERT INTO historial_estado(entidad,id_entidad,estado_anterior,estado_nuevo,
-            fecha,dni_responsable,observacion) VALUES(%s,%s,%s,%s,UTC_TIMESTAMP(),%s,%s)''',
-            (entidad, identificador, anterior, nuevo, actor, observacion),
-        )
+        columnas = dict(entidad=entidad, id_entidad=identificador, estado_anterior=anterior,
+                        estado_nuevo=nuevo, dni_responsable=actor, observacion=observacion)
+        if dni_objetivo is not None:
+            columnas['dni_objetivo'] = dni_objetivo
+        if datos is not None:
+            columnas['datos'] = json.dumps(datos, ensure_ascii=False)
+        campos = ','.join(columnas)
+        marcas = ','.join(['%s'] * len(columnas))
+        return self.ejecutar(f'INSERT INTO historial_estado(fecha,{campos}) VALUES(UTC_TIMESTAMP(),{marcas})',
+                             tuple(columnas.values()))
 
     def consultar_historial_estado(self, entidad, identificador):
         return self.consultar_sql(

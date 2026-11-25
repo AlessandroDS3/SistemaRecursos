@@ -23,3 +23,9 @@ class Devolucion:
             raise Conflicto('El bien ya fue recibido.')
         if detalle['estado_bien'] not in ('PRESTADO', 'PERDIDO'):
             raise Conflicto('El inventario no corresponde a una entrega pendiente.')
+
+    @staticmethod
+    def validar_codigo_recibido(detalle, valor):
+        codigo = texto(valor, 'Código del bien recibido', 40, True)
+        if codigo.casefold() != detalle['codigo_inventario'].casefold():
+            raise Conflicto('El código del bien recibido no coincide. Verifica el ejemplar o registra una discrepancia.')

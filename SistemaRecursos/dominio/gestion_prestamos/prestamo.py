@@ -28,11 +28,25 @@ class ContextoEntrega(TypedDict):
     vencido: bool
     limites_por_persona: dict[str, int | None]
     pendientes_por_persona: dict[str, int]
+    reservas_por_persona: dict[str, int]
     bienes: list[dict]
     entregas_pendientes: bool
+    cola_prioritaria: bool
     politicas: dict[int, dict]
     horario: HorarioAtencion | None
     ahora: datetime
+
+
+def validar_cupo_articulos(persona, limite, pendientes, reservas, nuevos=1):
+    if limite is None:
+        raise ValueError(f'Configura el límite de artículos para el tipo {persona["tipo"].lower()}.')
+    if pendientes + reservas + nuevos <= limite:
+        return
+    nombre = f'{persona["nombres"]} {persona["apellidos"]}'
+    ocupados = f'{pendientes} bienes pendientes'
+    if reservas:
+        ocupados += f' y {reservas} reservas activas'
+    raise Conflicto(f'{nombre} tiene {ocupados}. Esta operación superaría su límite de {limite}.')
 
 
 @dataclass(kw_only=True)
@@ -85,22 +99,18 @@ class SolicitudPrestamo:
         if contexto['vencido']:
             raise Conflicto('El solicitante o un integrante tiene bienes vencidos pendientes.')
         for documento in self.solicitantes:
-            persona = contexto['personas'][documento]
-            limite = contexto['limites_por_persona'][documento]
-            pendientes = contexto['pendientes_por_persona'][documento]
-            if limite is None:
-                raise ValueError(f'Configura el límite de artículos para el tipo {persona["tipo"].lower()}.')
-            if pendientes + len(self.bienes) > limite:
-                nombre = f'{persona["nombres"]} {persona["apellidos"]}'
-                raise Conflicto(
-                    f'{nombre} tiene {pendientes} bienes pendientes. '
-                    f'Con esta entrega superaría su límite de {limite}.'
-                )
+            validar_cupo_articulos(
+                contexto['personas'][documento], contexto['limites_por_persona'][documento],
+                contexto['pendientes_por_persona'][documento], contexto['reservas_por_persona'][documento],
+                len(self.bienes),
+            )
         bienes = contexto['bienes']
         if {b['id_bien'] for b in bienes} != set(self.bienes):
             raise NoEncontrado('Uno de los bienes no existe.')
         if contexto['entregas_pendientes']:
             raise Conflicto('Uno de los bienes ya tiene una entrega pendiente.')
+        if contexto['cola_prioritaria']:
+            raise Conflicto('Atiende primero las reservas en espera de este recurso.')
         horario = contexto['horario']
         if horario is None:
             raise ValueError('Configura el horario de atención.')

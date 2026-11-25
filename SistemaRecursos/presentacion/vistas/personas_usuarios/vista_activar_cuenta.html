@@ -1,0 +1,22 @@
+{% extends 'personas_usuarios/vista_acceso.html' %}
+{% from 'parciales/formularios.html' import csrf %}
+{% block titulo %}Activar cuenta · UNSA{% endblock %}
+{% block panel_acceso %}
+  <section class="panel-acceso">
+  <div class="contenido-panel-acceso">
+  <h2>Activar cuenta</h2>
+  <form method="post" class="formulario">
+    {{ csrf() }}
+    {% if error %}<p class="aviso" role="alert">{{ error }}</p>{% endif %}
+    <label>Usuario<input name="usuario" autocomplete="username" maxlength="50" required></label>
+    <label>Código de activación<input name="codigo" type="password" autocomplete="off" maxlength="43" required></label>
+    <label>Nueva contraseña<input name="clave_nueva" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
+    <label>Confirma la contraseña<input name="confirmacion" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
+    <div class="acciones">
+      <button>Establecer contraseña</button>
+      <a href="{{ url_for('auth.iniciar_sesion') }}">Volver al inicio de sesión</a>
+    </div>
+  </form>
+  </div>
+  </section>
+{% endblock %}

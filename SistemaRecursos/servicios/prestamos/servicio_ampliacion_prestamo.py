@@ -1,5 +1,6 @@
 from dominio.compartido.validacion import Conflicto, NoEncontrado, entero, texto
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
+from dominio.gestion_personas_usuarios.persona import validar_elegibilidad
 from dominio.gestion_control.politica_prestamo import HorarioAtencion, PoliticaPrestamo
 from dominio.gestion_prestamos.ampliacion_prestamo import AmpliacionPrestamo
 from dominio.gestion_prestamos.contratos_prestamos import IRepositorioAmpliacionPrestamo
@@ -101,7 +102,7 @@ class ServicioAplicacionAmpliacionPrestamo:
                 operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
             )
             solicitud = exigir_pendiente(
-                operacion.consultar_solicitud_ampliacion(identificador, bloquear=True)
+                operacion.consultar_solicitud_ampliacion(identificador)
             )
             ampliacion = AmpliacionPrestamo(
                 cantidad=solicitud['cantidad'],
@@ -115,6 +116,7 @@ class ServicioAplicacionAmpliacionPrestamo:
                 )
             except Conflicto as error:
                 raise Conflicto(f'{error} Rechaza la solicitud con un motivo.') from None
+            exigir_pendiente(operacion.consultar_solicitud_ampliacion(identificador, bloquear=True))
             operacion.actualizar_plazo_prestamo(
                 solicitud['id_detalle'], ampliacion.fecha_anterior, nueva
             )
@@ -170,4 +172,11 @@ class ServicioAplicacionAmpliacionPrestamo:
             PoliticaPrestamo.desde_datos(fila),
             HorarioAtencion(**horario) if horario else None,
         )
+        restricciones = operacion.consultar_restricciones_ampliacion(prestamo, detalle['id_recurso'])
+        for persona in restricciones['personas']:
+            validar_elegibilidad(persona)
+        if restricciones['sancion']:
+            raise Conflicto('El responsable o un integrante tiene una sanción activa.')
+        if restricciones['reservas_sin_bien']:
+            raise Conflicto('Hay reservas vigentes de este recurso sin otro ejemplar disponible.')
         return prestamo, nueva

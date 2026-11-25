@@ -99,6 +99,13 @@ class RepositorioSancionSQL(RepositorioSQL):
             ),
         )
 
+    def consultar_incidencia_sin_sancion(self, detalle, tipo):
+        return self.consultar_sql(
+            '''SELECT i.id_incidencia FROM incidencia i LEFT JOIN sancion s ON s.id_incidencia_ref=i.id_incidencia
+            WHERE i.id_detalle=%s AND i.tipo=%s AND s.id_sancion IS NULL
+            ORDER BY i.id_incidencia LIMIT 1 FOR UPDATE OF i''', (detalle, tipo), una=True,
+        )
+
     def registrar_sancion(self, datos):
         return self.insertar('sancion', datos)
 
@@ -107,7 +114,7 @@ class RepositorioSancionSQL(RepositorioSQL):
             'gravedad', 'fecha_inicio_nivel', 'fecha_fin', 'motivo', 'descripcion', 'estado',
             'fecha_regularizacion', 'tipo_regularizacion', 'dni_regularizacion',
             'observacion_regularizacion', 'id_bien_reposicion', 'fecha_levantamiento',
-            'dni_levantamiento', 'justificacion_levantamiento',
+            'dni_levantamiento', 'justificacion_levantamiento', 'fecha_recuperacion_original',
         }
         if not datos or set(datos) - permitidos:
             raise ValueError('Campos de sanción inválidos.')

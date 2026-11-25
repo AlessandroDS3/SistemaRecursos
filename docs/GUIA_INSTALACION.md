@@ -14,8 +14,8 @@ instalación existente y resolver los problemas más comunes. Los comandos se es
 | MySQL Server | 8.0.13 o superior (probado con 8.4) | `mysql --version` o el servicio `MySQL84` en *Servicios* |
 | Navegador | Chrome, Edge o Firefox recientes | — |
 
-No hace falta internet para usar el sistema: las fuentes y los estilos están incluidos.
-Sí hace falta la primera vez, para que `run.ps1` instale las dependencias de Python.
+Para descargar las dependencias de Python se requiere internet. Las fuentes y estilos
+están incluidos en el repositorio para el uso cotidiano.
 
 ## 2. Instalación nueva
 
@@ -54,36 +54,58 @@ $env:DB_NAME = 'prestamos_escuela_pruebas'   # o 'prestamos_escuela' para uso re
 
 Si no creas el archivo, `run.ps1` pide la contraseña cada vez.
 
-### 2.3 Crear el administrador (solo con `schema.sql`)
+### 2.3 Instalar las dependencias
+
+Desde la raíz del repositorio:
+
+```powershell
+cd SistemaRecursos
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+El script prepara `.venv`, instala las versiones de `requirements.txt` y comprueba que
+sean compatibles. Vuelve a ejecutarlo cuando cambien las dependencias.
+
+### 2.4 Crear el administrador (solo con `schema.sql`)
 
 Con una base vacía no existe ninguna cuenta. Desde la carpeta `SistemaRecursos`:
 
 ```powershell
+. .\entorno.ps1
+$env:DB_NAME = 'prestamos_escuela'
+Configurar-ConexionProyecto
 ..\.venv\Scripts\python.exe -m arranque.inicializar_administrador --dni 12345678 --nombres "Ana" --apellidos "Pérez" --correo "ana@unsa.edu.pe" --codigo-empleado ADM001 --area "Administración" --usuario ana
 ```
 
-El comando muestra una contraseña temporal; el sistema pedirá cambiarla al entrar.
-Solo funciona si la base todavía no tiene cuentas. (La primera vez ejecuta antes `run.ps1`
-para que se cree el entorno `.venv`.)
+El comando muestra un código de un solo uso. Usa **Activar cuenta** dentro de las próximas
+24 horas para elegir la contraseña del administrador. El comando funciona si la base
+todavía no tiene cuentas. Si usas `config.local.ps1`, comprueba
+que `DB_NAME` apunte a la misma base.
 
-### 2.4 Iniciar el sistema
+### 2.5 Iniciar el sistema
 
 ```powershell
-cd SistemaRecursos
 powershell -ExecutionPolicy Bypass -File .\run.ps1
 ```
 
-Abre <http://127.0.0.1:5001>. El script crea el entorno virtual, instala las dependencias,
-comprueba que la base tenga el esquema correcto y arranca la aplicación junto con la
-**revisión automática de vencimientos** (cada 30 segundos).
+Desde `SistemaRecursos`, inicia la aplicación y la revisión automática de vencimientos.
+Abre <http://127.0.0.1:5001>.
 
-> **Importante:** inicia siempre con `run.ps1`. Si la aplicación se levanta de otra forma
-> (por ejemplo `flask run` o un servidor como waitress importando `create_app`), la revisión
-> automática **no** se inicia; el administrador verá un aviso en Inicio.
+Para operarlos por separado, usa PowerShell en dos terminales:
+
+```powershell
+.\run.ps1 -SoloProcesador
+.\run.ps1 -SoloWeb
+```
+
+Si usas `flask run` o un servidor WSGI que importe `create_app`, ejecuta el procesador
+independiente. Ambos deben apuntar a la misma base. El procesador revisa cada 30 segundos,
+coordina la ejecución por base y vuelve a intentar los ciclos que fallan. Inicio muestra
+la última revisión correcta y un aviso si queda desactualizada.
 
 ## 3. Actualizar una instalación existente
 
-1. Detén la aplicación (Ctrl + C en la ventana donde corre).
+1. Detén la aplicación y el procesador si está en una terminal independiente (Ctrl + C).
 2. Haz una copia de seguridad de la base:
 
    ```powershell
@@ -91,23 +113,29 @@ comprueba que la base tenga el esquema correcto y arranca la aplicación junto c
    ```
 
 3. Actualiza el código (`git pull`).
-4. Aplica las migraciones que falten y arranca:
+4. Desde `SistemaRecursos`, comprueba el esquema y aplica los pasos pendientes. Por ejemplo:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File .\run.ps1 -MigrarSanciones -MigrarCierre
+   .\migrate.ps1 -Paso Comprobar
+   .\migrate.ps1 -Paso ReglasPrestamo,Comprobar
    ```
 
    | Opción | Archivo | Qué agrega |
    |---|---|---|
-   | `-MigrarSanciones` | `sql/migraciones/20261123_sanciones_por_gravedad.sql` | Sanciones leve/grave/muy grave y regularización |
-   | `-MigrarCierre` | `sql/migraciones/20261124_cierre_pendientes.sql` | Identificador del sistema y fecha de registro de bienes, sesiones, mantenimientos, solicitudes de ampliación y estado del procesador |
+   | `Sanciones` | `sql/migraciones/20261123_sanciones_por_gravedad.sql` | Sanciones leve, grave y muy grave, y regularización |
+   | `Cierre` | `sql/migraciones/20261124_cierre_pendientes.sql` | Identificador del sistema y fecha de registro de bienes, sesiones, mantenimientos, solicitudes de ampliación y estado del procesador |
+   | `Horario` | `arranque/esquema_horario.py` | Días de atención |
+   | `ReglasPrestamo` | `sql/migraciones/20261125_reglas_prestamo.sql` | Campos de ampliación, recuperación del original y auditoría de préstamos y cuentas en `historial_estado` |
 
    Las migraciones **se pueden ejecutar varias veces**: si un cambio ya existe, lo saltan.
    No borran datos. También se pueden ejecutar desde MySQL Workbench seleccionando la base
    y abriendo el archivo `.sql`.
 
-5. La aplicación revisa el esquema al iniciar. Si falta una migración, se detiene con un
-   mensaje que indica qué opción usar.
+5. Cuando la comprobación confirme el esquema actualizado, inicia con `run.ps1`.
+
+Si aplicaste la versión preliminar de `ReglasPrestamo`, la versión actual copia sus
+registros a `historial_estado` y conserva los códigos de autorización emitidos. Las tablas
+preliminares quedan como respaldo.
 
 ### Qué hacer si una migración se interrumpe
 
@@ -138,14 +166,14 @@ $env:TEST_MYSQL_PASSWORD = 'contraseña_del_servidor_de_pruebas'
 | Mensaje o síntoma | Causa | Solución |
 |---|---|---|
 | `la ejecución de scripts está deshabilitada en este sistema` | Política de ejecución de PowerShell | Usa `powershell -ExecutionPolicy Bypass -File .\run.ps1` (solo afecta a esa ejecución) |
-| `La base tiene un esquema anterior … run.ps1 -MigrarSanciones` o `-MigrarCierre` | Falta una migración | Sigue la sección 3 |
-| `Unknown column 'fecha_regularizacion'` | Falta `-MigrarSanciones` | Sección 3 |
+| `Falta el esquema requerido` | La comprobación encontró una migración pendiente | Sigue el paso que indica `migrate.ps1 -Paso Comprobar` |
+| `Unknown column 'fecha_regularizacion'` | Falta el esquema de sanciones por gravedad | Ejecuta la comprobación de la sección 3 |
 | `Access denied for user 'root'` | Contraseña o usuario de MySQL incorrectos | Revisa `config.local.ps1` |
 | `Can't connect to MySQL server` | El servicio de MySQL está detenido | Inicia el servicio `MySQL84` en *Servicios* de Windows |
 | El navegador muestra el diseño antiguo | Caché del navegador | Recarga con Ctrl + F5 |
 | «Demasiados intentos fallidos» al iniciar sesión | 5 intentos fallidos seguidos de esa cuenta (o 20 del mismo equipo) | Espera 15 minutos; reiniciar la aplicación también borra el contador |
 | «Tu sesión terminó» | 30 minutos sin actividad u 8 horas desde el ingreso | Vuelve a iniciar sesión |
-| Aviso en Inicio: «La revisión automática … no se está ejecutando» | La aplicación no se inició con `run.ps1` o MySQL falló | Reinicia con `run.ps1`; el aviso muestra el último error |
+| Aviso en Inicio: «La revisión automática … no se está ejecutando» | Procesador detenido o error de MySQL | Revisa el proceso y el último error que muestra Inicio |
 | `Puerto 5001 en uso` | Otra instancia sigue abierta | Cierra la otra ventana o define `$env:PORT = '5002'` |
 
 ## 6. Seguridad al publicar en red

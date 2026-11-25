@@ -58,6 +58,8 @@ class ControladorPersona:
             VISTA_PERSONA,
             modo='detalle',
             persona=persona,
+            cambios_tipo=(self.servicio.consultar_cambios_tipo_persona(documento)
+                           if g.usuario.rol == 'ADMINISTRADOR' else []),
             tiene_cuenta=g.usuario.permite('USUARIOS_GESTIONAR')
             and self.cuentas.tiene_cuenta(documento),
         )

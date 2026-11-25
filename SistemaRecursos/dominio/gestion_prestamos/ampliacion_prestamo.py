@@ -32,6 +32,8 @@ class AmpliacionPrestamo:
             raise Conflicto(
                 'Solo se amplían bienes prestados, no vencidos y pendientes de devolución.'
             )
+        if detalle.get('ampliado'):
+            raise Conflicto('Este bien ya recibió su única ampliación en este préstamo.')
         extra = timedelta(**{'hours' if self.unidad == 'HORAS' else 'days': self.cantidad})
         if extra > politica.duracion:
             raise ValueError('La ampliación no puede superar otro plazo de la política.')
@@ -41,7 +43,7 @@ class AmpliacionPrestamo:
             raise ValueError('La ampliación produce una fecha fuera de rango.') from None
         if politica.unidad_plazo == 'HORAS' and (horario is None or nueva > horario.cierre(actual)):
             raise ValueError('La ampliación debe respetar el cierre de atención.')
-        return nueva
+        return horario.siguiente_dia_de_atencion(nueva) if horario is not None else nueva
 
 
 class ContextoAmpliacion(TypedDict):

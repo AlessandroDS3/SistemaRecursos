@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import logging
 import os
 from pathlib import Path
@@ -22,7 +23,6 @@ from repositorio.control.repositorio_procesador_sql import RepositorioProcesador
 from servicios.personas_usuarios.servicio_acceso import ServicioAplicacionAcceso
 from servicios.personas_usuarios.servicio_cuenta import ServicioAplicacionCuenta
 from servicios.personas_usuarios.servicio_persona import ServicioAplicacionPersona
-from servicios.personas_usuarios.servicio_rol import ServicioAplicacionRol
 from servicios.recursos.servicio_recurso import ServicioAplicacionRecurso
 from servicios.recursos.servicio_bien_material import ServicioAplicacionBienMaterial
 from servicios.control.servicio_politica_prestamo import ServicioAplicacionPoliticaPrestamo
@@ -33,9 +33,6 @@ from servicios.control.servicio_sancion import ServicioAplicacionSancion
 from servicios.reportes.servicio_reporte import ServicioAplicacionReporte
 from servicios.control.servicio_procesador import ServicioAplicacionProcesador
 from arranque.procesador_vencimientos import iniciar_procesador_vencimientos
-from arranque.esquema_sanciones import comprobar_esquema_sanciones
-from arranque.esquema_cierre import comprobar_esquema_cierre
-from arranque.esquema_horario import comprobar_esquema_horario
 from dominio.gestion_personas_usuarios.sesion import DURACION_MAXIMA
 
 from presentacion.controladores.controlador_inicio import registrar_inicio
@@ -72,7 +69,6 @@ def crear_servicios(conexion, dominios_institucionales=('unsa.edu.pe',)):
             RepositorioCuentaSQL(conexion), dominios_institucionales
         ),
         'personas': ServicioAplicacionPersona(RepositorioPersonaSQL(conexion)),
-        'roles': ServicioAplicacionRol(),
         'recursos': ServicioAplicacionRecurso(RepositorioRecursoSQL(conexion)),
         'bienes': ServicioAplicacionBienMaterial(RepositorioBienMaterialSQL(conexion)),
         'politicas': ServicioAplicacionPoliticaPrestamo(RepositorioPoliticaPrestamoSQL(conexion)),
@@ -90,7 +86,7 @@ def crear_servicios(conexion, dominios_institucionales=('unsa.edu.pe',)):
 def registrar_controladores(app, servicios):
     controladores = [
         ControladorAcceso(servicios['acceso']),
-        ControladorCuenta(servicios['cuentas'], servicios['roles']),
+        ControladorCuenta(servicios['cuentas']),
         ControladorPersona(servicios['personas'], servicios['cuentas']),
         ControladorRecurso(servicios['recursos'], servicios['bienes'], servicios['politicas']),
         ControladorBienMaterial(servicios['bienes'], servicios['recursos']),
@@ -147,27 +143,25 @@ def create_app(config=None):
     return app
 
 
-if __name__ == '__main__':
-    from mysql.connector import Error
-
+def main(argv=None):
+    parser = ArgumentParser(description='Inicia el servidor web del Sistema de Recursos.')
+    parser.add_argument('--sin-procesador', action='store_true',
+                        help='Ejecuta la revisión automática en un proceso independiente.')
+    args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
-    for comprobar, opcion in (
-        (comprobar_esquema_sanciones, '-MigrarSanciones'),
-        (comprobar_esquema_cierre, '-MigrarCierre'),
-        (comprobar_esquema_horario, '-MigrarHorario'),
-    ):
-        try:
-            comprobar(MySQLConnection())
-        except Error as error:
-            if error.errno in (1054, 1146):
-                raise SystemExit(
-                    'La base tiene un esquema anterior. Haz una copia de seguridad y ejecuta '
-                    f'run.ps1 {opcion} para actualizarla.'
-                ) from None
-            raise SystemExit(f'No se pudo comprobar la base configurada: {error}') from None
     app = create_app()
-    servicios = app.extensions['servicios']
-    iniciar_procesador_vencimientos(
-        servicios['sanciones'], servicios['reservas'], servicios['procesador']
-    )
-    app.run(host='127.0.0.1', port=int(os.getenv('PORT', '5001')))
+    detener = None
+    if not args.sin_procesador:
+        servicios = app.extensions['servicios']
+        detener = iniciar_procesador_vencimientos(
+            servicios['sanciones'], servicios['reservas'], servicios['procesador']
+        )
+    try:
+        app.run(host='127.0.0.1', port=int(os.getenv('PORT', '5001')), use_reloader=False)
+    finally:
+        if detener is not None:
+            detener.set()
+
+
+if __name__ == '__main__':
+    main()

@@ -20,6 +20,19 @@
         <a class="boton" href="{{ url_for('prestamos.registrar_prestamo',volver=volver) }}">+ Nuevo préstamo</a>
       {% endif %}
     </div>
+    {% if g.usuario.rol == 'ADMINISTRADOR' %}
+      <details class="panel" {% if g.error_formulario and request.endpoint == 'prestamos.autorizar_operacion_propia' %}open{% endif %}>
+        <summary>Autorizar entrega o devolución propia</summary>
+        <form method="post" class="formulario" action="{{ url_for('prestamos.autorizar_operacion_propia') }}">
+          {{ csrf() }}
+          {{ campo('dni_operador','DNI del encargado o administrador',requerido=true,maximo=8) }}
+          <label>Operación<select name="accion" required><option value="ENTREGA">Entrega</option><option value="DEVOLUCION">Devolución</option></select></label>
+          {{ campo('id_prestamo','Número de préstamo (para devolución)',tipo='number') }}
+          {{ campo('motivo','Motivo y bienes autorizados',requerido=true,maximo=255) }}
+          <button>Emitir autorización</button>
+        </form>
+      </details>
+    {% endif %}
     <form class="filtros filtros-bloque">
       <div class="rejilla dos-columnas">
         <label>
@@ -300,6 +313,7 @@
             <input type="checkbox" name="acepta_condiciones" value="1" required>
             He comunicado el plazo y el permiso de salida al solicitante.
           </label>
+          {{ campo('autorizacion','N.º de autorización (si participas en este préstamo)',tipo='number') }}
           <button class="boton-principal" id="confirmar-prestamo" disabled>
             Registrar préstamo
           </button>
@@ -424,6 +438,7 @@
             <td>
               {% if gestionar and not d.fecha_devolucion and not d.fecha_regularizacion %}
                 {{ opciones('condicion_'~d.id_detalle,'Condición',('BUENO','DANADO')) }}
+                {{ campo('codigo_recibido_'~d.id_detalle,'Código del bien recibido',maximo=40) }}
                 <small id="aviso-danio-{{ d.id_detalle }}" class="aviso-condicion" data-aviso-danio role="status" hidden></small>
               {% elif d.condicion_devolucion %}{{ estado(d.condicion_devolucion) }}
               {% else %}{{ 'Repuesto' if d.fecha_regularizacion else 'Pendiente' }}{% endif %}
@@ -438,11 +453,41 @@
   </div>
   {% if gestionar %}
     {% if hay_devolucion_pendiente and prestamo.estado_actual not in ('DEVUELTO', 'REGULARIZADO') %}
+      {% if g.usuario.dni == prestamo.dni_persona or prestamo.participantes|selectattr('dni_persona','equalto',g.usuario.dni)|list %}
+        {{ campo('autorizacion','Número de autorización de otro administrador',tipo='number',requerido=true) }}
+      {% endif %}
       <div class="acciones al-final">
         <button>Registrar devolución</button>
       </div>
     {% endif %}
     </form>
+    {% if hay_devolucion_pendiente %}
+      <details class="panel">
+        <summary>Registrar un bien distinto o una discrepancia</summary>
+        {% for d in hay_devolucion_pendiente %}
+          <form method="post" class="formulario operacion-bien" action="{{ url_for('prestamos.registrar_discrepancia_devolucion', identificador=prestamo.id_prestamo, detalle_id=d.id_detalle) }}">
+            {{ csrf() }}
+            <strong>{{ d.codigo_inventario }} · {{ d.recurso }}</strong>
+            {{ campo('motivo','Código, serie o diferencia observada',requerido=true,maximo=200) }}
+            <button class="secundario">Registrar discrepancia</button>
+          </form>
+        {% endfor %}
+      </details>
+    {% endif %}
+      {% if g.usuario.rol == 'ADMINISTRADOR' and prestamo.detalles|selectattr('fecha_devolucion')|list %}
+        <details class="panel" {% if g.error_formulario and request.endpoint == 'prestamos.rectificar_devolucion' %}open{% endif %}>
+          <summary>Revisar y rectificar devoluciones</summary>
+          <p>Verifica qué ocurrió y que el bien no haya tenido movimientos posteriores.</p>
+          {% for d in prestamo.detalles if d.fecha_devolucion %}
+            <form method="post" class="formulario operacion-bien" action="{{ url_for('prestamos.rectificar_devolucion', identificador=prestamo.id_prestamo, detalle_id=d.id_detalle) }}">
+              {{ csrf() }}
+              <strong>{{ d.codigo_inventario }} · {{ d.fecha_devolucion|fecha }}</strong>
+              {{ campo('motivo','Motivo de rectificación',requerido=true,maximo=255) }}
+              <button class="secundario">Rectificar devolución</button>
+            </form>
+          {% endfor %}
+        </details>
+      {% endif %}
   {% endif %}
   </section>
   {% set solicitudes = solicitudes or [] %}
@@ -451,7 +496,7 @@
     <details class="panel" {% if g.formulario_id and g.formulario_id.startswith('solicitud-') %}open{% endif %}>
       <summary>Solicitar más plazo</summary>
       <p class="suave">El encargado revisará tu pedido. Mientras tanto, el plazo actual sigue vigente.</p>
-      {% for d in prestamo.detalles if not d.fecha_devolucion and not d.fecha_regularizacion and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora and d.id_detalle not in detalles_con_pedido %}
+      {% for d in prestamo.detalles if not d.fecha_devolucion and not d.fecha_regularizacion and not d.ampliado and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora and d.id_detalle not in detalles_con_pedido %}
         {% set formulario_solicitud = 'solicitud-'~d.id_detalle %}
         <form method="post"
               id="{{ formulario_solicitud }}"
@@ -519,7 +564,7 @@
     <details class="panel">
       <summary>Ampliar plazo</summary>
       <p class="suave">Máximo: otro plazo permitido. Los préstamos por horas terminan al cierre.</p>
-      {% for d in prestamo.detalles if not d.fecha_devolucion and not d.fecha_regularizacion and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora %}
+      {% for d in prestamo.detalles if not d.fecha_devolucion and not d.fecha_regularizacion and not d.ampliado and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora %}
         {% set formulario_ampliacion = 'ampliacion-'~d.id_detalle %}
         <form method="post"
               id="{{ formulario_ampliacion }}"

@@ -5,6 +5,7 @@
 {% block titulo %}{{ 'Sanción #' ~ sancion.id_sancion if modo == 'detalle' else 'Sanciones' }} · UNSA{% endblock %}
 {% block contenido %}
   {% if modo == 'detalle' %}
+    {% set caso_propio = g.usuario.dni == sancion.dni_persona or sancion.participantes|selectattr('dni_persona','equalto',g.usuario.dni)|list %}
     <div class="cabecera">
       <h1>Sanción #{{ sancion.id_sancion }}</h1>
       <div>{{ estado(sancion.gravedad) }} {{ estado(sancion.estado) }}</div>
@@ -39,7 +40,8 @@
       {% if sancion.revision_administrador %}<p class="aviso" role="status">El periodo grave terminó sin regularización. El administrador debe revisar el caso; el bloqueo continúa.</p>{% endif %}
     </section>
     {% if sancion.estado == 'ACTIVA' %}
-      {% if not sancion.fecha_regularizacion and sancion.tipo != 'RETRASO' %}
+      {% if caso_propio %}<p class="aviso">Otro responsable autorizado debe revisar esta sanción.</p>{% endif %}
+      {% if not sancion.fecha_regularizacion and sancion.tipo != 'RETRASO' and (not caso_propio or sancion.tipo in ('PERDIDA', 'DANIO')) %}
         <section class="panel">
           <h2>Aceptar regularización</h2>
           <form method="post" class="formulario" action="{{ url_for('sanciones.regularizar_sancion', identificador=sancion.id_sancion) }}">
@@ -47,12 +49,18 @@
             <label>Forma de regularización
               <select name="tipo_regularizacion" required>
                 {% if sancion.tipo == 'PERDIDA' %}<option value="RECUPERACION">Recuperación del original en buen estado</option>{% endif %}
-                {% if sancion.tipo == 'DANIO' %}<option value="REPARACION">Reparación aceptada</option>{% endif %}
+                {% if sancion.tipo == 'DANIO' and not caso_propio %}<option value="REPARACION">Reparación aceptada</option>{% endif %}
                 {% if sancion.tipo in ('DANIO', 'PERDIDA') %}<option value="REPOSICION">Reposición equivalente aceptada</option>{% endif %}
                 {% if sancion.tipo in ('CUSTODIA', 'SALIDA_NO_AUTORIZADA') %}<option value="VERIFICACION">Devolución y custodia verificadas</option>{% endif %}
               </select>
             </label>
             <label>Observación de aceptación<textarea name="observacion" required maxlength="255"></textarea></label>
+            {% if sancion.tipo == 'PERDIDA' %}
+              <label>Código de inventario leído en el original (para recuperación)<input name="codigo_recibido" maxlength="40"></label>
+            {% endif %}
+            {% if caso_propio %}
+              <label>N.º de autorización para recibir un bien propio o su reposición<input name="autorizacion" type="number" min="1"></label>
+            {% endif %}
             {% if sancion.tipo in ('DANIO', 'PERDIDA') %}
               <details>
                 <summary>Datos del nuevo bien, solo para una reposición</summary>
@@ -68,7 +76,7 @@
           <p class="suave">La aceptación no acorta la sanción. Las leves y graves se cumplen automáticamente cuando terminan su periodo y el pendiente está regularizado.</p>
         </section>
       {% endif %}
-      <section class="panel">
+      {% if not caso_propio %}<section class="panel">
         <h2>Levantar sanción</h2>
         {% if not sancion.fecha_regularizacion %}
           <p>Primero debe registrarse la devolución o aceptarse la reparación o reposición. Si el bien está perdido y se recuperó dañado, registra su recepción en el préstamo.</p>
@@ -85,7 +93,8 @@
           </form>
         {% endif %}
       </section>
-      {% if sancion.gravedad != 'MUY_GRAVE' or g.usuario.rol == 'ADMINISTRADOR' %}
+      {% endif %}
+      {% if not caso_propio and (sancion.gravedad != 'MUY_GRAVE' or g.usuario.rol == 'ADMINISTRADOR') %}
         <details class="panel">
           <summary>Evaluar o elevar la gravedad</summary>
           <p>Una elevación inicia su nuevo periodo al confirmarse. No se duplica la sanción ni se reinicia el plazo por registrar otra causa del mismo nivel.</p>
@@ -98,6 +107,26 @@
         <p>{{ sancion.justificacion_levantamiento or 'Sin observación adicional.' }}</p>
         <p>{{ sancion.fecha_levantamiento|fecha }}</p>
       </section>
+    {% endif %}
+    {% if not caso_propio and g.usuario.rol == 'ADMINISTRADOR' and sancion.estado != 'ANULADA' %}
+      <details class="panel">
+        <summary>Anular sanción por error</summary>
+        <form method="post" class="formulario" action="{{ url_for('sanciones.anular_sancion', identificador=sancion.id_sancion) }}">
+          {{ csrf() }}
+          <label>Motivo de anulación<input name="motivo" required maxlength="255"></label>
+          <button>Anular sanción</button>
+        </form>
+      </details>
+    {% endif %}
+    {% if not caso_propio and g.usuario.rol == 'ADMINISTRADOR' and sancion.tipo == 'PERDIDA' and sancion.id_bien_reposicion and sancion.estado_bien == 'PERDIDO' and not sancion.fecha_recuperacion_original %}
+      <details class="panel">
+        <summary>Registrar recuperación del original</summary>
+        <form method="post" class="formulario" action="{{ url_for('sanciones.registrar_original_recuperado', identificador=sancion.id_sancion) }}">
+          {{ csrf() }}
+          <label>Cómo se recuperó el bien<input name="motivo" required maxlength="255"></label>
+          <button>Enviar original a revisión</button>
+        </form>
+      </details>
     {% endif %}
     <details class="panel"><summary>Historial de la sanción</summary>{{ historial(sancion.historial) }}</details>
     <div class="acciones"><a href="{{ prestamo_url }}">Volver al préstamo</a><a href="{{ url_for('sanciones.consultar_sanciones') }}">Ver sanciones</a></div>

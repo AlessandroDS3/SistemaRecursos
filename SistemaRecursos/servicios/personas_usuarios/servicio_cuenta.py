@@ -1,12 +1,13 @@
 from dominio.compartido.validacion import Conflicto, NoEncontrado, comprobar_version
 from werkzeug.security import check_password_hash, generate_password_hash
-from dominio.compartido.validacion import dni, entero
+from dominio.compartido.validacion import dni, entero, texto
 from dominio.gestion_personas_usuarios.contratos_personas_usuarios import IRepositorioCuenta
 from dominio.gestion_personas_usuarios.cuenta import (
     CuentaCreada,
     ESTADOS_CUENTA,
+    activacion_valida,
     base_nombre_usuario,
-    generar_clave_temporal,
+    generar_activacion,
     nombre_usuario_disponible,
     proteger_administradores,
     validar_clave,
@@ -53,6 +54,48 @@ class ServicioAplicacionCuenta:
                     'debe_cambiar_clave': False,
                 },
             )
+            operacion.cerrar_sesiones_de_cuenta(actor)
+
+    def activar_cuenta(self, usuario, codigo, nueva, confirmacion):
+        usuario = validar_nombre_usuario(usuario)
+        nueva = validar_clave(nueva)
+        if nueva != confirmacion:
+            raise ValueError('La nueva contraseña y su confirmación no coinciden.')
+        if nueva == codigo:
+            raise ValueError('Elige una contraseña diferente del código de activación.')
+        with self.repositorio.transaccion() as op:
+            identificador = op.consultar_id_por_nombre_usuario(usuario)
+            cuenta = op.consultar_cuenta_para_cambiar_clave(identificador) if identificador else None
+            if (cuenta is None or cuenta['estado_cuenta'] != 'ACTIVA' or cuenta['estado_persona'] != 'ACTIVA'
+                    or not activacion_valida(cuenta['contrasena_hash'], codigo, op.consultar_fecha_actual())):
+                raise ValueError('El usuario o el código es incorrecto, venció o ya fue utilizado.')
+            op.actualizar_cuenta(identificador, dict(contrasena_hash=generate_password_hash(nueva, method='scrypt'),
+                                                   debe_cambiar_clave=False))
+            op.cerrar_sesiones_de_cuenta(identificador)
+            op.registrar_historial_estado('CUENTA', identificador, 'PENDIENTE', 'ACTIVADA',
+                                         cuenta['dni_persona'], 'Contraseña establecida.')
+
+    def restablecer_clave(self, documento, motivo, version_recibida, actor):
+        documento, actor = dni(documento), entero(actor)
+        motivo = texto(motivo, 'Motivo del restablecimiento', 255, True)
+        with self.repositorio.transaccion() as op:
+            cuentas = op.consultar_cuentas_para_actualizar()
+            administrador = exigir_permiso(op.consultar_cuenta_actor(actor), 'USUARIOS_GESTIONAR')
+            cuenta = next((fila for fila in cuentas if fila['dni_persona'] == documento), None)
+            if cuenta is None:
+                raise NoEncontrado('Cuenta inexistente.')
+            if administrador['rol'] != 'ADMINISTRADOR' or cuenta['rol'] == 'ADMINISTRADOR':
+                raise PermissionError('El restablecimiento está disponible para cuentas de usuario y encargado.')
+            if cuenta['estado_cuenta'] != 'ACTIVA' or cuenta['estado_persona'] != 'ACTIVA':
+                raise Conflicto('La cuenta y la persona deben estar activas para restablecer el acceso.')
+            comprobar_version(version_recibida, version_cuenta(cuenta))
+            identificador = cuenta['id_usuario']
+            codigo, huella = generar_activacion(op.consultar_fecha_actual())
+            op.actualizar_cuenta(identificador, dict(contrasena_hash=huella, debe_cambiar_clave=True))
+            op.cerrar_sesiones_de_cuenta(identificador)
+            op.registrar_historial_estado('CUENTA', identificador, None, 'RESTABLECIDA',
+                                         administrador['dni_persona'], motivo)
+            return CuentaCreada(identificador, cuenta['nombre_usuario'], codigo)
 
     def consultar_cuenta(self, documento: str) -> dict:
         cuenta = self.repositorio.consultar_cuenta(dni(documento))
@@ -70,7 +113,7 @@ class ServicioAplicacionCuenta:
         try:
             nombre = self._proponer_nombre(self.repositorio, persona)
         except ValueError:
-            nombre = ''
+            return dict(nombre_usuario='', requiere_nombre=True)
         return dict(nombre_usuario=nombre)
 
     def _proponer_nombre(self, repositorio, persona):
@@ -104,33 +147,31 @@ class ServicioAplicacionCuenta:
             )
             if operacion.consultar_id_por_nombre_usuario(nombre) is not None:
                 raise Conflicto('El nombre de usuario ya está registrado.')
-            clave = generar_clave_temporal()
+            codigo, huella = generar_activacion(operacion.consultar_fecha_actual())
             identificador = operacion.registrar_cuenta(
                 documento,
                 nombre,
-                generate_password_hash(clave, method='scrypt'),
+                huella,
             )
-            return CuentaCreada(identificador, nombre, clave)
+            return CuentaCreada(identificador, nombre, codigo)
 
     def registrar_primer_administrador(self, datos: dict, nombre: str) -> CuentaCreada:
         """Inicialización local de una base que aún no tiene cuentas."""
         persona = Persona.desde_datos(dict(datos, tipo='ADMINISTRATIVO', estado='ACTIVA'))
         nombre = validar_nombre_usuario(nombre)
-        clave = generar_clave_temporal()
         with self.repositorio.transaccion() as operacion:
+            codigo, huella = generar_activacion(operacion.consultar_fecha_actual())
             identificador = operacion.registrar_primera_cuenta_administradora(
-                persona, nombre, generate_password_hash(clave, method='scrypt'),
+                persona, nombre, huella,
             )
-        return CuentaCreada(identificador, nombre, clave)
+        return CuentaCreada(identificador, nombre, codigo)
 
     def _preparar_cambios_cuenta(self, datos: dict) -> dict:
-        clave = validar_clave(datos.get('clave', ''), permitir_vacia=True)
+        if datos.get('clave') or {'contrasena_hash', 'debe_cambiar_clave'} & datos.keys():
+            raise ValueError('Usa el formulario de restablecimiento para cambiar las credenciales.')
         cambios: dict = {}
         if 'nombre_usuario' in datos:
             cambios['nombre_usuario'] = validar_nombre_usuario(datos['nombre_usuario'])
-        if clave:
-            cambios['contrasena_hash'] = generate_password_hash(clave, method='scrypt')
-            cambios['debe_cambiar_clave'] = True
         if 'estado_cuenta' in datos:
             if datos['estado_cuenta'] not in ESTADOS_CUENTA:
                 raise ValueError('Estado de cuenta inválido.')
@@ -145,10 +186,10 @@ class ServicioAplicacionCuenta:
         documento, actor = dni(documento), entero(actor)
         cambios = self._preparar_cambios_cuenta(datos)
         with self.repositorio.transaccion() as operacion:
+            cuentas = operacion.consultar_cuentas_para_actualizar()
             cuenta = exigir_permiso(operacion.consultar_cuenta_actor(actor), 'USUARIOS_GESTIONAR')
             if 'rol' in cambios:
                 exigir_permiso(cuenta, 'ROLES_GESTIONAR')
-            cuentas = operacion.consultar_cuentas_para_actualizar()
             actual = next((c for c in cuentas if c['dni_persona'] == documento), None)
             if actual is None:
                 raise NoEncontrado('Cuenta inexistente.')
@@ -172,7 +213,11 @@ class ServicioAplicacionCuenta:
                     'Solo un administrador puede editar otra cuenta administradora.'
                 )
             nueva = dict(actual, **cambios)
+            if actual['rol'] != 'ADMINISTRADOR' and nueva['rol'] == 'ADMINISTRADOR' and actual['debe_cambiar_clave']:
+                raise ValueError('La persona debe establecer su contraseña antes de recibir el rol de administrador.')
             if cambios.get('estado_cuenta') == 'ACTIVA' and actual['estado_persona'] != 'ACTIVA':
                 raise ValueError('La persona debe estar activa para habilitar la cuenta.')
             proteger_administradores(cuentas, actual, nueva, actor)
             operacion.actualizar_cuenta(actual['id_usuario'], cambios)
+            if any(actual[campo] != nueva[campo] for campo in ('rol', 'estado_cuenta')):
+                operacion.cerrar_sesiones_de_cuenta(actual['id_usuario'])

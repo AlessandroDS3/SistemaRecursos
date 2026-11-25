@@ -70,6 +70,10 @@ class ServicioAplicacionRecurso:
             recurso = Recurso(**campos_recurso, id_recurso=identificador)
             if operacion.consultar_categoria(recurso.id_categoria) is None:
                 raise ValueError('Categoría inexistente.')
+            if actual and recurso.id_categoria != actual['id_categoria'] and (
+                operacion.existe_prestamo_pendiente_del_recurso(identificador)
+            ):
+                raise Conflicto('El recurso conserva su categoría mientras tenga bienes pendientes de devolución o regularización.')
             id_recurso_guardado = operacion.guardar_recurso(recurso)
             if identificador is None and texto(
                 datos.get('codigo_inventario'), 'Código de inventario', 40

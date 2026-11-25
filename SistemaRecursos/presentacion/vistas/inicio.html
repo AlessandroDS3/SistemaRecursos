@@ -12,7 +12,7 @@
         <strong>La revisión automática de vencimientos no se está ejecutando.</strong>
         Última ejecución correcta: {{ procesador.ultima_ejecucion_correcta|fecha if procesador.ultima_ejecucion_correcta else 'nunca' }}.
         {% if procesador.ultimo_error %}<br><small>Último error ({{ procesador.ultimo_error_fecha|fecha }}): {{ procesador.ultimo_error }}</small>{% endif %}
-        <br><small>Inicia el sistema con run.ps1 para que las reservas y sanciones se actualicen solas.</small>
+        <br><small>Revisa que el procesador esté activo y conectado a MySQL.</small>
       </div>
     </div>
   {% endif %}

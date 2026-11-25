@@ -31,8 +31,8 @@ def main(argv=None):
         return 1
 
     print(f'Cuenta administradora creada: {cuenta.nombre_usuario}')
-    print(f'Contraseña temporal: {cuenta.clave_temporal}')
-    print('El sistema pedirá cambiarla al iniciar sesión.')
+    print(f'Código de activación: {cuenta.codigo_activacion}')
+    print('Usa el usuario y el código en /cuentas/activar dentro de 24 horas para elegir la contraseña.')
     return 0
 
 

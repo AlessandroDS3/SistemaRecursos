@@ -1,9 +1,11 @@
 import logging
 from secrets import token_urlsafe
+import unicodedata
 
 from werkzeug.security import check_password_hash, generate_password_hash
 from dominio.compartido.validacion import entero
 from dominio.gestion_personas_usuarios.contratos_personas_usuarios import IRepositorioAcceso
+from dominio.gestion_personas_usuarios.cuenta import PREFIJO_ACTIVACION
 from dominio.gestion_personas_usuarios.sesion import (
     INTERVALO_ACTIVIDAD,
     AccesoBloqueado,
@@ -35,7 +37,8 @@ class ServicioAplicacionAcceso:
             or len(clave) > 256
         ):
             return None
-        clave_usuario = ('usuario', nombre.strip().lower())
+        clave_usuario = ('usuario', ''.join(c for c in unicodedata.normalize('NFKD', nombre.strip().casefold())
+                                            if not unicodedata.combining(c)))
         clave_origen = ('origen', origen or 'desconocido')
         minutos = max(
             self.limitador_usuario.minutos_bloqueo(clave_usuario),
@@ -44,16 +47,17 @@ class ServicioAplicacionAcceso:
         if minutos:
             raise AccesoBloqueado(minutos)
         cuenta_acceso = self.repositorio.consultar_cuenta_por_usuario(nombre.strip())
-        hash_a_comprobar = cuenta_acceso.contrasena_hash if cuenta_acceso else self._hash_ausente
+        activada = cuenta_acceso and not cuenta_acceso.contrasena_hash.startswith(PREFIJO_ACTIVACION)
+        hash_a_comprobar = cuenta_acceso.contrasena_hash if activada else self._hash_ausente
         try:
             correcta = check_password_hash(hash_a_comprobar, clave)
         except (ValueError, TypeError):
             correcta = False
-        if cuenta_acceso is None or not correcta or not cuenta_acceso.puede_acceder():
+        if not activada or not correcta or not cuenta_acceso.puede_acceder():
             self.limitador_usuario.registrar_fallo(clave_usuario)
             self.limitador_origen.registrar_fallo(clave_origen)
             # Se registra el intento sin la contraseña.
-            registro.warning('Acceso fallido para %r desde %s', nombre.strip()[:50], clave_origen[1])
+            registro.warning('Acceso fallido desde %s', clave_origen[1])
             return None
         self.limitador_usuario.limpiar(clave_usuario)
         self.repositorio.registrar_acceso(cuenta_acceso.id_usuario)

@@ -2,6 +2,7 @@ from dataclasses import asdict
 
 from mysql.connector import IntegrityError
 
+from dominio.compartido.validacion import Conflicto
 from dominio.gestion_recursos.bien_material import generar_identificador_sistema
 from repositorio.base_datos.base_sql import RepositorioSQL
 
@@ -45,6 +46,11 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
     def guardar_bien_material(self, bien) -> int:
         datos = asdict(bien)
         identificador = datos.pop('id_bien')
+        if bien.numero_serie:
+            recurso = self.consultar_sql('SELECT marca,modelo FROM recurso WHERE id_recurso=%s FOR SHARE',
+                                         (bien.id_recurso,), una=True)
+            if recurso and recurso['marca'] and recurso['modelo']:
+                self.validar_serie_por_modelo(bien.numero_serie, recurso['marca'], recurso['modelo'], identificador)
         if identificador is None:
             bien.id_bien = self._insertar_con_identificador(datos)
         else:
@@ -55,6 +61,17 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
                 (*datos.values(), identificador),
             )
         return bien.id_bien
+
+    def validar_serie_por_modelo(self, serie, marca, modelo, bien=None):
+        self.consultar_sql('SELECT id_recurso FROM recurso WHERE marca=%s AND modelo=%s '
+                           'ORDER BY id_recurso FOR UPDATE', (marca, modelo))
+        repetido = self.consultar_sql(
+            '''SELECT b.id_bien FROM bien_material b JOIN recurso r ON r.id_recurso=b.id_recurso
+            WHERE r.marca=%s AND r.modelo=%s AND b.numero_serie=%s AND NOT (b.id_bien<=>%s)
+            LIMIT 1 FOR SHARE''', (marca, modelo, serie, bien), una=True,
+        )
+        if repetido:
+            raise Conflicto('Ese número de serie ya está registrado para la misma marca y modelo.')
 
     def _insertar_con_identificador(self, datos: dict) -> int:
         """Genera el identificador en el servidor; una colisión reintenta con otro valor.

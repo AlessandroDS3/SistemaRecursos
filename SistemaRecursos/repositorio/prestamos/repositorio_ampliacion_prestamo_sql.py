@@ -1,10 +1,19 @@
 from dominio.compartido.validacion import Conflicto
 from dominio.gestion_prestamos.ampliacion_prestamo import ContextoAmpliacion
 from repositorio.base_datos.base_sql import RepositorioSQL
+from repositorio.personas_usuarios.repositorio_persona_sql import CONSULTA as PERSONAS
+from repositorio.prestamos.repositorio_prestamo_sql import RepositorioPrestamoSQL
 
 
 class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
     def consultar_contexto_ampliacion_prestamo(self, prestamo, detalle) -> ContextoAmpliacion:
+        recurso = self.consultar_sql(
+            '''SELECT b.id_recurso FROM detalle_prestamo d JOIN bien_material b ON b.id_bien=d.id_bien
+            WHERE d.id_prestamo=%s AND d.id_detalle=%s''', (prestamo, detalle), una=True,
+        )
+        if recurso:
+            self.consultar_sql('SELECT id_recurso FROM recurso WHERE id_recurso=%s FOR UPDATE',
+                               (recurso['id_recurso'],), una=True)
         cabecera = self.consultar_sql(
             'SELECT * FROM prestamo WHERE id_prestamo=%s FOR UPDATE', (prestamo,), una=True
         )
@@ -14,7 +23,7 @@ class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
         if cabecera is None:
             return contexto
         fila = self.consultar_sql(
-            '''SELECT d.*,b.estado AS estado_bien FROM detalle_prestamo d
+            '''SELECT d.*,b.estado AS estado_bien,b.id_recurso FROM detalle_prestamo d
             JOIN bien_material b ON b.id_bien=d.id_bien WHERE d.id_prestamo=%s AND d.id_detalle=%s FOR UPDATE''',
             (prestamo, detalle),
             una=True,
@@ -35,6 +44,21 @@ class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
         contexto['politica'] = politica
         contexto['horario'] = horario
         return contexto
+
+    def consultar_restricciones_ampliacion(self, prestamo, recurso) -> dict:
+        documentos = {prestamo['dni_persona']}
+        documentos.update(fila['dni_persona'] for fila in self.consultar_sql(
+            'SELECT dni_persona FROM participante_prestamo WHERE id_prestamo=%s FOR SHARE',
+            (prestamo['id_prestamo'],),
+        ))
+        documentos = tuple(sorted(documentos))
+        marcas = ','.join(['%s'] * len(documentos))
+        personas = self.consultar_sql(PERSONAS + f' WHERE p.dni IN ({marcas}) ORDER BY p.dni FOR SHARE',
+                                     documentos)
+        prestamos = RepositorioPrestamoSQL(self.conexion, self._cursor)
+        disponibles, en_espera = prestamos.consultar_balance_cola(recurso)
+        return dict(personas=personas, sancion=prestamos.sanciones.existen_sanciones_activas(documentos),
+                    reservas_sin_bien=en_espera > disponibles)
 
     # Solicitudes del usuario (AMP-01)
 
@@ -91,9 +115,9 @@ class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
 
     def actualizar_plazo_prestamo(self, detalle, anterior, nueva):
         self.ejecutar(
-            '''UPDATE detalle_prestamo SET fecha_limite_devolucion=%s
+            '''UPDATE detalle_prestamo SET fecha_limite_devolucion=%s,ampliado=TRUE
             WHERE id_detalle=%s AND fecha_limite_devolucion=%s
-            AND fecha_devolucion IS NULL AND fecha_regularizacion IS NULL''',
+            AND fecha_devolucion IS NULL AND fecha_regularizacion IS NULL AND ampliado=FALSE''',
             (nueva, detalle, anterior),
         )
         if self._cursor.rowcount != 1:

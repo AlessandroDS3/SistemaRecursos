@@ -42,6 +42,9 @@ class ServicioAplicacionPersona:
     def registrar_persona(self, datos: dict, actor: int) -> str:
         return self._guardar_persona(datos, actor)
 
+    def consultar_cambios_tipo_persona(self, documento: str) -> list[dict]:
+        return self.repositorio.consultar_cambios_tipo_persona(dni(documento))
+
     def actualizar_persona(self, documento: str, datos: dict, actor: int) -> str:
         return self._guardar_persona(datos, actor, dni(documento))
 
@@ -62,11 +65,11 @@ class ServicioAplicacionPersona:
                 persona.estado != persona_anterior.estado or persona.dni != documento_anterior
             )
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.consultar_cuenta_actor(actor), 'PERSONAS_GESTIONAR')
+            cuentas = operacion.consultar_cuentas_para_actualizar() if bloquear_cuentas else []
+            actor_cuenta = exigir_permiso(operacion.consultar_cuenta_actor(actor), 'PERSONAS_GESTIONAR')
             if documento_anterior is not None:
                 # Estado y DNI conservan el orden cuentas -> persona; los demás cambios
                 # bloquean únicamente la ficha y sus datos institucionales.
-                cuentas = operacion.consultar_cuentas_para_actualizar() if bloquear_cuentas else []
                 anterior = operacion.consultar_persona(documento_anterior, bloquear=True)
                 if anterior is None:
                     raise NoEncontrado('Persona inexistente.')
@@ -74,9 +77,12 @@ class ServicioAplicacionPersona:
                     datos.get('version'), version(Persona.desde_datos(anterior).datos())
                 )
                 if persona.tipo != anterior['tipo']:
-                    raise ValueError(
-                        'El tipo institucional de una ficha registrada no se cambia en esta operación.'
-                    )
+                    if actor_cuenta['rol'] != 'ADMINISTRADOR':
+                        raise PermissionError('Solo el administrador puede cambiar el tipo de persona.')
+                    if persona.dni != documento_anterior:
+                        raise ValueError('Conserva el DNI al cambiar el tipo de persona.')
+                    motivo = texto(datos.get('motivo_cambio_tipo'), 'Motivo del cambio de tipo', 255, True)
+                    operacion.cambiar_tipo_persona(anterior, persona, motivo, actor_cuenta['dni_persona'])
                 cuenta = next((c for c in cuentas if c['dni_persona'] == documento_anterior), None)
                 if cuenta:
                     proteger_administradores(
@@ -84,6 +90,7 @@ class ServicioAplicacionPersona:
                     )
                     if cuenta['id_usuario'] == actor and persona.estado != 'ACTIVA':
                         raise ValueError('No puedes desactivar tu propia persona.')
+                    operacion.cerrar_sesiones_de_cuenta(cuenta['id_usuario'])
             operacion.guardar_persona(persona, documento_anterior)
         return persona.dni
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Final, Mapping, TypedDict
 
 from dominio.compartido.validacion import Conflicto, NoEncontrado, entero, fecha_local, texto
@@ -14,6 +14,7 @@ RECHAZADA: Final = 'RECHAZADA'
 ESTADOS_RESERVA = (EN_ESPERA, LISTA_PARA_RETIRO, ATENDIDA, CANCELADA, EXPIRADA, RECHAZADA)
 ESTADOS_PENDIENTES = (EN_ESPERA, LISTA_PARA_RETIRO)
 FILTRO_PENDIENTES = 'PENDIENTES'
+ANTICIPACION_MAXIMA = timedelta(days=7)
 
 ESTADOS_POR_ACCION = {
     'cancelar': ESTADOS_PENDIENTES,
@@ -86,6 +87,8 @@ def nueva_reserva(datos: Mapping[str, str], documento: str, ahora: datetime) -> 
     requerida = fecha_local(datos.get('fecha_requerida'))
     if requerida <= ahora:
         raise ValueError('La reserva debe indicar una fecha futura.')
+    if requerida - ahora > ANTICIPACION_MAXIMA:
+        raise ValueError('Puedes reservar con un máximo de 7 días de anticipación.')
     return {
         'dni_persona': documento,
         'id_recurso': entero(datos.get('id_recurso'), 'Recurso'),
@@ -133,6 +136,8 @@ def validar_accion(
     if reserva['estado'] not in esperados:
         raise Conflicto('El estado de la reserva no permite esta acción.')
 
+    if accion == 'expirar' and ventana_atencion_reserva(reserva, ahora) != 'VENCIDA':
+        raise Conflicto('La reserva solo puede marcarse vencida después de su plazo.')
     if accion not in ('preparar', 'entregar'):
         return
 

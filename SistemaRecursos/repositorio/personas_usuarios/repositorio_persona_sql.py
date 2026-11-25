@@ -1,6 +1,6 @@
 from dominio.gestion_personas_usuarios.persona import CAMPOS_TIPO
 from repositorio.base_datos.base_sql import RepositorioSQL
-from repositorio.personas_usuarios.repositorio_cuenta_sql import cargar_cuentas_para_actualizar
+from repositorio.personas_usuarios.repositorio_cuenta_sql import cargar_cuentas_para_actualizar, cerrar_sesiones_de_cuenta
 
 TABLAS_TIPO = {'ESTUDIANTE': 'estudiante', 'DOCENTE': 'docente', 'ADMINISTRATIVO': 'administrativo'}
 CONSULTA = '''SELECT p.*,e.cui,e.ciclo,e.estado_matricula,d.codigo_docente,d.departamento_academico,
@@ -90,6 +90,30 @@ class RepositorioPersonaSQL(RepositorioSQL):
 
     def consultar_cuentas_para_actualizar(self) -> list[dict]:
         return cargar_cuentas_para_actualizar(self)
+
+    def cerrar_sesiones_de_cuenta(self, identificador):
+        cerrar_sesiones_de_cuenta(self, identificador)
+
+    def cambiar_tipo_persona(self, anterior, persona, motivo, responsable):
+        tipo_anterior = anterior['tipo']
+        if tipo_anterior in TABLAS_TIPO:
+            self.ejecutar(f'DELETE FROM {TABLAS_TIPO[tipo_anterior]} WHERE dni=%s', (persona.dni,))
+        self.insertar(TABLAS_TIPO[persona.tipo], dict(
+            dni=persona.dni, **{campo: getattr(persona, campo) for campo in CAMPOS_TIPO[persona.tipo]}
+        ))
+        self.registrar_historial_estado(
+            'TIPO_PERSONA', None, tipo_anterior, persona.tipo, responsable, motivo,
+            dni_objetivo=persona.dni,
+            datos={'datos_institucionales': {campo: anterior[campo] for campo in CAMPOS_TIPO.get(tipo_anterior, ())}},
+        )
+
+    def consultar_cambios_tipo_persona(self, documento):
+        return self.consultar_sql(
+            '''SELECT estado_anterior AS tipo_anterior,estado_nuevo AS tipo_nuevo,
+            observacion AS motivo,fecha,dni_responsable FROM historial_estado
+            WHERE entidad='TIPO_PERSONA' AND dni_objetivo=%s ORDER BY fecha DESC,id_historial_estado DESC''',
+            (documento,),
+        )
 
     def buscar_personas(self, termino: str) -> list[dict]:
         return self.consultar_sql(

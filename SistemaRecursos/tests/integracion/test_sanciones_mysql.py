@@ -97,7 +97,7 @@ class SancionesMySQLTest(BaseMySQLTest):
         return self.repo.consultar_sanciones()[0]
 
     def devolver(self, condicion='BUENO'):
-        self.prestamos.registrar_devolucion(1, dict(detalles=['1'], condicion_1=condicion,
+        self.prestamos.registrar_devolucion(1, dict(detalles=['1'], condicion_1=condicion, codigo_recibido_1='ORIGINAL',
                                                   observacion_1='Verificación física del bien'), 2)
 
     def perder(self):
@@ -288,18 +288,51 @@ class SancionesMySQLTest(BaseMySQLTest):
         self.reponer()
         self.assertEqual(self.prestamos_repo.consultar_prestamo(1)['estado_actual'], 'PARCIALMENTE_DEVUELTO')
         self.assertEqual(self.prestamos_repo.consultar_resumen_prestamos()['prestamos_pendientes'], 1)
-        self.prestamos.registrar_devolucion(1, dict(detalles=['2'], condicion_2='BUENO'), 2)
+        self.prestamos.registrar_devolucion(1, dict(detalles=['2'], condicion_2='BUENO', codigo_recibido_2='OTRO'), 2)
         self.assertEqual(self.prestamos_repo.consultar_prestamo(1)['estado_actual'], 'REGULARIZADO')
 
     def test_recuperacion_original_conserva_el_periodo_grave(self):
         self.perder()
         fin = self.sancion()['fecha_fin']
         self.servicio.regularizar_sancion(self.sancion()['id_sancion'], dict(
-            tipo_regularizacion='RECUPERACION', observacion='Original recuperado en buen estado'), 2)
+            tipo_regularizacion='RECUPERACION', codigo_recibido='ORIGINAL', observacion='Original recuperado en buen estado'), 2)
         s = self.sancion()
         self.assertIsNotNone(s['fecha_devolucion'])
         self.assertEqual((s['tipo_regularizacion'], s['estado'], s['fecha_fin']), ('RECUPERACION', 'ACTIVA', fin))
         self.assertEqual(s['estado_bien'], 'DISPONIBLE')
+
+    def test_admin_anula_sancion_sin_borrar_el_pendiente(self):
+        self.perder()
+        sancion = self.sancion()['id_sancion']
+        with self.assertRaises(PermissionError):
+            self.servicio.anular_sancion(sancion, 'Aplicada por error', 2)
+        self.servicio.anular_sancion(sancion, 'Aplicada por error', 1)
+        self.assertEqual(self.sancion()['estado'], 'ANULADA')
+        self.assertEqual(self.prestamos_repo.consultar_resumen_prestamos()['prestamos_pendientes'], 1)
+        self.devolver('DANADO')
+        filas = {s['tipo']: s['estado'] for s in self.repo.consultar_sanciones()}
+        self.assertEqual(filas, {'DANIO': 'ACTIVA', 'PERDIDA': 'ANULADA'})
+
+    def test_encargado_integrante_no_puede_adjudicar_sancion_propia(self):
+        self.consulta("INSERT INTO participante_prestamo(id_prestamo,dni_persona) VALUES(1,'10000002')")
+        with self.assertRaises(PermissionError):
+            self.perder()
+        self.prestamos.registrar_perdida_bien_material(1, 1, 'Pérdida comprobada', 1)
+        sancion = self.sancion()['id_sancion']
+        with self.assertRaises(PermissionError):
+            self.servicio.levantar_sancion(sancion, 'Intento de levantamiento propio', 2)
+        self.assertEqual(self.sancion()['estado'], 'ACTIVA')
+
+    def test_original_recuperado_despues_de_reponer_va_a_revision(self):
+        self.perder()
+        self.reponer()
+        anterior = self.sancion()
+        self.servicio.registrar_original_recuperado(anterior['id_sancion'], 'Encontrado en almacén', 1)
+        sancion = self.sancion()
+        self.assertEqual(sancion['id_bien_reposicion'], anterior['id_bien_reposicion'])
+        self.assertEqual(sancion['estado_bien'], 'MANTENIMIENTO')
+        self.assertIsNotNone(sancion['fecha_recuperacion_original'])
+        self.assertEqual(self.prestamos_repo.consultar_prestamo(1)['estado_actual'], 'REGULARIZADO')
 
     def test_plazo_cumplido_sin_reponer_no_libera_y_reposicion_posterior_cumple(self):
         self.perder()
@@ -470,17 +503,23 @@ class AltaInicialMySQLTest(BaseMySQLTest):
             self.assertEqual(main(args), 0)
             args[1] = '10000002'
             self.assertEqual(main(args), 1)
-        clave = salida.getvalue().splitlines()[1].split(': ', 1)[1]
+        codigo = salida.getvalue().splitlines()[1].split(': ', 1)[1]
         self.assertEqual(self.consulta('SELECT dni FROM persona'), [{'dni': '10000001'}])
         with patch('app.clave_local', return_value='prueba-alta-inicial'):
             app = create_app(dict(TESTING=True, MYSQL_CONFIG=self.config))
         cliente = app.test_client()
-        self.assertEqual(cliente.get('/login').status_code, 200)
+        self.assertEqual(cliente.get('/cuentas/activar').status_code, 200)
         with cliente.session_transaction() as sesion:
             csrf = sesion['csrf']
-        respuesta = cliente.post('/login', data=dict(csrf_token=csrf, usuario='ana', clave=clave))
+        clave = 'UnaClaveNueva2026!'
+        respuesta = cliente.post('/cuentas/activar', data=dict(csrf_token=csrf, usuario='ana', codigo=codigo,
+                                                              clave_nueva=clave, confirmacion=clave))
         self.assertEqual(respuesta.status_code, 302)
-        self.assertEqual(respuesta.location, '/cuentas/mi-contrasena')
+        self.assertEqual(respuesta.location, '/login')
+        cliente.get('/login')
+        with cliente.session_transaction() as sesion:
+            csrf = sesion['csrf']
+        self.assertEqual(cliente.post('/login', data=dict(csrf_token=csrf, usuario='ana', clave=clave)).location, '/')
         self.assertEqual(self.consulta('SELECT rol FROM usuario_sistema'), [{'rol': 'ADMINISTRADOR'}])
 
 

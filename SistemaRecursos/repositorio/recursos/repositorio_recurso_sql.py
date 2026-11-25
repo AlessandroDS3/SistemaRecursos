@@ -58,10 +58,16 @@ class RepositorioRecursoSQL(RepositorioSQL):
         if identificador is None:
             recurso.id_recurso = self.insertar('recurso', datos)
         else:
+            actual = self.consultar_recurso(identificador, bloquear=True)
             self.ejecutar(
                 'UPDATE recurso SET ' + ','.join(c + '=%s' for c in datos) + ' WHERE id_recurso=%s',
                 (*datos.values(), identificador),
             )
+            if recurso.marca and recurso.modelo and (recurso.marca, recurso.modelo) != (actual['marca'], actual['modelo']):
+                inventario = RepositorioBienMaterialSQL(self.conexion, self._cursor)
+                for bien in self.consultar_sql('''SELECT id_bien,numero_serie FROM bien_material
+                        WHERE id_recurso=%s AND numero_serie<>'' FOR SHARE''', (identificador,)):
+                    inventario.validar_serie_por_modelo(bien['numero_serie'], recurso.marca, recurso.modelo, bien['id_bien'])
         return recurso.id_recurso
 
     def guardar_bien_material(self, bien) -> int:
@@ -81,6 +87,14 @@ class RepositorioRecursoSQL(RepositorioSQL):
             relacion: self.consultar_sql(sql, (identificador,), una=True) is not None
             for relacion, sql in consultas.items()
         }
+
+    def existe_prestamo_pendiente_del_recurso(self, identificador: int) -> bool:
+        return self.consultar_sql(
+            '''SELECT d.id_detalle FROM bien_material b JOIN detalle_prestamo d ON d.id_bien=b.id_bien
+            WHERE b.id_recurso=%s AND d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL
+            LIMIT 1 FOR SHARE''',
+            (identificador,), una=True,
+        ) is not None
 
     def eliminar_recurso(self, identificador: int) -> None:
         self.ejecutar('DELETE FROM recurso WHERE id_recurso=%s', (identificador,))

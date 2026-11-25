@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from dominio.compartido.validacion import fecha_local
-from dominio.gestion_control.politica_prestamo import ConfiguracionReservas, HorarioAtencion
+from dominio.gestion_control.politica_prestamo import ConfiguracionReservas, HorarioAtencion, PoliticaPrestamo
 from servicios.prestamos.servicio_reserva import ServicioAplicacionReserva
 
 
@@ -60,6 +60,11 @@ class CierreReservaTest(unittest.TestCase):
 
 
 class FechasReservaTest(unittest.TestCase):
+    def test_plazo_en_dias_vence_el_siguiente_dia_de_atencion(self):
+        politica = PoliticaPrestamo(tipo_persona='ESTUDIANTE', id_categoria=1, plazo_maximo=1, unidad_plazo='DIAS')
+        entrega = fecha_local('2026-11-27T10:00')
+        self.assertEqual(politica.vencimiento(entrega, HorarioAtencion()), fecha_local('2026-11-30T10:00'))
+
     def test_horario_valida_el_dia_y_las_horas_en_lima(self):
         horario = HorarioAtencion()
         for fecha in ('2026-11-28T10:00', '2026-11-27T16:00', '2026-11-27T07:59'):

@@ -5,7 +5,7 @@ from dominio.compartido.validacion import Conflicto, NoEncontrado, dni, entero, 
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 from dominio.gestion_control.politica_prestamo import ConfiguracionReservas, HorarioAtencion
 from dominio.gestion_prestamos.contratos_prestamos import IRepositorioReserva
-from dominio.gestion_prestamos.prestamo import SolicitudPrestamo
+from dominio.gestion_prestamos.prestamo import SolicitudPrestamo, validar_cupo_articulos
 from dominio.gestion_prestamos.reserva import (
     ATENDIDA,
     CambiosReserva,
@@ -79,6 +79,8 @@ class ServicioAplicacionReserva:
             reserva = nueva_reserva(datos, cuenta['dni_persona'], op.consultar_fecha_actual())
             contexto = op.consultar_contexto_reserva(reserva['dni_persona'], reserva['id_recurso'])
             validar_solicitud(reserva, contexto, comprobar_duplicada=True)
+            persona = contexto['persona']
+            validar_cupo_articulos(persona, **op.prestamos.consultar_cupo_persona(persona))
             configuracion = self._consultar_configuracion_general(op)
             HorarioAtencion.desde_datos(configuracion).cierre(reserva['fecha_requerida'])
             reserva['fecha_limite_vencimiento'] = self._plazos_reserva(configuracion).vencimiento(
@@ -136,10 +138,10 @@ class ServicioAplicacionReserva:
     def _preparar_reserva(
         self, op: IRepositorioReserva, reserva: DetalleReserva, cuenta: dict, ahora: datetime
     ) -> tuple[CambiosReserva, str]:
-        validar_solicitud(
-            reserva,
-            op.consultar_contexto_reserva(reserva['dni_persona'], reserva['id_recurso']),
-        )
+        contexto = op.consultar_contexto_reserva(reserva['dni_persona'], reserva['id_recurso'])
+        validar_solicitud(reserva, contexto)
+        persona = contexto['persona']
+        validar_cupo_articulos(persona, **op.prestamos.consultar_cupo_persona(persona, reserva['id_reserva']))
         primera = op.consultar_primera_reserva_en_espera(reserva['id_recurso'], ahora)
         if primera is None or primera['id_reserva'] != reserva['id_reserva']:
             raise Conflicto('Atiende primero la reserva anterior de este recurso.')
@@ -179,7 +181,7 @@ class ServicioAplicacionReserva:
             salida_solicitada=bool(reserva['salida_solicitada']),
         )
         prestamo = ServicioAplicacionPrestamo.registrar_prestamo_en_operacion(
-            op.prestamos, solicitud, bien
+            op.prestamos, solicitud, bien, reserva['id_reserva'], codigo=datos.get('autorizacion')
         )
         return (
             {'estado': ATENDIDA, 'id_prestamo_ref': prestamo},
@@ -194,7 +196,10 @@ class ServicioAplicacionReserva:
         accion: str,
         datos: Mapping[str, str],
     ) -> tuple[CambiosReserva, str]:
-        nota = texto(datos.get('motivo'), 'Motivo', 255, accion in ('rechazar', 'expirar'))
+        no_retirado = accion == 'expirar' and reserva['estado'] == LISTA_PARA_RETIRO
+        nota = texto(datos.get('motivo'), 'Motivo', 220 if no_retirado else 255, accion in ('rechazar', 'expirar'))
+        if no_retirado:
+            nota = f'No retiró el bien preparado. {nota}'
         self._liberar_bien_reservado(op, reserva, cuenta['dni_persona'])
         # Liberar el inventario no borra qué bien se preparó para esta reserva.
         return {'estado': ESTADOS_CIERRE[accion]}, nota
@@ -215,6 +220,7 @@ class ServicioAplicacionReserva:
                 raise NoEncontrado(MENSAJE_RESERVA_INEXISTENTE)
             # Un recurso serializa la selección de la cola y de sus ejemplares.
             op.bloquear_recurso(reserva['id_recurso'])
+            op.bloquear_persona(reserva['dni_persona'])
             reserva = op.consultar_reserva(entero(identificador), bloquear=True)
             if reserva is None:
                 raise NoEncontrado(MENSAJE_RESERVA_INEXISTENTE)
@@ -266,7 +272,7 @@ class ServicioAplicacionReserva:
                     reserva['estado'],
                     EXPIRADA,
                     None,
-                    'Plazo vencido.',
+                    'No retiró el bien preparado.' if reserva['estado'] == LISTA_PARA_RETIRO else 'Plazo vencido.',
                 )
                 cantidad += 1
         return cantidad

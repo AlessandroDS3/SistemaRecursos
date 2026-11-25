@@ -13,7 +13,10 @@ from dominio.gestion_control.sancion import (
 
 def _crear_sancion(op: IOperacionesSancion, detalle, tipo, gravedad, motivo, inicio, documento=None):
     config = ConfiguracionSanciones.desde_datos(op.consultar_configuracion() or {})
-    incidencia = op.registrar_incidencia(detalle['id_detalle'], tipo, motivo, inicio)
+    anterior = op.consultar_incidencia_sin_sancion(detalle['id_detalle'], tipo)
+    incidencia = anterior['id_incidencia'] if anterior else op.registrar_incidencia(
+        detalle['id_detalle'], tipo, motivo, inicio,
+    )
     datos = dict(
         id_incidencia_ref=incidencia, motivo=motivo, descripcion=motivo, fecha=inicio,
         estado='ACTIVA', fecha_revision=config.fecha_revision_perdida(inicio),
@@ -40,6 +43,8 @@ def registrar_sancion_por_retraso(op: IOperacionesSancion, detalle, ahora):
 
 def registrar_falta(op: IOperacionesSancion, detalle, causa, gravedad, motivo, cuenta, ahora, *, politica=None):
     actual = op.consultar_sancion_detalle(detalle['id_detalle'])
+    if actual and actual['estado'] == 'ANULADA' and actual['tipo'] != causa:
+        actual = None
     nota = validar_evaluacion(actual, gravedad, causa, motivo, cuenta)
     validar_contexto_evaluacion(detalle, causa, actual, politica)
     documento = cuenta['dni_persona']
@@ -67,7 +72,7 @@ def cerrar_sancion(op: IOperacionesSancion, sancion, estado, nota, documento, ah
         justificacion_levantamiento=nota,
     ))
     op.actualizar_incidencia(sancion['id_incidencia_ref'], dict(estado='RESUELTA'))
-    op.registrar_historial_estado('SANCION', sancion['id_sancion'], 'ACTIVA', estado, documento, nota)
+    op.registrar_historial_estado('SANCION', sancion['id_sancion'], sancion['estado'], estado, documento, nota)
 
 
 def cumplir_sancion(op: IOperacionesSancion, sancion, ahora):
@@ -99,7 +104,9 @@ def regularizar_devolucion(op: IOperacionesSancion, detalle, condicion, document
 
 def registrar_danio_devolucion(op: IOperacionesSancion, detalle, observacion, cuenta, ahora):
     actual = op.consultar_sancion_detalle(detalle['id_detalle'])
-    if not actual or actual['gravedad'] == 'LEVE':
+    if actual and actual['estado'] == 'ANULADA' and actual['tipo'] == 'DANIO':
+        return
+    if not actual or actual['gravedad'] == 'LEVE' or actual['estado'] == 'ANULADA':
         registrar_falta(op, detalle, 'DANIO', 'GRAVE', observacion, cuenta, ahora)
         return
     # La recepción del bien conserva la gravedad y el plazo de la sanción.

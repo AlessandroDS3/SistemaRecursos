@@ -40,7 +40,7 @@ class RepositorioCuentaSQL(RepositorioSQL):
 
     def consultar_cuenta_para_cambiar_clave(self, identificador: int) -> dict | None:
         return self.consultar_sql(
-            '''SELECT u.id_usuario,u.contrasena_hash,u.debe_cambiar_clave,u.estado_cuenta,p.estado AS estado_persona
+            '''SELECT u.id_usuario,u.dni_persona,u.contrasena_hash,u.debe_cambiar_clave,u.estado_cuenta,p.estado AS estado_persona
             FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona
             WHERE u.id_usuario=%s FOR UPDATE''',
             (identificador,),
@@ -58,6 +58,9 @@ class RepositorioCuentaSQL(RepositorioSQL):
 
     def consultar_cuentas_para_actualizar(self) -> list[dict]:
         return cargar_cuentas_para_actualizar(self)
+
+    def cerrar_sesiones_de_cuenta(self, identificador):
+        cerrar_sesiones_de_cuenta(self, identificador)
 
     def registrar_cuenta(self, documento: str, nombre: str, hash_clave: str) -> int:
         return self._insertar_cuenta(documento, nombre, hash_clave, 'USUARIO')
@@ -106,3 +109,8 @@ class RepositorioCuentaSQL(RepositorioSQL):
                 'UPDATE usuario_sistema SET ' + columnas + ' WHERE id_usuario=%s',
                 (*datos.values(), identificador),
             )
+
+
+def cerrar_sesiones_de_cuenta(repo, identificador):
+    repo.ejecutar('''UPDATE sesion_usuario SET fecha_cierre=UTC_TIMESTAMP()
+        WHERE id_usuario=%s AND fecha_cierre IS NULL''', (identificador,))

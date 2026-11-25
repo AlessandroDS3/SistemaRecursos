@@ -200,7 +200,11 @@ if (formularioPrestamo) {
     const politica = politicaDelBien(bien);
     if (!politica) return null;
     const limite = Date.now() + Number(politica.horas) * 3600000;
-    return new Date(politica.unidad === "HORAS" ? Math.min(limite, horarioActual().cierre.getTime()) : limite);
+    if (politica.unidad === "HORAS") return new Date(Math.min(limite, horarioActual().cierre.getTime()));
+    const dias = formularioPrestamo.dataset.dias.split(",");
+    const diaLima = (new Date(limite - 5 * 3600000).getUTCDay() + 6) % 7;
+    const espera = Math.min(...dias.map(dia => (Number(dia) - diaLima + 7) % 7));
+    return new Date(limite + espera * 86400000);
   }
 
   function actualizarPoliticas() {

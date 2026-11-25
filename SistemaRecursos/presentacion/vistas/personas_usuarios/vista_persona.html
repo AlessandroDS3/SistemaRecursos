@@ -135,6 +135,16 @@
         </dd>
       {% endif %}
     </dl>
+    {% if cambios_tipo %}
+      <details class="panel">
+        <summary>Historial de tipo institucional</summary>
+        <ul>
+          {% for cambio in cambios_tipo %}
+            <li>{{ cambio.fecha|fecha }} · {{ cambio.tipo_anterior }} → {{ cambio.tipo_nuevo }} · {{ cambio.motivo }} (DNI {{ cambio.dni_responsable }})</li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endif %}
     <div class="acciones">
       {% if g.usuario.permite('REPORTES_CONSULTAR') %}
         <a class="boton secundario" href="{{ url_for('reportes.consultar_reportes', tipo='historial_persona', dni_persona=persona.dni) }}">Ver historial completo</a>
@@ -171,11 +181,15 @@
         {{ campo('correo','Correo',persona.correo,tipo='email',maximo=120) }}
         {{ campo('telefono','Teléfono',persona.telefono,maximo=20) }}
         {% if persona %}
-          <input type="hidden" name="tipo" value="{{ persona.tipo }}">
-          <p>
-            Tipo:
-            {{ persona.tipo }}
-          </p>
+          {% if g.usuario.rol == 'ADMINISTRADOR' %}
+            {{ opciones('tipo','Tipo',tipos,persona.tipo) }}
+            <div data-motivo-cambio-tipo="{{ persona.tipo }}" hidden>
+              {{ campo('motivo_cambio_tipo','Motivo del cambio de tipo',maximo=255) }}
+            </div>
+          {% else %}
+            <input type="hidden" name="tipo" value="{{ persona.tipo }}">
+            <p>Tipo: {{ persona.tipo }}</p>
+          {% endif %}
           {{ opciones('estado','Estado',estados,persona.estado) }}
         {% else %}
           {{ opciones('tipo','Tipo',tipos,'ESTUDIANTE') }}

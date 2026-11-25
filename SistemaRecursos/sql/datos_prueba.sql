@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS detalle_prestamo (
   id_bien INT NOT NULL,
   id_politica INT NOT NULL,
   fecha_limite_devolucion DATETIME NOT NULL,
+  ampliado BOOLEAN NOT NULL DEFAULT FALSE,
   condicion_entrega ENUM('BUENO','DANADO') NOT NULL DEFAULT 'BUENO',
   observaciones_entrega VARCHAR(255),
   fecha_devolucion DATETIME NULL,
@@ -239,6 +240,7 @@ CREATE TABLE IF NOT EXISTS sancion (
   dni_regularizacion VARCHAR(8) NULL,
   observacion_regularizacion VARCHAR(255) NULL,
   id_bien_reposicion INT NULL,
+  fecha_recuperacion_original DATETIME NULL,
   FOREIGN KEY (dni_regularizacion) REFERENCES persona(dni) ON UPDATE CASCADE,
   FOREIGN KEY (id_bien_reposicion) REFERENCES bien_material(id_bien),
   FOREIGN KEY (dni_levantamiento) REFERENCES persona(dni) ON UPDATE CASCADE,
@@ -247,15 +249,19 @@ CREATE TABLE IF NOT EXISTS sancion (
 -- 6. HISTORIALES
 CREATE TABLE IF NOT EXISTS historial_estado (
   id_historial_estado  INT AUTO_INCREMENT PRIMARY KEY,
-  entidad              ENUM('BIEN_MATERIAL','RESERVA','SANCION','PRESTAMO','CONFIGURACION_SANCIONES') NOT NULL,
-  id_entidad           INT NOT NULL,
+  entidad              ENUM('BIEN_MATERIAL','RESERVA','SANCION','PRESTAMO','CONFIGURACION_SANCIONES','TIPO_PERSONA','AUTORIZACION_PROPIA','RECTIFICACION_DEVOLUCION','CUENTA') NOT NULL,
+  id_entidad           INT NULL,
   estado_anterior      VARCHAR(30),
   estado_nuevo         VARCHAR(30) NOT NULL,
   fecha                DATETIME NOT NULL,
   observacion          VARCHAR(255),
   dni_responsable   VARCHAR(8),
+  dni_objetivo        VARCHAR(8) NULL,
+  datos               JSON NULL,
   INDEX (entidad, id_entidad),
-  FOREIGN KEY (dni_responsable) REFERENCES persona(dni) ON UPDATE CASCADE
+  INDEX idx_historial_dni_objetivo (entidad, dni_objetivo),
+  FOREIGN KEY (dni_responsable) REFERENCES persona(dni) ON UPDATE CASCADE,
+  CONSTRAINT fk_historial_dni_objetivo FOREIGN KEY (dni_objetivo) REFERENCES persona(dni) ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
 -- 7. SESIONES, MANTENIMIENTOS, SOLICITUDES DE AMPLIACION Y PROCESADOR
@@ -731,6 +737,8 @@ INSERT INTO solicitud_ampliacion (id_prestamo, id_detalle, dni_solicitante, cant
 (17, 19, '99000002', 2, 'DIAS', 'Dos días adicionales para terminar la lectura.',
  '2026-11-04 14:00:00', '2026-11-05 09:00:00', 'APROBADA', '2026-11-04 15:00:00',
  '98000002', '2026-11-07 09:00:00', 'Ampliación autorizada antes del vencimiento.');
+
+UPDATE detalle_prestamo SET ampliado=TRUE WHERE id_detalle=19;
 
 -- CASOS DE PRUEBA DE SANCIONES POR GRAVEDAD, PLAZO Y REGULARIZACIÓN.
 INSERT INTO `incidencia` (`id_incidencia`, `id_detalle`, `tipo`, `dni_registrador`, `descripcion`, `fecha`, `estado`) VALUES

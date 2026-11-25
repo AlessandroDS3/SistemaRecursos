@@ -1,8 +1,8 @@
 # Sistema de préstamos de recursos
 
 > **Guías:** [instalación y actualización](docs/GUIA_INSTALACION.md) · [manual por rol](docs/MANUAL_POR_ROL.md).
-> En Windows inicia con `powershell -ExecutionPolicy Bypass -File .\run.ps1`. Para una base
-> existente, aplica las migraciones con `-MigrarSanciones -MigrarCierre`.
+> En Windows usa `install.ps1` para preparar el entorno y `run.ps1` para iniciar.
+> Para actualizar una base existente, usa `migrate.ps1` según la guía.
 
 Aplicación en Python, Flask y MySQL. Esta rama contiene los archivos necesarios
 para ejecutar el sistema: código, plantillas, estilos, imágenes de la interfaz,
@@ -19,12 +19,14 @@ Requisitos: Python 3.10 o superior y MySQL 8.
 
 ```powershell
 cd SistemaRecursos
+.\install.ps1
 .\run.ps1
 ```
 
-El script crea el entorno virtual, instala `requirements.txt` y solicita la contraseña
-de MySQL. Puedes definir `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME`
-en el entorno o en `config.local.ps1`, que está excluido de Git.
+`install.ps1` prepara el entorno virtual e instala `requirements.txt`. Vuelve a ejecutarlo
+cuando cambien las dependencias. `run.ps1` inicia la aplicación y solicita la contraseña de
+MySQL si hace falta. Puedes definir `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y
+`DB_NAME` en el entorno o en `config.local.ps1`, que está excluido de Git.
 
 Abre http://127.0.0.1:5001. Los reportes permiten descargar CSV y PDF respetando los filtros.
 El repositorio de reportes ejecuta las consultas de la aplicación. El archivo
@@ -36,13 +38,16 @@ Importa `SistemaRecursos/sql/schema.sql` y configura la conexión de MySQL en el
 entorno. Desde `SistemaRecursos`, con las dependencias ya instaladas, ejecuta:
 
 ```powershell
+. .\entorno.ps1
 $env:DB_NAME = 'prestamos_escuela'
+Configurar-ConexionProyecto
 ..\.venv\Scripts\python.exe -m arranque.inicializar_administrador --dni 12345678 --nombres "Ana" --apellidos "Pérez" --correo "ana@unsa.edu.pe" --codigo-empleado ADM001 --area "Administración" --usuario ana
 .\run.ps1
 ```
 
-Usa los datos reales del responsable. El comando crea su ficha administrativa y
-muestra una contraseña temporal que debe cambiar al entrar. Solo funciona cuando
+Usa los datos reales del responsable. El comando crea su ficha administrativa y emite
+un código de un solo uso. Entra a **Activar cuenta** para elegir su contraseña dentro de
+24 horas. El comando funciona cuando
 la base todavía no tiene cuentas. Conserva el mismo `DB_NAME` al iniciar el sistema
 y, si usas `config.local.ps1`, comprueba que apunte a esa base.
 
@@ -50,7 +55,7 @@ y, si usas `config.local.ps1`, comprueba que apunte a esa base.
 
 El sistema tiene tres roles: `USUARIO`, `ENCARGADO_PRESTAMOS` y `ADMINISTRADOR`.
 Sus permisos están definidos en `SistemaRecursos/dominio/gestion_personas_usuarios/rol.py`
-y se muestran como consulta en **Roles y permisos**. El administrador puede asignar
+y se muestran en **Personas → Editar cuenta y rol**. El administrador puede asignar
 estos roles a las cuentas; los permisos de cada rol no se editan desde la aplicación.
 Las instalaciones nuevas ya no crean la tabla `rol_permiso`.
 Para eliminarla de una base existente, selecciona la base del sistema y ejecuta
@@ -65,16 +70,12 @@ En otra máquina, para una base nueva, importa uno de los dos archivos SQL:
 separada con las mismas tablas y datos ficticios. Ambos incluyen las sanciones
 por gravedad y no necesitan ejecutar la migración.
 
-Para actualizar una instalación existente, detén la aplicación, haz una copia de
-seguridad y ejecuta `.\run.ps1 -MigrarSanciones` desde `SistemaRecursos`. El script
-actualiza la base configurada en `DB_NAME` y luego inicia la aplicación. Si usas
-MySQL Workbench, selecciona esa base y ejecuta
+Para actualizar una instalación anterior a sanciones por gravedad, detén la aplicación y
+el procesador, haz una copia de seguridad y ejecuta `.\migrate.ps1 -Paso Sanciones` desde
+`SistemaRecursos`. Si usas MySQL Workbench, selecciona la base configurada y ejecuta
 `SistemaRecursos/sql/migraciones/20261123_sanciones_por_gravedad.sql`.
 La migración conserva las cuentas, préstamos, reservas, sanciones e historiales.
-Si aparece `Unknown column 'fecha_regularizacion'`, corresponde a esta actualización.
-
-Para una instalación nueva, usa `SistemaRecursos/sql/datos_prueba.sql` si quieres
-datos de demostración o `SistemaRecursos/sql/schema.sql` si prefieres partir de cero.
+Comprueba las actualizaciones pendientes con `.\migrate.ps1 -Paso Comprobar`.
 
 En **Sanciones → Configurar plazos**, el administrador configura la leve
 (14 días iniciales), la grave (180 días como referencia inicial del semestre) y
@@ -88,7 +89,9 @@ sanción conserva una copia de estos valores. Cambiarlos no modifica sanciones a
 - **Muy grave:** solo el administrador puede aplicarla y rehabilitarla, después
   de regularizar el incidente. No vence automáticamente.
 
-La revisión automática, iniciada por `run.ps1`, se ejecuta cada 30 segundos.
+La revisión automática se ejecuta cada 30 segundos. `run.ps1` inicia la revisión y la web.
+Con `run.ps1 -SoloProcesador` puedes operar la revisión en otra terminal y usar
+`run.ps1 -SoloWeb` o un servidor que importe la fábrica Flask para la web.
 Cumple leves y graves únicamente si terminó su periodo y el bien fue regularizado.
 Los posibles casos de pérdida o custodia se muestran como alertas para revisión;
 el tiempo transcurrido no confirma una pérdida ni aplica una muy grave.
