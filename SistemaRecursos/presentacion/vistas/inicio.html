@@ -6,6 +6,22 @@
   <div class="cabecera">
     <h1>Inicio</h1>
   </div>
+  {% if procesador and procesador.alerta %}
+    <div class="aviso error-formulario" role="alert">
+      <div>
+        <strong>La revisión automática de vencimientos no se está ejecutando.</strong>
+        Última ejecución correcta: {{ procesador.ultima_ejecucion_correcta|fecha if procesador.ultima_ejecucion_correcta else 'nunca' }}.
+        {% if procesador.ultimo_error %}<br><small>Último error ({{ procesador.ultimo_error_fecha|fecha }}): {{ procesador.ultimo_error }}</small>{% endif %}
+        <br><small>Inicia el sistema con run.ps1 para que las reservas y sanciones se actualicen solas.</small>
+      </div>
+    </div>
+  {% endif %}
+  {% if solicitudes_pendientes %}
+    <p class="aviso" role="status">
+      Hay {{ solicitudes_pendientes }} solicitud{{ 'es' if solicitudes_pendientes != 1 }} de ampliación por revisar.
+      <a href="{{ url_for('ampliaciones.consultar_solicitudes') }}">Revisar solicitudes</a>
+    </p>
+  {% endif %}
   <section class="panel acciones-inicio" aria-label="Acciones frecuentes">
     <h2>{{ 'Operaciones de préstamo' if encargado else 'Encuentra un recurso para reservar' }}</h2>
     <div class="acciones">

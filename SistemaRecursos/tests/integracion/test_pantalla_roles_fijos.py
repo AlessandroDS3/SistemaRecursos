@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from app import create_app
 from dominio.gestion_personas_usuarios.rol import permisos_del_rol
-from tests.soporte_roles import cuenta
+from tests.soporte_roles import cliente_autenticado, cuenta
 
 
 class PantallaRolesFijosTest(unittest.TestCase):
@@ -15,15 +15,7 @@ class PantallaRolesFijosTest(unittest.TestCase):
             cls.app = create_app(dict(TESTING=True))
 
     def cliente(self, rol):
-        acceso = cuenta(rol)
-        self.enterContext(patch.object(
-            self.app.extensions['servicios']['acceso'],
-            'consultar_cuenta_activa', return_value=acceso,
-        ))
-        cliente = self.app.test_client()
-        with cliente.session_transaction() as sesion:
-            sesion.update(id_usuario=1, credenciales=acceso.version_credenciales, csrf='token')
-        return cliente
+        return cliente_autenticado(self, self.app, cuenta(rol))
 
     def test_administrador_consulta_permisos_sin_formulario_de_edicion(self):
         cliente = self.cliente('ADMINISTRADOR')

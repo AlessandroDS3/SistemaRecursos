@@ -35,6 +35,59 @@ class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
         contexto['horario'] = horario
         return contexto
 
+    # Solicitudes del usuario (AMP-01)
+
+    def registrar_solicitud_ampliacion(self, prestamo, detalle, solicitante, solicitud, fecha_anterior):
+        return self.ejecutar(
+            '''INSERT INTO solicitud_ampliacion(id_prestamo,id_detalle,dni_solicitante,cantidad,
+            unidad,motivo,fecha_solicitud,fecha_limite_anterior)
+            VALUES(%s,%s,%s,%s,%s,%s,UTC_TIMESTAMP(),%s)''',
+            (prestamo, detalle, solicitante, solicitud.cantidad, solicitud.unidad,
+             solicitud.motivo, fecha_anterior),
+        )
+
+    def consultar_solicitud_ampliacion(self, identificador, bloquear=False):
+        return self.consultar_sql(
+            'SELECT * FROM solicitud_ampliacion WHERE id_solicitud=%s'
+            + (' FOR UPDATE' if bloquear else ''),
+            (identificador,),
+            una=True,
+        )
+
+    def consultar_solicitudes_ampliacion(self, estado=None, prestamo=None):
+        condiciones, parametros = [], []
+        if estado:
+            condiciones.append('s.estado=%s')
+            parametros.append(estado)
+        if prestamo:
+            condiciones.append('s.id_prestamo=%s')
+            parametros.append(prestamo)
+        sql = '''SELECT s.*,b.codigo_inventario,r.nombre AS recurso,d.fecha_limite_devolucion,
+            d.fecha_devolucion,d.fecha_regularizacion,
+            CONCAT(p.nombres,' ',p.apellidos) AS solicitante,
+            CONCAT(pr.nombres,' ',pr.apellidos) AS responsable_resolucion
+            FROM solicitud_ampliacion s
+            JOIN detalle_prestamo d ON d.id_detalle=s.id_detalle
+            JOIN bien_material b ON b.id_bien=d.id_bien
+            JOIN recurso r ON r.id_recurso=b.id_recurso
+            JOIN persona p ON p.dni=s.dni_solicitante
+            LEFT JOIN persona pr ON pr.dni=s.dni_resolucion'''
+        if condiciones:
+            sql += ' WHERE ' + ' AND '.join(condiciones)
+        return self.consultar_sql(
+            sql + " ORDER BY s.estado<>'PENDIENTE', s.fecha_solicitud DESC LIMIT 200", parametros
+        )
+
+    def resolver_solicitud_ampliacion(self, identificador, estado, actor, nueva, observacion):
+        self.ejecutar(
+            """UPDATE solicitud_ampliacion SET estado=%s,fecha_resolucion=UTC_TIMESTAMP(),
+            dni_resolucion=%s,fecha_limite_nueva=%s,observacion_resolucion=%s
+            WHERE id_solicitud=%s AND estado='PENDIENTE'""",
+            (estado, actor, nueva, observacion, identificador),
+        )
+        if self._cursor.rowcount != 1:
+            raise Conflicto('La solicitud ya fue resuelta. Recarga la lista.')
+
     def actualizar_plazo_prestamo(self, detalle, anterior, nueva):
         self.ejecutar(
             '''UPDATE detalle_prestamo SET fecha_limite_devolucion=%s

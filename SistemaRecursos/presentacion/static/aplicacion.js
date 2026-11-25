@@ -261,3 +261,13 @@ function mostrarCondicionesReserva() {
 }
 recursoReserva?.addEventListener('change', mostrarCondicionesReserva);
 mostrarCondicionesReserva();
+
+document.querySelector('[data-cambiar-tema]')?.addEventListener('click', () => {
+  const raiz = document.documentElement;
+  const oscuroActual = raiz.dataset.theme
+    ? raiz.dataset.theme === 'dark'
+    : matchMedia('(prefers-color-scheme: dark)').matches;
+  const tema = oscuroActual ? 'light' : 'dark';
+  raiz.dataset.theme = tema;
+  try { localStorage.setItem('tema', tema); } catch (e) { /* almacenamiento no disponible */ }
+});

@@ -223,6 +223,7 @@ class RepositorioReporteSQL(RepositorioSQL):
         busqueda = """
             b.codigo_inventario LIKE %s OR r.nombre LIKE %s
             OR r.marca LIKE %s OR r.modelo LIKE %s OR b.numero_serie LIKE %s
+            OR b.identificador_sistema LIKE %s
         """
         condiciones, parametros = self._filtros_comunes(filtro, busqueda, campo_estado='b.estado')
         if filtro.ubicacion:
@@ -238,10 +239,10 @@ class RepositorioReporteSQL(RepositorioSQL):
 
         sql_reporte = f"""
             SELECT
-                b.id_bien, b.codigo_inventario,
+                b.id_bien, b.codigo_inventario, b.identificador_sistema,
                 r.nombre AS recurso, c.nombre AS categoria,
                 r.marca, r.modelo, b.numero_serie,
-                b.estado, b.ubicacion, b.fecha_adquisicion
+                b.estado, b.ubicacion, b.fecha_adquisicion, b.fecha_registro
             {tablas}
             {where_sql}
             ORDER BY r.nombre, b.codigo_inventario, b.id_bien

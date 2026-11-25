@@ -54,12 +54,12 @@
         <p class="suave">Deja el código vacío si agregarás los bienes después.</p>
         <div class="rejilla cuatro-columnas">
           {{ campo('codigo_inventario','Código de inventario',maximo=40) }}
-          {{ campo('numero_serie','Número de serie (opcional)',maximo=60) }}
+          {{ campo('numero_serie','Serie del fabricante (opcional)',maximo=60) }}
           {{ campo('fecha_adquisicion','Fecha de adquisición (opcional)',tipo='date') }}
           {{ campo('ubicacion','Ubicación (opcional)',maximo=120) }}
         </div>
         {{ campo('descripcion_bien','Descripción del bien (opcional)') }}
-        <p class="suave">Estado inicial: disponible.</p>
+        <p class="suave">Estado inicial: disponible. El identificador del sistema y la fecha de registro se generan automáticamente.</p>
       </fieldset>
     {% endif %}
     <div class="acciones">

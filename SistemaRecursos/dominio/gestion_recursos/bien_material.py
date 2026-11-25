@@ -1,7 +1,16 @@
 from dataclasses import dataclass, fields
-from datetime import date
+from datetime import date, datetime
+from secrets import choice
 
-from dominio.compartido.validacion import Conflicto, entero, texto, version
+from dominio.compartido.validacion import LIMA, Conflicto, entero, texto, version
+
+# Sin 0/O ni 1/I para que el identificador se pueda dictar y copiar sin confusiones.
+ALFABETO_IDENTIFICADOR = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+
+
+def generar_identificador_sistema(anio: int) -> str:
+    """Identificador interno del sistema (AUT-01), distinto de la serie del fabricante."""
+    return f'SR-{anio}-' + ''.join(choice(ALFABETO_IDENTIFICADOR) for _ in range(6))
 
 ESTADOS_BIEN = ('DISPONIBLE', 'PRESTADO', 'RESERVADO', 'DANADO', 'MANTENIMIENTO', 'PERDIDO')
 ESTADOS_MANUALES = ('DISPONIBLE', 'DANADO', 'MANTENIMIENTO', 'PERDIDO')
@@ -32,7 +41,7 @@ class BienMaterial:
     def __post_init__(self):
         self.id_recurso = entero(self.id_recurso, 'Recurso')
         self.codigo_inventario = texto(self.codigo_inventario, 'Código de inventario', 40, True)
-        self.numero_serie = texto(self.numero_serie, 'Número de serie', 60)
+        self.numero_serie = texto(self.numero_serie, 'Serie del fabricante', 60)
         self.ubicacion = texto(self.ubicacion, 'Ubicación', 120)
         self.descripcion_bien = texto(self.descripcion_bien, 'Descripción', 255) or None
         if self.fecha_adquisicion in ('', None):
@@ -44,6 +53,10 @@ class BienMaterial:
                 raise ValueError('La fecha de adquisición no es válida.') from None
         elif not isinstance(self.fecha_adquisicion, date):
             raise ValueError('La fecha de adquisición no es válida.')
+        if isinstance(self.fecha_adquisicion, datetime):
+            self.fecha_adquisicion = self.fecha_adquisicion.date()
+        if self.fecha_adquisicion and self.fecha_adquisicion > datetime.now(LIMA).date():
+            raise ValueError('La fecha de adquisición no puede ser futura.')
 
 
 def version_bien_material(datos: dict) -> str:

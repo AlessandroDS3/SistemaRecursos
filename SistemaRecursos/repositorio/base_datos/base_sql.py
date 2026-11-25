@@ -20,6 +20,8 @@ MENSAJES_DUPLICADOS = {
     'bien_material.codigo_inventario': 'Ya existe un bien con ese código de inventario.',
     'categoria_recurso.nombre': 'Ya existe una categoría con ese nombre.',
     'politica_prestamo.uq_politica_persona_categoria_vigente': 'Ya existe una política vigente para ese tipo de persona y categoría.',
+    'mantenimiento_bien.uq_mantenimiento_abierto': 'El bien ya tiene un mantenimiento abierto.',
+    'solicitud_ampliacion.uq_solicitud_pendiente': 'Ya existe una solicitud de ampliación pendiente para ese bien.',
 }
 
 

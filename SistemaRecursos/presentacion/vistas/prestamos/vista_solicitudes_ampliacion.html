@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from 'parciales/formularios.html' import csrf %}
+{% from 'parciales/componentes.html' import estado as etiqueta_estado %}
+{% block titulo %}Solicitudes de ampliación · UNSA{% endblock %}
+{% block contenido %}
+  <div class="cabecera">
+    <div>
+      <h1>Solicitudes de ampliación</h1>
+      <p>Pedidos de más plazo hechos por los usuarios. Al aprobar se revalida la política y el horario.</p>
+    </div>
+    <a class="boton secundario" href="{{ url_for('prestamos.consultar_prestamos') }}">Volver a préstamos</a>
+  </div>
+  <nav class="pestanas-recursos" aria-label="Estado de las solicitudes">
+    {% for codigo, nombre in (('PENDIENTE', 'Pendientes'), ('APROBADA', 'Aprobadas'), ('RECHAZADA', 'Rechazadas'), ('', 'Todas')) %}
+      <a href="{{ url_for('ampliaciones.consultar_solicitudes', estado=codigo) }}"
+         {% if estado == codigo %}aria-current="page"{% endif %}>{{ nombre }}</a>
+    {% endfor %}
+  </nav>
+  <section class="panel panel-tabla">
+    <div class="tabla" tabindex="0" role="region" aria-label="Solicitudes">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Solicitud</th>
+            <th scope="col">Bien y préstamo</th>
+            <th scope="col">Pedido</th>
+            <th scope="col">Plazo actual</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Resolución</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in solicitudes %}
+            <tr>
+              <td>#{{ s.id_solicitud }}<small>{{ s.solicitante }}</small><small>{{ s.fecha_solicitud|fecha }}</small></td>
+              <td>
+                {{ s.codigo_inventario }}<small>{{ s.recurso }}</small>
+                <a href="{{ url_for('prestamos.consultar_prestamo', identificador=s.id_prestamo) }}">Préstamo #{{ s.id_prestamo }}</a>
+              </td>
+              <td>+{{ s.cantidad }} {{ 'horas' if s.unidad == 'HORAS' else 'días' }}<small>{{ s.motivo }}</small></td>
+              <td>
+                {{ s.fecha_limite_devolucion|fecha }}
+                {% if s.fecha_devolucion %}<small>Bien devuelto</small>
+                {% elif s.estado == 'PENDIENTE' and s.fecha_limite_devolucion <= ahora %}<small>Plazo vencido</small>{% endif %}
+              </td>
+              <td>{{ etiqueta_estado(s.estado) }}</td>
+              <td>
+                {% if s.estado == 'PENDIENTE' %}
+                  <form method="post" class="formulario" action="{{ url_for('ampliaciones.aprobar_solicitud', identificador=s.id_solicitud) }}">
+                    {{ csrf() }}
+                    <label>Observación (opcional)<input name="observacion" maxlength="255"></label>
+                    <button>Aprobar</button>
+                  </form>
+                  <form method="post" class="formulario operacion-bien" action="{{ url_for('ampliaciones.rechazar_solicitud', identificador=s.id_solicitud) }}">
+                    {{ csrf() }}
+                    <label>Motivo del rechazo<input name="observacion" maxlength="255" required></label>
+                    <button class="secundario">Rechazar</button>
+                  </form>
+                {% else %}
+                  {% if s.fecha_limite_nueva %}Nuevo plazo: {{ s.fecha_limite_nueva|fecha }}{% endif %}
+                  <small>{{ s.responsable_resolucion or '—' }} · {{ s.fecha_resolucion|fecha if s.fecha_resolucion else '' }}</small>
+                  {% if s.observacion_resolucion %}<small>{{ s.observacion_resolucion }}</small>{% endif %}
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="sin-recursos">No hay solicitudes en esta lista.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

@@ -46,8 +46,8 @@ def columnas(serie, histograma=False):
     techo = maximo
     for i in range(5):
         y = 35 + i * 40
-        dibujo.add(Line(35, y, 340, y, strokeColor=HexColor('#e4e7ec'), strokeWidth=.6))
-        dibujo.add(String(29, y - 3, f'{techo * i / 4:g}', textAnchor='end', fontSize=10, fillColor=HexColor('#667085')))
+        dibujo.add(Line(35, y, 340, y, strokeColor=HexColor('#e9e9e7'), strokeWidth=.6))
+        dibujo.add(String(29, y - 3, f'{techo * i / 4:g}', textAnchor='end', fontSize=10, fillColor=HexColor('#73726e')))
     cantidad = len(serie['elementos'])
     if not cantidad:
         return dibujo
@@ -56,7 +56,7 @@ def columnas(serie, histograma=False):
     for i, item in enumerate(serie['elementos']):
         x = 38 + i * paso + (paso - ancho) / 2
         alto = 160 * item['cantidad'] / maximo
-        dibujo.add(Rect(x, 35, ancho, alto, fillColor=HexColor('#287b78'), strokeColor=HexColor('#ffffff'), strokeWidth=.6))
+        dibujo.add(Rect(x, 35, ancho, alto, fillColor=HexColor('#111113'), strokeColor=HexColor('#ffffff'), strokeWidth=.6))
         dibujo.add(String(x + ancho / 2, 40 + alto, str(item['cantidad']), textAnchor='middle', fontName='Helvetica-Bold', fontSize=12))
         dibujo.add(String(x + ancho / 2, 20, str(i + 1), textAnchor='middle', fontSize=11))
     return dibujo

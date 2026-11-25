@@ -1,4 +1,4 @@
-param([switch]$MigrarSanciones)
+param([switch]$MigrarSanciones, [switch]$MigrarCierre)
 
 $ErrorActionPreference = 'Stop'
 
@@ -46,6 +46,12 @@ try {
         & $pythonProyecto -m arranque.esquema_sanciones
         if ($LASTEXITCODE -ne 0) {
             throw 'No se pudo actualizar el esquema de sanciones.'
+        }
+    }
+    if ($MigrarCierre) {
+        & $pythonProyecto -m arranque.esquema_cierre
+        if ($LASTEXITCODE -ne 0) {
+            throw 'No se pudo actualizar el esquema de cierre de pendientes.'
         }
     }
     & $pythonProyecto (Join-Path $PSScriptRoot 'app.py')

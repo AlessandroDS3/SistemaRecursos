@@ -3,7 +3,7 @@
   overflow-y: auto;
   margin-top: 10px;
   border: 1px solid var(--borde);
-  border-radius: 10px;
+  border-radius: var(--radio-panel);
   background: var(--blanco);
 }
 
@@ -80,7 +80,7 @@
   margin-top: 10px;
   padding: 12px 14px;
   border: 1px solid var(--borde);
-  border-radius: 10px;
+  border-radius: var(--radio-panel);
   background: var(--fondo-hover);
 }
 
@@ -109,7 +109,7 @@
 .prestamo-campos { min-width: 0; }
 .prestamo-campos > .panel { margin: 0 0 20px; }
 .prestamo-campos .seleccion-prestamo h2 { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.paso-prestamo { display: inline-grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: var(--profundo); color: var(--blanco); font-size: 13px; flex-shrink: 0; }
+.paso-prestamo { display: inline-grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: var(--acento); color: var(--sobre-acento); font-size: 13px; font-weight: 600; flex-shrink: 0; }
 .prestamo-opciones { margin-top: 22px; }
 .prestamo-cantidad { margin: 22px 0 12px; letter-spacing: .7px; color: var(--suave); }
 #bienes-seleccionados { gap: 0; }
@@ -123,8 +123,8 @@
 .prestamo-bien-fecha small { display: block; color: var(--suave); font-size: 11px; margin-bottom: 3px; }
 .prestamo-bien-fecha strong { display: block; font-weight: 400; font-size: 12px; }
 .prestamo-quitar { background: transparent; border: 0; color: var(--suave); padding: 4px; font-size: 23px; }
-.prestamo-iniciales { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--profundo); color: var(--blanco); font-weight: 600; flex: 0 0 auto; }
-#persona-seleccionada { border-color: var(--foco); background: var(--fondo-hover); }
+.prestamo-iniciales { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--acento); color: var(--sobre-acento); font-weight: 600; flex: 0 0 auto; }
+#persona-seleccionada { border-color: var(--acento); background: var(--fondo-hover); }
 #persona-seleccionada > div { flex: 1; min-width: 0; }
 .prestamo-resumen.panel { position: sticky; top: 24px; margin: 0; padding: 22px; }
 .prestamo-resumen h2 { font-size: 17px; }
@@ -143,7 +143,7 @@
 .prestamo-opciones-radio { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .prestamo-opciones-radio label { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 9px 11px; border: 1px solid var(--borde); border-radius: var(--radio-control); background: var(--blanco); color: var(--texto); font-size: 12px; cursor: pointer; }
 .prestamo-opciones-radio input[type=radio] { flex: 0 0 auto; width: 13px; height: 13px; margin: 0; padding: 0; accent-color: var(--acento); }
-.prestamo-opciones-radio label:has(input:checked) { border-color: var(--foco); }
+.prestamo-opciones-radio label:has(input:checked) { border-color: var(--acento); background: var(--acento-tenue); }
 .prestamo-opciones-radio label:focus-within { outline: 2px solid var(--acento); outline-offset: 2px; }
 @media (max-width: 480px) { .prestamo-opciones-radio { gap: 6px; } .prestamo-opciones-radio label { padding: 9px 8px; } }
 

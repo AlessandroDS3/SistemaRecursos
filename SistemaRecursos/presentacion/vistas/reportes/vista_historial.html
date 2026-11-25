@@ -40,7 +40,7 @@
   <section class="panel ficha-historial" aria-label="Sujeto del historial">
     {% if filtro.tipo == 'historial_bien' %}
     <div><span class="suave">Objeto</span><h2>{{ sujeto.codigo_inventario }} · {{ sujeto.recurso }}</h2>
-      <p>{{ sujeto.categoria }}{% if sujeto.numero_serie %} · Serie: {{ sujeto.numero_serie }}{% endif %}{% if sujeto.ubicacion %} · {{ sujeto.ubicacion }}{% endif %}</p></div>
+      <p>{{ sujeto.categoria }}{% if sujeto.identificador_sistema %} · {{ sujeto.identificador_sistema }}{% endif %}{% if sujeto.numero_serie %} · Serie del fabricante: {{ sujeto.numero_serie }}{% endif %}{% if sujeto.ubicacion %} · {{ sujeto.ubicacion }}{% endif %}</p></div>
     {% else %}
     <div><span class="suave">{{ 'Mi cuenta' if propio else 'Persona' }}</span><h2>{{ sujeto.nombre_completo }}</h2><p>DNI: {{ sujeto.dni }}{% if sujeto.cui %} · CUI: {{ sujeto.cui }}{% endif %}</p></div>
     {% endif %}

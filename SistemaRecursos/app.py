@@ -17,6 +17,7 @@ from repositorio.prestamos.repositorio_reserva_sql import RepositorioReservaSQL
 from repositorio.prestamos.repositorio_ampliacion_prestamo_sql import RepositorioAmpliacionPrestamoSQL
 from repositorio.control.repositorio_sancion_sql import RepositorioSancionSQL
 from repositorio.reportes.repositorio_reporte_sql import RepositorioReporteSQL
+from repositorio.control.repositorio_procesador_sql import RepositorioProcesadorSQL
 
 from servicios.personas_usuarios.servicio_acceso import ServicioAplicacionAcceso
 from servicios.personas_usuarios.servicio_cuenta import ServicioAplicacionCuenta
@@ -30,8 +31,11 @@ from servicios.prestamos.servicio_reserva import ServicioAplicacionReserva
 from servicios.prestamos.servicio_ampliacion_prestamo import ServicioAplicacionAmpliacionPrestamo
 from servicios.control.servicio_sancion import ServicioAplicacionSancion
 from servicios.reportes.servicio_reporte import ServicioAplicacionReporte
+from servicios.control.servicio_procesador import ServicioAplicacionProcesador
 from arranque.procesador_vencimientos import iniciar_procesador_vencimientos
 from arranque.esquema_sanciones import comprobar_esquema_sanciones
+from arranque.esquema_cierre import comprobar_esquema_cierre
+from dominio.gestion_personas_usuarios.sesion import DURACION_MAXIMA
 
 from presentacion.controladores.controlador_inicio import registrar_inicio
 from presentacion.errores_http import registrar_errores
@@ -79,6 +83,7 @@ def crear_servicios(conexion, dominios_institucionales=('unsa.edu.pe',)):
         ),
         'sanciones': ServicioAplicacionSancion(RepositorioSancionSQL(conexion)),
         'reportes': ServicioAplicacionReporte(RepositorioReporteSQL(conexion)),
+        'procesador': ServicioAplicacionProcesador(RepositorioProcesadorSQL(conexion)),
     }
 
 
@@ -92,7 +97,11 @@ def registrar_controladores(app, servicios):
         ControladorBienMaterial(servicios['bienes'], servicios['recursos']),
         ControladorPoliticaPrestamo(servicios['politicas'], servicios['recursos']),
         ControladorPrestamo(
-            servicios['prestamos'], servicios['bienes'], servicios['recursos'], servicios['politicas']
+            servicios['prestamos'],
+            servicios['bienes'],
+            servicios['recursos'],
+            servicios['politicas'],
+            servicios['ampliaciones'],
         ),
         ControladorReserva(servicios['reservas']),
         ControladorAmpliacionPrestamo(servicios['ampliaciones'], servicios['prestamos']),
@@ -112,6 +121,8 @@ def create_app(config=None):
         SESSION_COOKIE_NAME='recursos_rehecho',
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
+        # La cookie dura como máximo lo mismo que la sesión del servidor (SEG-02).
+        PERMANENT_SESSION_LIFETIME=DURACION_MAXIMA,
         MAX_CONTENT_LENGTH=1024 * 1024,
     )
     app.config.update(config or {})
@@ -141,16 +152,22 @@ if __name__ == '__main__':
     from mysql.connector import Error
 
     logging.basicConfig(level=logging.INFO)
-    try:
-        comprobar_esquema_sanciones(MySQLConnection())
-    except Error as error:
-        if error.errno == 1054:
-            raise SystemExit(
-                'La base tiene un esquema anterior. Haz una copia de seguridad y ejecuta '
-                'run.ps1 -MigrarSanciones para actualizarla.'
-            ) from None
-        raise SystemExit(f'No se pudo comprobar la base configurada: {error}') from None
+    for comprobar, opcion in (
+        (comprobar_esquema_sanciones, '-MigrarSanciones'),
+        (comprobar_esquema_cierre, '-MigrarCierre'),
+    ):
+        try:
+            comprobar(MySQLConnection())
+        except Error as error:
+            if error.errno in (1054, 1146):
+                raise SystemExit(
+                    'La base tiene un esquema anterior. Haz una copia de seguridad y ejecuta '
+                    f'run.ps1 {opcion} para actualizarla.'
+                ) from None
+            raise SystemExit(f'No se pudo comprobar la base configurada: {error}') from None
     app = create_app()
     servicios = app.extensions['servicios']
-    iniciar_procesador_vencimientos(servicios['sanciones'], servicios['reservas'])
+    iniciar_procesador_vencimientos(
+        servicios['sanciones'], servicios['reservas'], servicios['procesador']
+    )
     app.run(host='127.0.0.1', port=int(os.getenv('PORT', '5001')))

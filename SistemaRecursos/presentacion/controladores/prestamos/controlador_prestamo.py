@@ -19,13 +19,14 @@ def _bien_formulario(bien):
 
 
 class ControladorPrestamo:
-    def __init__(self, servicio, bienes, recursos, politicas):
+    def __init__(self, servicio, bienes, recursos, politicas, ampliaciones=None):
         self.servicio, self.bienes, self.recursos, self.politicas = (
             servicio,
             bienes,
             recursos,
             politicas,
         )
+        self.ampliaciones = ampliaciones
         self.blueprint = Blueprint('prestamos', __name__, url_prefix='/prestamos')
         self.blueprint.add_url_rule(
             '/condiciones', 'consultar_condiciones_prestamo', self.consultar_condiciones_prestamo
@@ -159,6 +160,11 @@ class ControladorPrestamo:
             'prestamos/vista_prestamo.html',
             modo='detalle',
             prestamo=prestamo,
+            solicitudes=(
+                self.ampliaciones.consultar_solicitudes_prestamo(identificador)
+                if self.ampliaciones
+                else []
+            ),
             gestionar=gestionar,
             ahora=datetime.now(timezone.utc).replace(tzinfo=None),
             volver=regreso_prestamos(),

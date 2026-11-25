@@ -1,25 +1,24 @@
-"""Ejecuta casos de uso periódicos; no introduce reglas ni abre conexiones SQL."""
+"""Ejecuta casos de uso periódicos; no introduce reglas ni abre conexiones SQL directamente."""
 
 import atexit
-import logging
 from threading import Event, Thread
 
 
-def iniciar_procesador_vencimientos(sanciones, reservas, intervalo=30):
+def iniciar_procesador_vencimientos(sanciones, reservas, procesador, intervalo=30):
+    """Revisa vencimientos cada `intervalo` segundos mientras el proceso esté activo.
+
+    `procesador` registra la última ejecución correcta y los errores, y evita que dos
+    procesos sobre la misma base hagan la revisión a la vez (OPE-01).
+    """
     detener = Event()
+    operaciones = (
+        sanciones.procesar_sanciones_por_vencimiento,
+        reservas.expirar_reservas_vencidas,
+    )
 
     def procesar():
         while not detener.is_set():
-            for operacion in (
-                sanciones.procesar_sanciones_por_vencimiento,
-                reservas.expirar_reservas_vencidas,
-            ):
-                try:
-                    operacion()
-                except Exception:
-                    logging.getLogger(__name__).exception(
-                        'Falló una revisión de vencimientos; se reintentará.'
-                    )
+            procesador.ejecutar_revision(operaciones)
             detener.wait(intervalo)
 
     hilo = Thread(target=procesar, name='vencimientos', daemon=True)

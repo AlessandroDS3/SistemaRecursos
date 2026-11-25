@@ -1,36 +1,27 @@
 /* Estilos exclusivos de los gráficos de la pantalla de reportes. */
-.estadisticas-reportes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin: 24px 0; }
-.estadisticas-reportes .estadistica-reporte { margin: 0; min-width: 0; }
-.estadistica-reporte h2 { margin: 0; font-size: 18px; }
-.estadistica-reporte figcaption p { margin: 6px 0 20px; }
+.estadisticas-reportes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.estadisticas-reportes .estadistica-reporte { margin: 0; min-width: 0; padding: 18px 20px; }
+.estadistica-reporte h2 { margin: 0; font-size: var(--letra-subtitulo); }
+.estadistica-reporte figcaption p { margin: 4px 0 8px; font-size: var(--letra-pequena); }
 .estadistica-dona { width: 200px; height: 200px; border-radius: 50%; display: grid; place-items: center; margin: 20px auto; }
-.estadistica-centro { width: 140px; height: 140px; border-radius: 50%; background: var(--blanco, white); display: flex; flex-direction: column; justify-content: center; text-align: center; padding: 12px; }
-.estadistica-centro strong, .estadistica-total strong { font-size: 30px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.estadistica-centro span { font-size: 12px; color: var(--suave); }
-.estadistica-leyenda, .estadistica-barras { list-style: none; padding: 0; display: grid; gap: 14px; }
+.estadistica-centro { width: 140px; height: 140px; border-radius: 50%; background: var(--blanco); display: flex; flex-direction: column; justify-content: center; text-align: center; padding: 12px; }
+.estadistica-centro strong, .estadistica-total strong { font-size: 28px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.estadistica-centro span { font-size: var(--letra-micro); color: var(--suave); }
+.estadistica-total { margin: 6px 0 0; color: var(--suave); }
+.estadistica-total strong { color: var(--texto); margin-right: 4px; }
+.estadistica-leyenda, .estadistica-barras { list-style: none; padding: 0; display: grid; gap: 0; margin: 8px 0 0; }
 .estadistica-leyenda li, .estadistica-fila { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.estadistica-leyenda li { border-bottom: 1px solid var(--borde); padding: 7px 0; font-size: var(--letra-normal); }
+.estadistica-leyenda li:last-child { border-bottom: 0; }
 .estadistica-leyenda li > span:first-child, .estadistica-fila > span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.estadistica-leyenda li > span:last-child, .estadistica-fila > span:last-child { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.estadistica-leyenda li > span:last-child, .estadistica-fila > span:last-child { flex-shrink: 0; color: var(--suave); font-variant-numeric: tabular-nums; }
+.estadistica-leyenda li > span:last-child strong { color: var(--texto); }
 .estadistica-leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; }
-.estadistica-pista { height: 12px; background: var(--fondo-hover, #eee); border-radius: 4px; overflow: hidden; margin-top: 6px; }
-.estadistica-pista span { display: block; height: 100%; background: #287b78; border-radius: inherit; }
-.estadistica-nota { font-size: 12px; margin-bottom: 0; }
-.estadistica-vacia { padding: 50px 0; text-align: center; }
+.estadistica-pista { height: 8px; background: var(--fondo-activo); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+.estadistica-pista span { display: block; height: 100%; background: var(--acento); border-radius: inherit; }
+.estadistica-nota { font-size: var(--letra-micro); margin-bottom: 0; }
+.estadistica-vacia { padding: 48px 0; text-align: center; }
+.estadistica-insignia { display: block; margin-bottom: 4px; font-size: var(--letra-micro); font-weight: 500; color: var(--suave); }
+.estadistica-vector { margin: 6px 0; padding: 10px; background: #fff; border-radius: var(--radio-control); }
+.estadistica-vector svg { width: 100%; max-width: 380px; height: auto; display: block; margin: 0 auto; }
 @media (max-width: 900px) { .estadisticas-reportes { grid-template-columns: minmax(0, 1fr); } }
-.estadistica-insignia { font-size: 10px; letter-spacing: .1em; font-weight: 700; color: var(--acento); display: block; margin-bottom: 10px; }
-.estadisticas-reportes .estadistica-reporte { border-top: 3px solid var(--acento); box-shadow: 0 6px 20px #302b2d08; }
-.estadistica-vector { background: linear-gradient(180deg, #faf9fb, #fff); border-radius: 12px; margin: 14px 0; }
-.estadistica-vector svg { width: 100%; max-width: 400px; height: auto; display: block; margin: 0 auto; }
-.estadistica-total { margin: 4px 0; }
-.estadistica-leyenda li { border-bottom: 1px solid #eee; padding: 7px 0; font-size: 12px; }
-
-/* Gráficos compactos: limitar el dibujo sin reducir la legibilidad de la leyenda. */
-.estadisticas-reportes { gap: 14px; margin: 16px 0; }
-.estadisticas-reportes .estadistica-reporte { padding: 14px 16px; }
-.estadistica-reporte h2 { font-size: 18px; }
-.estadistica-reporte figcaption p { margin: 4px 0 8px; font-size: 12px; }
-.estadistica-insignia { margin-bottom: 5px; }
-.estadistica-total strong { font-size: 28px; }
-.estadistica-vector { margin: 6px 0; }
-.estadistica-leyenda { gap: 2px; margin: 8px 0; }
-.estadistica-leyenda li { padding: 6px 0; font-size: 14px; }

@@ -3,7 +3,7 @@
 from functools import wraps
 from hmac import compare_digest
 from secrets import token_urlsafe
-from flask import abort, g, redirect, request, session, url_for
+from flask import abort, flash, g, redirect, request, session, url_for
 
 
 def csrf_token():
@@ -12,12 +12,14 @@ def csrf_token():
     return session['csrf']
 
 
-def establecer_sesion(cuenta_acceso):
-    """Guarda la identidad y renueva el token CSRF después de autenticar la cuenta."""
+def establecer_sesion(cuenta_acceso, token_sesion):
+    """Guarda la identidad, el token de la sesión del servidor y renueva el token CSRF."""
     session.clear()
+    session.permanent = True
     session.update(
         id_usuario=cuenta_acceso.id_usuario,
         credenciales=cuenta_acceso.version_credenciales,
+        sid=token_sesion,
         csrf=token_urlsafe(32),
     )
 
@@ -45,12 +47,18 @@ def configurar_seguridad(app, acceso):
         identificador = session.get('id_usuario')
         if identificador is not None:
             cuenta_acceso = acceso.consultar_cuenta_activa(identificador)
-            if cuenta_acceso and compare_digest(
-                cuenta_acceso.version_credenciales, session.get('credenciales', '')
+            if (
+                cuenta_acceso
+                and compare_digest(
+                    cuenta_acceso.version_credenciales, session.get('credenciales', '')
+                )
+                and acceso.validar_sesion(session.get('sid'), identificador)
             ):
                 g.usuario = cuenta_acceso
             else:
                 session.clear()
+                if request.endpoint not in ('auth.iniciar_sesion', 'static'):
+                    flash('Tu sesión terminó. Inicia sesión nuevamente.')
         if request.endpoint not in ('auth.iniciar_sesion', 'static') and g.usuario is None:
             return redirect(url_for('auth.iniciar_sesion'))
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):

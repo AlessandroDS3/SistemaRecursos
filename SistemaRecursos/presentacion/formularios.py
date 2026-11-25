@@ -28,6 +28,7 @@ def recuperar_formulario(mostrar):
                 prefijo = {
                     'ampliaciones.ampliar_prestamo': 'ampliacion',
                     'prestamos.registrar_perdida_bien_material': 'perdida',
+                    'ampliaciones.solicitar_ampliacion': 'solicitud',
                 }.get(request.endpoint)
                 g.formulario_id = (
                     f'{prefijo}-{request.view_args["detalle_id"]}'
@@ -53,7 +54,7 @@ def recuperar_formulario(mostrar):
 def _campos_del_error(mensaje):
     aliases = {
         'codigo_inventario': 'codigo de inventario',
-        'numero_serie': 'numero de serie',
+        'numero_serie': 'serie del fabricante',
         'fecha_adquisicion': 'fecha de adquisicion',
         'nombre_usuario': 'usuario',
         'dni': 'dni',

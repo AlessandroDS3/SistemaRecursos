@@ -1,7 +1,7 @@
 -- Estructura del sistema de prestamos de recursos para MySQL 8.
 -- Crea prestamos_escuela sin registros: personas, cuentas y catalogo vacios.
 -- Acceso actualizado: persona.correo admite NULL y usuario_sistema incluye debe_cambiar_clave.
--- Incluye la estructura de sanciones por gravedad. Ejecutar sobre una base nueva.
+-- Incluye sanciones por gravedad, sesiones, mantenimientos, solicitudes de ampliacion y procesador. Ejecutar sobre una base nueva.
 -- CREATE TABLE IF NOT EXISTS no modifica la estructura de tablas ya existentes.
 SET NAMES utf8mb4;
 
@@ -84,14 +84,17 @@ CREATE TABLE IF NOT EXISTS bien_material (
   id_bien            INT AUTO_INCREMENT PRIMARY KEY,
   id_recurso     INT NOT NULL,
   codigo_inventario  VARCHAR(40) NOT NULL UNIQUE,
+  identificador_sistema VARCHAR(20) NULL,
   numero_serie       VARCHAR(60),
   fecha_adquisicion  DATE NULL,
+  fecha_registro     DATETIME NOT NULL DEFAULT (UTC_TIMESTAMP()),
   estado             ENUM('DISPONIBLE','PRESTADO','RESERVADO','DANADO','MANTENIMIENTO','PERDIDO')
                      NOT NULL DEFAULT 'DISPONIBLE',
   ubicacion          VARCHAR(120),
   descripcion_bien   VARCHAR(255) NULL,
   INDEX idx_bien_estado_recurso_codigo (estado, id_recurso, codigo_inventario),
   INDEX idx_bien_recurso_codigo (id_recurso, codigo_inventario),
+  UNIQUE KEY uq_bien_identificador_sistema (identificador_sistema),
   FOREIGN KEY (id_recurso) REFERENCES recurso(id_recurso)
 ) ENGINE=InnoDB;
 
@@ -269,3 +272,71 @@ CREATE TABLE IF NOT EXISTS historial_estado (
   INDEX (entidad, id_entidad),
   FOREIGN KEY (dni_responsable) REFERENCES persona(dni) ON UPDATE CASCADE
 ) ENGINE=InnoDB;
+
+-- 7. SESIONES, MANTENIMIENTOS, SOLICITUDES DE AMPLIACION Y PROCESADOR
+
+CREATE TABLE IF NOT EXISTS sesion_usuario (
+  id_sesion         CHAR(64) PRIMARY KEY,
+  id_usuario        INT NOT NULL,
+  fecha_inicio      DATETIME NOT NULL,
+  ultima_actividad  DATETIME NOT NULL,
+  fecha_cierre      DATETIME NULL,
+  INDEX idx_sesion_usuario (id_usuario, fecha_cierre),
+  FOREIGN KEY (id_usuario) REFERENCES usuario_sistema(id_usuario) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS mantenimiento_bien (
+  id_mantenimiento    INT AUTO_INCREMENT PRIMARY KEY,
+  id_bien             INT NOT NULL,
+  tipo                ENUM('PREVENTIVO','CORRECTIVO') NOT NULL,
+  motivo              VARCHAR(255) NOT NULL,
+  estado_previo       VARCHAR(30) NOT NULL,
+  fecha_inicio        DATETIME NOT NULL,
+  fecha_fin_estimada  DATE NULL,
+  dni_apertura        VARCHAR(8) NOT NULL,
+  fecha_fin_real      DATETIME NULL,
+  dni_cierre          VARCHAR(8) NULL,
+  resultado           ENUM('DISPONIBLE','DANADO') NULL,
+  observacion_cierre  VARCHAR(255) NULL,
+  abierto             TINYINT GENERATED ALWAYS AS (IF(fecha_fin_real IS NULL, 1, NULL)) STORED,
+  UNIQUE KEY uq_mantenimiento_abierto (id_bien, abierto),
+  INDEX idx_mantenimiento_bien (id_bien, fecha_inicio),
+  FOREIGN KEY (id_bien) REFERENCES bien_material(id_bien),
+  FOREIGN KEY (dni_apertura) REFERENCES persona(dni) ON UPDATE CASCADE,
+  FOREIGN KEY (dni_cierre) REFERENCES persona(dni) ON UPDATE CASCADE,
+  CHECK (fecha_fin_real IS NULL OR resultado IS NOT NULL)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS solicitud_ampliacion (
+  id_solicitud            INT AUTO_INCREMENT PRIMARY KEY,
+  id_prestamo             INT NOT NULL,
+  id_detalle              INT NOT NULL,
+  dni_solicitante         VARCHAR(8) NOT NULL,
+  cantidad                INT NOT NULL CHECK (cantidad > 0),
+  unidad                  ENUM('HORAS','DIAS') NOT NULL,
+  motivo                  VARCHAR(255) NOT NULL,
+  fecha_solicitud         DATETIME NOT NULL,
+  fecha_limite_anterior   DATETIME NOT NULL,
+  estado                  ENUM('PENDIENTE','APROBADA','RECHAZADA') NOT NULL DEFAULT 'PENDIENTE',
+  fecha_resolucion        DATETIME NULL,
+  dni_resolucion          VARCHAR(8) NULL,
+  fecha_limite_nueva      DATETIME NULL,
+  observacion_resolucion  VARCHAR(255) NULL,
+  pendiente               TINYINT GENERATED ALWAYS AS (IF(estado='PENDIENTE', 1, NULL)) STORED,
+  UNIQUE KEY uq_solicitud_pendiente (id_detalle, pendiente),
+  INDEX idx_solicitud_estado (estado, fecha_solicitud),
+  FOREIGN KEY (id_prestamo) REFERENCES prestamo(id_prestamo),
+  FOREIGN KEY (id_detalle) REFERENCES detalle_prestamo(id_detalle),
+  FOREIGN KEY (dni_solicitante) REFERENCES persona(dni) ON UPDATE CASCADE,
+  FOREIGN KEY (dni_resolucion) REFERENCES persona(dni) ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS estado_procesador (
+  id_procesador              TINYINT PRIMARY KEY CHECK (id_procesador = 1),
+  ultima_ejecucion_correcta  DATETIME NULL,
+  ultimo_error_fecha         DATETIME NULL,
+  ultimo_error               VARCHAR(500) NULL,
+  fallos_consecutivos        INT NOT NULL DEFAULT 0
+) ENGINE=InnoDB;
+
+INSERT IGNORE INTO estado_procesador(id_procesador) VALUES (1);

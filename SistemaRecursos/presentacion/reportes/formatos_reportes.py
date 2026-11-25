@@ -28,6 +28,7 @@ FORMATOS = {
     'gravedad': 'estado',
     'tipo_regularizacion': 'etiqueta',
     'fecha_adquisicion': 'dia',
+    'fecha_registro': 'fecha',
     'estado': 'estado',
     'situacion': 'estado',
     'cumplimiento': 'estado',

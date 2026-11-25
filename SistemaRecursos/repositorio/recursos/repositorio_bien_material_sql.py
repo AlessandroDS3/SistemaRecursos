@@ -1,5 +1,11 @@
 from dataclasses import asdict
+
+from mysql.connector import IntegrityError
+
+from dominio.gestion_recursos.bien_material import generar_identificador_sistema
 from repositorio.base_datos.base_sql import RepositorioSQL
+
+INTENTOS_IDENTIFICADOR = 8
 
 
 class RepositorioBienMaterialSQL(RepositorioSQL):
@@ -26,9 +32,10 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
             condiciones.append("b.estado='DISPONIBLE'")
         if filtros.get('q'):
             condiciones.append(
-                '(b.codigo_inventario LIKE %s OR r.nombre LIKE %s OR r.marca LIKE %s OR r.modelo LIKE %s)'
+                '(b.codigo_inventario LIKE %s OR b.identificador_sistema LIKE %s OR b.numero_serie LIKE %s'
+                ' OR r.nombre LIKE %s OR r.marca LIKE %s OR r.modelo LIKE %s)'
             )
-            parametros.extend([f"%{filtros['q']}%"] * 4)
+            parametros.extend([f"%{filtros['q']}%"] * 6)
         sql = '''SELECT b.*,r.nombre AS recurso,r.id_categoria FROM bien_material b
             JOIN recurso r ON r.id_recurso=b.id_recurso'''
         if condiciones:
@@ -39,7 +46,7 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
         datos = asdict(bien)
         identificador = datos.pop('id_bien')
         if identificador is None:
-            bien.id_bien = self.insertar('bien_material', datos)
+            bien.id_bien = self._insertar_con_identificador(datos)
         else:
             self.ejecutar(
                 'UPDATE bien_material SET '
@@ -48,6 +55,23 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
                 (*datos.values(), identificador),
             )
         return bien.id_bien
+
+    def _insertar_con_identificador(self, datos: dict) -> int:
+        """Genera el identificador en el servidor; una colisión reintenta con otro valor.
+
+        En InnoDB un INSERT rechazado por clave única no revierte la transacción en curso.
+        """
+        anio = self.consultar_fecha_actual().year
+        for _ in range(INTENTOS_IDENTIFICADOR):
+            try:
+                return self.insertar(
+                    'bien_material',
+                    dict(datos, identificador_sistema=generar_identificador_sistema(anio)),
+                )
+            except IntegrityError as error:
+                if 'identificador_sistema' not in (error.msg or ''):
+                    raise
+        raise RuntimeError('No se pudo generar un identificador único para el bien.')
 
     def cambiar_estado_bien_material(self, identificador, anterior, nuevo, motivo, actor) -> None:
         self.ejecutar('UPDATE bien_material SET estado=%s WHERE id_bien=%s', (nuevo, identificador))
@@ -94,3 +118,40 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
 
     def eliminar_bien_material(self, identificador: int) -> None:
         self.ejecutar('DELETE FROM bien_material WHERE id_bien=%s', (identificador,))
+
+    # Mantenimientos (MAN-01)
+
+    def consultar_mantenimiento_abierto(self, identificador: int, bloquear=False) -> dict | None:
+        return self.consultar_sql(
+            '''SELECT * FROM mantenimiento_bien WHERE id_bien=%s AND fecha_fin_real IS NULL'''
+            + (' FOR UPDATE' if bloquear else ''),
+            (identificador,),
+            una=True,
+        )
+
+    def consultar_mantenimientos(self, identificador: int) -> list[dict]:
+        return self.consultar_sql(
+            '''SELECT m.*,CONCAT(pa.nombres,' ',pa.apellidos) AS responsable_apertura,
+            CONCAT(pc.nombres,' ',pc.apellidos) AS responsable_cierre
+            FROM mantenimiento_bien m
+            LEFT JOIN persona pa ON pa.dni=m.dni_apertura
+            LEFT JOIN persona pc ON pc.dni=m.dni_cierre
+            WHERE m.id_bien=%s ORDER BY m.fecha_inicio DESC,m.id_mantenimiento DESC''',
+            (identificador,),
+        )
+
+    def abrir_mantenimiento(self, identificador, apertura, estado_previo, actor) -> int:
+        return self.ejecutar(
+            '''INSERT INTO mantenimiento_bien(id_bien,tipo,motivo,estado_previo,fecha_inicio,
+            fecha_fin_estimada,dni_apertura) VALUES(%s,%s,%s,%s,UTC_TIMESTAMP(),%s,%s)''',
+            (identificador, apertura.tipo, apertura.motivo, estado_previo,
+             apertura.fecha_fin_estimada, actor),
+        )
+
+    def cerrar_mantenimiento(self, id_mantenimiento, cierre, actor) -> None:
+        self.ejecutar(
+            '''UPDATE mantenimiento_bien SET fecha_fin_real=UTC_TIMESTAMP(),dni_cierre=%s,
+            resultado=%s,observacion_cierre=%s
+            WHERE id_mantenimiento=%s AND fecha_fin_real IS NULL''',
+            (actor, cierre.resultado, cierre.observacion, id_mantenimiento),
+        )

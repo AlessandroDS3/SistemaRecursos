@@ -209,7 +209,8 @@ def _ficha_historial(sujeto, por_bien):
         return [
             ('Objeto', f"{sujeto['codigo_inventario']} · {sujeto['recurso']}"),
             ('Categoría', sujeto['categoria']),
-            ('Serie', sujeto['numero_serie']),
+            ('Identificador del sistema', sujeto.get('identificador_sistema')),
+            ('Serie del fabricante', sujeto['numero_serie']),
             ('Ubicación', sujeto['ubicacion']),
             ('Estado actual del bien', etiqueta_reporte(sujeto['estado'])),
         ]

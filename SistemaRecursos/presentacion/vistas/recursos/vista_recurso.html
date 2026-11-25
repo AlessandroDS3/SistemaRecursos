@@ -133,7 +133,7 @@
           <tr>
             <th>Inventario</th>
             <th>Descripción particular</th>
-            <th>Serie</th>
+            <th>Identificador / serie</th>
             <th>Ubicación</th>
             <th>Estado</th>
             {% if gestionar_prestamos %}<th>Acción</th>{% endif %}
@@ -152,7 +152,7 @@
                 {% endif %}
               </td>
               <td>{{ b.descripcion_bien or 'Sin descripción particular' }}</td>
-              <td>{{ b.numero_serie or 'Sin registrar' }}</td>
+              <td>{{ b.identificador_sistema or '—' }}<small>Fabricante: {{ b.numero_serie or 'sin registrar' }}</small></td>
               <td>{{ b.ubicacion or 'Sin registrar' }}</td>
               <td>{{ estado(b.estado) }}</td>
               {% if gestionar_prestamos %}

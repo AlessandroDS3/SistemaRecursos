@@ -30,3 +30,35 @@ class RepositorioAccesoSQL(RepositorioSQL):
                 'UPDATE usuario_sistema SET ultimo_acceso=UTC_TIMESTAMP() WHERE id_usuario=%s',
                 (identificador,),
             )
+
+    def crear_sesion(self, huella, id_usuario):
+        with self.transaccion() as operacion:
+            operacion.ejecutar(
+                '''INSERT INTO sesion_usuario(id_sesion,id_usuario,fecha_inicio,ultima_actividad)
+                VALUES(%s,%s,UTC_TIMESTAMP(),UTC_TIMESTAMP())''',
+                (huella, id_usuario),
+            )
+
+    def consultar_sesion(self, huella):
+        return self.consultar_sql(
+            '''SELECT id_usuario,fecha_inicio,ultima_actividad,fecha_cierre
+            FROM sesion_usuario WHERE id_sesion=%s''',
+            (huella,),
+            una=True,
+        )
+
+    def registrar_actividad_sesion(self, huella):
+        with self.transaccion() as operacion:
+            operacion.ejecutar(
+                '''UPDATE sesion_usuario SET ultima_actividad=UTC_TIMESTAMP()
+                WHERE id_sesion=%s AND fecha_cierre IS NULL''',
+                (huella,),
+            )
+
+    def cerrar_sesion(self, huella):
+        with self.transaccion() as operacion:
+            operacion.ejecutar(
+                '''UPDATE sesion_usuario SET fecha_cierre=UTC_TIMESTAMP()
+                WHERE id_sesion=%s AND fecha_cierre IS NULL''',
+                (huella,),
+            )

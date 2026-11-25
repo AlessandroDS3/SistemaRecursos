@@ -1,5 +1,9 @@
 # Sistema de préstamos de recursos
 
+> **Guías:** [instalación y actualización](docs/GUIA_INSTALACION.md) · [manual por rol](docs/MANUAL_POR_ROL.md).
+> En Windows inicia con `powershell -ExecutionPolicy Bypass -File .\run.ps1`. Para una base
+> existente, aplica las migraciones con `-MigrarSanciones -MigrarCierre`.
+
 Aplicación en Python, Flask y MySQL. Esta rama contiene los archivos necesarios
 para ejecutar el sistema: código, plantillas, estilos, imágenes de la interfaz,
 dependencias, script de arranque y SQL.

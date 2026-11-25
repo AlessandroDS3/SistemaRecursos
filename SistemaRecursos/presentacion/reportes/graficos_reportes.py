@@ -15,7 +15,7 @@ CONFIGURACION = {
     'danos_perdidas': ('tipo_evento', 'Daños y pérdidas', 'eventos'),
     'personas': ('estado', 'Estado de las personas', 'personas'),
 }
-COLORES = ('#87002e', '#287b78', '#b77918', '#6554a4', '#3275a8', '#b64e40', '#77838b')
+COLORES = ('#111113', '#7a0d2e', '#8e8e94', '#c4c4c8', '#b3214d', '#4a4a50', '#e0b8c3')
 
 
 def _rango(minutos):

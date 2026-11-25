@@ -40,6 +40,18 @@ class ControladorBienMaterial:
                 self.eliminar_bien_material,
                 ['POST'],
             ),
+            (
+                '/<int:identificador>/mantenimiento/abrir',
+                'abrir_mantenimiento',
+                self.abrir_mantenimiento,
+                ['POST'],
+            ),
+            (
+                '/<int:identificador>/mantenimiento/cerrar',
+                'cerrar_mantenimiento',
+                self.cerrar_mantenimiento,
+                ['POST'],
+            ),
         ):
             self.blueprint.add_url_rule(ruta, nombre, funcion, methods=metodos)
 
@@ -114,6 +126,24 @@ class ControladorBienMaterial:
             identificador, request.form.to_dict(), g.usuario.id_usuario
         )
         flash('Estado actualizado.')
+        return redirect(url_for('bienes.consultar_bien_material', identificador=identificador))
+
+    @requiere_permiso('RECURSOS_GESTIONAR')
+    @recuperar_formulario(lambda self, identificador: self.consultar_bien_material(identificador))
+    def abrir_mantenimiento(self, identificador):
+        self.servicio.abrir_mantenimiento(
+            identificador, request.form.to_dict(), g.usuario.id_usuario
+        )
+        flash('Mantenimiento abierto. El bien no se puede prestar hasta cerrarlo.')
+        return redirect(url_for('bienes.consultar_bien_material', identificador=identificador))
+
+    @requiere_permiso('RECURSOS_GESTIONAR')
+    @recuperar_formulario(lambda self, identificador: self.consultar_bien_material(identificador))
+    def cerrar_mantenimiento(self, identificador):
+        self.servicio.cerrar_mantenimiento(
+            identificador, request.form.to_dict(), g.usuario.id_usuario
+        )
+        flash('Mantenimiento cerrado.')
         return redirect(url_for('bienes.consultar_bien_material', identificador=identificador))
 
     @requiere_permiso('RECURSOS_GESTIONAR')

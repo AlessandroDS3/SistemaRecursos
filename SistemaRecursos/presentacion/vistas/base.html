@@ -8,6 +8,10 @@
         Sistema de préstamos · UNSA
       {% endblock %}
     </title>
+    <script>
+      try { const tema = localStorage.getItem('tema'); if (tema) document.documentElement.dataset.theme = tema; } catch (e) {}
+    </script>
+    <link rel="preload" href="{{ url_for('static', filename='fuentes/inter-latin.woff2') }}" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet"
           href="{{ url_for('static', filename='estilos.css') }}">
     <script src="{{ url_for('static', filename='aplicacion.js') }}" defer></script>
@@ -31,6 +35,19 @@
         ('reportes.consultar_historial_propio', 'Mi historial', gestiona_prestamos and g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'), 'mi_historial'),
         ('sanciones.consultar_sanciones', 'Sanciones', gestiona_prestamos, 'sanciones')
       ] %}
+      {% set iconos = {
+        'inicio': 'M3 10.5 12 3l9 7.5M5 9v11h5v-6h4v6h5V9',
+        'recursos': 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
+        'prestamos': 'M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7',
+        'reservas': 'M4 5h16v15H4zM4 10h16M8 3v4M16 3v4',
+        'sanciones': 'M12 3 3 19h18L12 3zM12 10v4M12 16.5v.5',
+        'administracion_recursos': 'M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9',
+        'personas': 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6 6 0 0 1 12 0M16 4.3a3.5 3.5 0 0 1 0 6.4M21 20a6 6 0 0 0-3.5-5.5',
+        'politicas': 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4',
+        'roles': 'M12 3l7 3v5c0 4.4-3 8.2-7 10-4-1.8-7-5.6-7-10V6zM9.5 12l2 2 3.5-4',
+        'reportes': 'M4 20V11M10 20V5M16 20v-6M3 20h18',
+        'mi_historial': 'M4 12a8 8 0 1 0 2.3-5.6L4 8.7M4 4v4.7h4.7M12 8v4.5l3 2'
+      } %}
       <aside class="menu-lateral"
              id="menu-principal"
              aria-label="Menú del sistema">
@@ -57,7 +74,7 @@
             {% set activa = (grupo == 'inicio' and request.endpoint == 'inicio') or (grupo == 'administracion_recursos' and administra_recursos) or (es_historial_propio and grupo == ('mi_historial' if gestiona_prestamos else 'prestamos')) or (request.blueprint == grupo and not administra_recursos and not es_historial_propio) or (grupo == 'prestamos' and request.blueprint == 'ampliaciones') %}
             <a class="{{ 'enlace-menu-activo' if activa else 'enlace-menu' }}"
                href="{{ url_for(endpoint) }}"
-               {% if activa %}aria-current="page"{% endif %}>{{ etiqueta }}</a>
+               {% if activa %}aria-current="page"{% endif %}><svg class="icono-menu" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ iconos[grupo] }}"/></svg>{{ etiqueta }}</a>
                 {% endfor %}
               {% endfor %}
             {% endif %}
@@ -94,6 +111,14 @@
                   aria-label="Abrir menú">☰</button>
           <strong>Sistema de Recursos</strong>
           <span>UNSA · Ciencia de la Computación</span>
+          <button type="button"
+                  class="boton-tema"
+                  data-cambiar-tema
+                  aria-label="Cambiar tema claro u oscuro"
+                  title="Cambiar tema">
+            <svg class="icono-luna" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>
+            <svg class="icono-sol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </button>
         </header>
     {% endif %}
     <main id="contenido"

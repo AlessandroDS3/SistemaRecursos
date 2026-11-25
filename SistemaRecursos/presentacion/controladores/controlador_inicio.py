@@ -15,4 +15,20 @@ def registrar_inicio(app, servicios):
         if usuario.permite('CATALOGO_CONSULTAR'):
             resumen['bienes_disponibles'] = servicios['recursos'].consultar_disponibilidad()
 
-        return render_template('inicio.html', resumen=resumen)
+        solicitudes = (
+            len(servicios['ampliaciones'].consultar_solicitudes_ampliacion('PENDIENTE'))
+            if gestionar
+            else 0
+        )
+
+        procesador = (
+            servicios['procesador'].consultar_estado_procesador()
+            if usuario.permite('USUARIOS_GESTIONAR')
+            else None
+        )
+        return render_template(
+            'inicio.html',
+            resumen=resumen,
+            solicitudes_pendientes=solicitudes,
+            procesador=procesador,
+        )

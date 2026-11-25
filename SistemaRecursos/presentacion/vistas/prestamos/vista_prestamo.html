@@ -16,6 +16,7 @@
         <a class="boton secundario" href="{{ url_for('reportes.consultar_historial_propio') }}">Mi historial completo</a>
       {% endif %}
       {% if gestionar %}
+        <a class="boton secundario" href="{{ url_for('ampliaciones.consultar_solicitudes') }}">Solicitudes de ampliación</a>
         <a class="boton" href="{{ url_for('prestamos.registrar_prestamo',volver=volver) }}">+ Nuevo préstamo</a>
       {% endif %}
     </div>
@@ -443,6 +444,76 @@
     </form>
   {% endif %}
   </section>
+  {% set solicitudes = solicitudes or [] %}
+  {% set detalles_con_pedido = solicitudes|selectattr('estado', 'equalto', 'PENDIENTE')|map(attribute='id_detalle')|list %}
+  {% if not gestionar and prestamo.dni_persona == g.usuario.dni %}
+    <details class="panel" {% if g.formulario_id and g.formulario_id.startswith('solicitud-') %}open{% endif %}>
+      <summary>Solicitar más plazo</summary>
+      <p class="suave">El encargado revisará tu pedido. Mientras tanto, el plazo actual sigue vigente.</p>
+      {% for d in prestamo.detalles if not d.fecha_devolucion and not d.fecha_regularizacion and d.estado_bien=='PRESTADO' and d.fecha_limite_devolucion>ahora and d.id_detalle not in detalles_con_pedido %}
+        {% set formulario_solicitud = 'solicitud-'~d.id_detalle %}
+        <form method="post"
+              id="{{ formulario_solicitud }}"
+              action="{{ url_for('ampliaciones.solicitar_ampliacion',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
+              class="formulario operacion-bien">
+          {{ csrf() }}
+          <input type="hidden" name="_formulario" value="{{ formulario_solicitud }}">
+          <input type="hidden" name="volver" value="{{ volver }}">
+          <strong>{{ d.codigo_inventario }} · {{ d.recurso }}</strong>
+          <small>Vence: {{ d.fecha_limite_devolucion|fecha }}</small>
+          <div class="rejilla filtros-tres">
+            {{ campo('cantidad','Tiempo adicional',tipo='number',requerido=true,formulario=formulario_solicitud) }}
+            {{ opciones('unidad','Unidad',('HORAS','DIAS'),d.unidad_plazo,formulario=formulario_solicitud) }}
+            {{ campo('motivo','Motivo',requerido=true,formulario=formulario_solicitud) }}
+          </div>
+          <button class="secundario">Enviar solicitud</button>
+        </form>
+      {% else %}
+        <p>No hay bienes con plazo vigente disponibles para pedir ampliación.</p>
+      {% endfor %}
+    </details>
+  {% endif %}
+  {% if solicitudes %}
+    <section class="panel panel-tabla">
+      <h2>Solicitudes de ampliación</h2>
+      <div class="tabla">
+        <table>
+          <thead>
+            <tr><th>Bien</th><th>Pedido</th><th>Estado</th><th>Resolución</th></tr>
+          </thead>
+          <tbody>
+            {% for s in solicitudes %}
+              <tr>
+                <td>{{ s.codigo_inventario }}<small>{{ s.fecha_solicitud|fecha }}</small></td>
+                <td>+{{ s.cantidad }} {{ 'horas' if s.unidad == 'HORAS' else 'días' }}<small>{{ s.motivo }}</small></td>
+                <td>{{ estado(s.estado) }}</td>
+                <td>
+                  {% if s.estado == 'PENDIENTE' and gestionar %}
+                    <form method="post" class="formulario" action="{{ url_for('ampliaciones.aprobar_solicitud', identificador=s.id_solicitud) }}">
+                      {{ csrf() }}
+                      <input type="hidden" name="volver" value="{{ request.path }}">
+                      <button>Aprobar</button>
+                    </form>
+                    <form method="post" class="formulario operacion-bien" action="{{ url_for('ampliaciones.rechazar_solicitud', identificador=s.id_solicitud) }}">
+                      {{ csrf() }}
+                      <input type="hidden" name="volver" value="{{ request.path }}">
+                      <label>Motivo del rechazo<input name="observacion" maxlength="255" required></label>
+                      <button class="secundario">Rechazar</button>
+                    </form>
+                  {% elif s.estado == 'PENDIENTE' %}
+                    En revisión
+                  {% else %}
+                    {% if s.fecha_limite_nueva %}Nuevo plazo: {{ s.fecha_limite_nueva|fecha }}{% endif %}
+                    {% if s.observacion_resolucion %}<small>{{ s.observacion_resolucion }}</small>{% endif %}
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
   {% if gestionar %}
     <details class="panel">
       <summary>Ampliar plazo</summary>

@@ -25,6 +25,7 @@ from repositorio.control.repositorio_sancion_sql import RepositorioSancionSQL
 from repositorio.prestamos.repositorio_prestamo_sql import RepositorioPrestamoSQL
 from servicios.control.servicio_sancion import ServicioAplicacionSancion
 from servicios.prestamos.servicio_prestamo import ServicioAplicacionPrestamo
+from tests.soporte_roles import cliente_autenticado
 
 
 @unittest.skipUnless(os.getenv('TEST_MYSQL_PORT'), 'Requiere TEST_MYSQL_PORT')
@@ -33,14 +34,19 @@ class BaseMySQLTest(unittest.TestCase):
         self.nombre_base = 'pruebas_sanciones_' + token_hex(6)
         servidor = dict(host='127.0.0.1', port=int(os.environ['TEST_MYSQL_PORT']), user='root',
                         password=os.getenv('TEST_MYSQL_PASSWORD', ''), use_pure=True)
+        # La conexión que crea el esquema se confirma y se cierra de inmediato: si siguiera
+        # abierta, retendría bloqueos de metadatos y el DROP DATABASE final esperaría para siempre.
         conexion = mysql.connector.connect(**servidor)
-        self.addCleanup(conexion.close)
-        cursor = conexion.cursor()
-        esquema = (Path(__file__).parents[2] / 'sql/schema.sql').read_text(encoding='utf-8')
-        cursor.execute(esquema.replace('prestamos_escuela', self.nombre_base))
-        while cursor.nextset():
-            pass
-        cursor.close()
+        try:
+            cursor = conexion.cursor()
+            esquema = (Path(__file__).parents[2] / 'sql/schema.sql').read_text(encoding='utf-8')
+            cursor.execute(esquema.replace('prestamos_escuela', self.nombre_base))
+            while cursor.nextset():
+                pass
+            cursor.close()
+            conexion.commit()
+        finally:
+            conexion.close()
 
         def eliminar_base():
             with mysql.connector.connect(**servidor) as c:
@@ -113,11 +119,7 @@ class SancionesMySQLTest(BaseMySQLTest):
                              nombres='Prueba', apellidos='Persona', rol=rol,
                              estado_cuenta='ACTIVA', estado_persona='ACTIVA',
                              contrasena_hash='pruebas', permisos=permisos_del_rol(rol))
-        self.enterContext(patch.object(app.extensions['servicios']['acceso'], 'consultar_cuenta_activa', return_value=cuenta))
-        cliente = app.test_client()
-        with cliente.session_transaction() as sesion:
-            sesion.update(id_usuario=identificador, credenciales=cuenta.version_credenciales, csrf='token')
-        return cliente
+        return cliente_autenticado(self, app, cuenta, identificador)
 
     def test_retraso_inmediato_sin_duplicados_y_bloqueo_grupal(self):
         self.consulta('UPDATE detalle_prestamo SET fecha_limite_devolucion=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 SECOND)')
