@@ -1,7 +1,12 @@
 -- Datos ficticios para probar el sistema de recursos con MySQL 8.
--- Crea una base de demostracion aislada y carga escenarios consistentes al 12-11-2026.
--- Ejecutar SOLO en una instalacion nueva; NO ejecutar sobre una base con datos.
--- Si ya existe prestamos_escuela_pruebas, recrearla antes de importar estos datos.
+-- Crea una base de demostracion aislada. Los casos abiertos se fechan al importar.
+-- Ejecutar el archivo completo sobre una base vacía. Si no existe, el archivo la crea.
+-- No ejecutar la carga completa sobre una base que ya contiene datos.
+-- Si una carga falló, ejecuta ROLLBACK; en la misma pestaña de Workbench.
+-- Para reconstruir desde cero, ejecuta esta sentencia por separado solo si
+-- quieres borrar todo el contenido de la base de demostración:
+-- DROP DATABASE IF EXISTS `prestamos_escuela_pruebas`;
+-- Luego ejecuta este archivo completo, desde la primera línea.
 -- Las cuentas de demostracion usan debe_cambiar_clave=FALSE y las claves indicadas abajo.
 -- Cuentas locales de demostracion (no usar en produccion):
 -- admin / AdminPrueba2026!
@@ -322,6 +327,19 @@ CREATE TABLE IF NOT EXISTS estado_procesador (
 -- Fotografia de escenarios: 12 de noviembre de 2026.
 START TRANSACTION;
 
+-- Fechas UTC para que la primera revisión no venza los ejemplos recién cargados.
+SET @ahora_prueba = UTC_TIMESTAMP();
+SET @ayer_lima = DATE(@ahora_prueba - INTERVAL 5 HOUR) - INTERVAL 1 DAY;
+SET @entrega_activa = TIMESTAMP(@ayer_lima, '14:00:00'); -- 09:00 en Lima
+SET @entrega_grupal = @entrega_activa + INTERVAL 1 HOUR;
+SET @entrega_parcial = @entrega_activa - INTERVAL 25 HOUR;
+SET @devolucion_visor = @entrega_parcial + INTERVAL 1 DAY + INTERVAL 2 HOUR;
+SET @incidencia_visor = @devolucion_visor + INTERVAL 15 MINUTE;
+SET @solicitud_visor = @ahora_prueba - INTERVAL 1 DAY;
+SET @preparacion_visor = @ahora_prueba - INTERVAL 1 HOUR;
+SET @solicitud_reserva = @ahora_prueba - INTERVAL 30 MINUTE;
+SET @fecha_reserva = @ahora_prueba + INTERVAL 1 DAY;
+
 INSERT INTO `persona` (`nombres`, `apellidos`, `dni`, `telefono`, `correo`, `estado`) VALUES
 ('Ana', 'Torres', '02167885', '', 'ana@ejemplo.gmail', 'ACTIVA'),
 ('Administrador', 'Prueba', '98000001', '', 'admin@ejemplo.gmail', 'ACTIVA'),
@@ -368,19 +386,38 @@ INSERT INTO `administrativo` (`codigo_empleado`, `area`, `dni`) VALUES
 ('ADM-PRUEBA-02', 'Préstamos', '98000002'),
 ('ADM-PRB-03', 'Préstamos', '99000015');
 
-INSERT INTO `usuario_sistema` (`id_usuario`, `rol`, `nombre_usuario`, `contrasena_hash`, `ultimo_acceso`, `estado_cuenta`, `dni_persona`) VALUES
-(1, 'ADMINISTRADOR', 'admin', 'scrypt:32768:8:1$jhqyz5zQhHnufRRc$41187f6bf98ae78e7e0221856d29d8e17bf60a32e34552c7e5734f08ff017bee8d977ab06153ca966a08f70e634e4e0c83cfc4ca52e51b330b7602831af3c5a4', NULL, 'ACTIVA', '98000001'),
-(2, 'ENCARGADO_PRESTAMOS', 'encargado1', 'scrypt:32768:8:1$OSOfhtGAzkHFLfsT$b235f4c09cda8e8c25a44e0ffbf449f506a08cfe3a468af259a11f0ebb9b92dbae9305530e6175a88655984a0601b50e9a64fc34eab21f52964d68f65803fdd9', NULL, 'ACTIVA', '98000002'),
-(3, 'USUARIO', 'usuario1', 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460', NULL, 'ACTIVA', '02167885'),
-(4, 'USUARIO', 'estudiante01', 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460', NULL, 'ACTIVA', '99000001'),
-(5, 'USUARIO', 'estudiante02', 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460', NULL, 'ACTIVA', '99000002'),
-(6, 'USUARIO', 'estudiante03', 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460', NULL, 'ACTIVA', '99000003'),
-(7, 'USUARIO', 'estudiante04', 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460', NULL, 'ACTIVA', '99000004'),
-(8, 'USUARIO', 'estudiante05', 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460', NULL, 'ACTIVA', '99000005'),
-(9, 'USUARIO', 'estudiante06', 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460', NULL, 'ACTIVA', '99000006'),
-(10, 'USUARIO', 'estudiante07', 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460', NULL, 'ACTIVA', '99000007'),
-(11, 'USUARIO', 'estudiante08', 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460', NULL, 'ACTIVA', '99000008'),
-(19, 'ENCARGADO_PRESTAMOS', 'encargado2', 'scrypt:32768:8:1$OSOfhtGAzkHFLfsT$b235f4c09cda8e8c25a44e0ffbf449f506a08cfe3a468af259a11f0ebb9b92dbae9305530e6175a88655984a0601b50e9a64fc34eab21f52964d68f65803fdd9', NULL, 'ACTIVA', '99000015');
+-- Para recuperar cuentas en una base de pruebas existente, selecciona y ejecuta solo el INSERT siguiente.
+INSERT INTO usuario_sistema (dni_persona, nombre_usuario, rol, contrasena_hash)
+SELECT d.dni, d.usuario, d.rol, d.clave
+FROM (
+    SELECT '98000001' AS dni, 'admin' AS usuario, 'ADMINISTRADOR' AS rol, 'scrypt:32768:8:1$jhqyz5zQhHnufRRc$41187f6bf98ae78e7e0221856d29d8e17bf60a32e34552c7e5734f08ff017bee8d977ab06153ca966a08f70e634e4e0c83cfc4ca52e51b330b7602831af3c5a4' AS clave
+    UNION ALL
+    SELECT '98000002' AS dni, 'encargado1' AS usuario, 'ENCARGADO_PRESTAMOS' AS rol, 'scrypt:32768:8:1$OSOfhtGAzkHFLfsT$b235f4c09cda8e8c25a44e0ffbf449f506a08cfe3a468af259a11f0ebb9b92dbae9305530e6175a88655984a0601b50e9a64fc34eab21f52964d68f65803fdd9' AS clave
+    UNION ALL
+    SELECT '02167885' AS dni, 'usuario1' AS usuario, 'USUARIO' AS rol, 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460' AS clave
+    UNION ALL
+    SELECT '99000001' AS dni, 'estudiante01' AS usuario, 'USUARIO' AS rol, 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460' AS clave
+    UNION ALL
+    SELECT '99000002' AS dni, 'estudiante02' AS usuario, 'USUARIO' AS rol, 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460' AS clave
+    UNION ALL
+    SELECT '99000003' AS dni, 'estudiante03' AS usuario, 'USUARIO' AS rol, 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460' AS clave
+    UNION ALL
+    SELECT '99000004' AS dni, 'estudiante04' AS usuario, 'USUARIO' AS rol, 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460' AS clave
+    UNION ALL
+    SELECT '99000005' AS dni, 'estudiante05' AS usuario, 'USUARIO' AS rol, 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460' AS clave
+    UNION ALL
+    SELECT '99000006' AS dni, 'estudiante06' AS usuario, 'USUARIO' AS rol, 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460' AS clave
+    UNION ALL
+    SELECT '99000007' AS dni, 'estudiante07' AS usuario, 'USUARIO' AS rol, 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460' AS clave
+    UNION ALL
+    SELECT '99000008' AS dni, 'estudiante08' AS usuario, 'USUARIO' AS rol, 'scrypt:32768:8:1$GLlTvRZr6Kin4Gkx$65ce4a9c7ef057d3a4429b1297f7f5d2ffddb87b7068e46dd92bde33c7220b2ec3dcbced49863d234a8118b664ce836d8c77c724ca9f55336547e1b457002460' AS clave
+    UNION ALL
+    SELECT '99000015' AS dni, 'encargado2' AS usuario, 'ENCARGADO_PRESTAMOS' AS rol, 'scrypt:32768:8:1$OSOfhtGAzkHFLfsT$b235f4c09cda8e8c25a44e0ffbf449f506a08cfe3a468af259a11f0ebb9b92dbae9305530e6175a88655984a0601b50e9a64fc34eab21f52964d68f65803fdd9' AS clave
+) AS d
+JOIN persona p ON p.dni = d.dni AND p.estado = 'ACTIVA'
+LEFT JOIN usuario_sistema por_dni ON por_dni.dni_persona = d.dni
+LEFT JOIN usuario_sistema por_nombre ON por_nombre.nombre_usuario = d.usuario
+WHERE por_dni.id_usuario IS NULL AND por_nombre.id_usuario IS NULL;
 
 -- CATALOGO: NUEVE CATEGORIAS Y EQUIPOS DE LABORATORIO MODERNOS.
 INSERT INTO `categoria_recurso` (`id_categoria`, `nombre`, `descripcion`) VALUES
@@ -445,7 +482,7 @@ INSERT INTO `bien_material` (`id_bien`, `id_recurso`, `codigo_inventario`, `nume
 (3, 2, 'PR-LIB-001', NULL, '2026-07-02', 'DISPONIBLE', 'Biblioteca', NULL),
 (5, 2, 'PR-LIB-003', NULL, '2026-07-02', 'MANTENIMIENTO', 'Biblioteca', NULL),
 (6, 3, 'PR-PRO-001', 'SER-PRO-001', '2026-07-02', 'DISPONIBLE', 'Almacén', NULL),
-(7, 18, 'PR-DEP-MESA-001', NULL, '2026-08-01', 'PRESTADO', 'Coliseo', NULL),
+(7, 18, 'PR-DEP-MESA-001', NULL, '2026-08-01', 'DISPONIBLE', 'Coliseo', NULL),
 (8, 23, 'PR-DEP-PALETA-001', NULL, '2026-08-01', 'DISPONIBLE', 'Almacén deportivo', NULL),
 (9, 23, 'PR-DEP-PALETA-002', NULL, '2026-08-01', 'DISPONIBLE', 'Almacén deportivo', NULL),
 (12, 25, 'PR-DEP-BASQ-001', NULL, '2026-08-01', 'DISPONIBLE', 'Almacén deportivo', NULL),
@@ -563,7 +600,9 @@ INSERT INTO `bien_material` (`id_bien`, `id_recurso`, `codigo_inventario`, `nume
 -- Identificador del sistema y fecha de registro de los bienes de demostracion.
 UPDATE bien_material SET fecha_registro=COALESCE(TIMESTAMP(fecha_adquisicion,'12:00:00'),'2026-11-01 12:00:00'),
   identificador_sistema=CONCAT('SR-',DATE_FORMAT(COALESCE(fecha_adquisicion,'2026-11-01'),'%Y'),'-',
-  LPAD(UPPER(CONV(id_bien*7919+104729,10,36)),6,'0'));
+  LPAD(UPPER(CONV(id_bien*7919+104729,10,36)),6,'0'))
+WHERE id_bien BETWEEN 1 AND 199
+LIMIT 199;
 
 INSERT IGNORE INTO estado_procesador(id_procesador) VALUES (1);
 
@@ -576,7 +615,7 @@ INSERT INTO `limite_articulos_prestamo` (`tipo_persona`, `maximo_articulos`) VAL
 ('DOCENTE', 5),
 ('ADMINISTRATIVO', 4);
 
--- POLITICAS VIGENTES POR CATEGORIA Y TIPO DE PERSONA; DOS HISTORICAS.
+-- POLITICAS VIGENTES POR CATEGORIA Y TIPO DE PERSONA, Y POLITICAS HISTORICAS.
 INSERT INTO `politica_prestamo` (`id_politica`, `tipo_persona`, `plazo_maximo`, `unidad_plazo`, `permite_salida`, `id_categoria`, `vigente`) VALUES
 (24, 'ESTUDIANTE', 8, 'HORAS', 0, 1, 0),
 (26, 'DOCENTE', 14, 'DIAS', 1, 2, 0),
@@ -606,26 +645,27 @@ INSERT INTO `politica_prestamo` (`id_politica`, `tipo_persona`, `plazo_maximo`, 
 (153, 'ADMINISTRATIVO', 5, 'DIAS', 0, 8, 1),
 (154, 'ESTUDIANTE', 2, 'DIAS', 0, 9, 1),
 (155, 'DOCENTE', 3, 'DIAS', 0, 9, 1),
-(156, 'ADMINISTRATIVO', 3, 'DIAS', 0, 9, 1);
+(156, 'ADMINISTRATIVO', 3, 'DIAS', 0, 9, 1),
+(157, 'ESTUDIANTE', 2, 'DIAS', 1, 2, 0);
 
 -- OPERACIONES: PRESTAMOS CON HISTORIALES DIVERSOS.
 INSERT INTO `prestamo` (`id_prestamo`, `tipo_prestamo`, `fecha_solicitud`, `fecha_entrega`, `estado`, `observaciones`, `dni_encargado`, `dni_persona`) VALUES
 (1, 'INDIVIDUAL', '2026-10-30 08:00:00', '2026-10-30 08:00:00', 'VENCIDO', 'Préstamo original de laptop, vencido', '98000002', '02167885'),
 (2, 'INDIVIDUAL', '2026-10-23 13:45:00', '2026-10-23 14:00:00', 'DEVUELTO', 'Préstamo original devuelto de un libro', '98000002', '98000004'),
-(3, 'INDIVIDUAL', '2026-10-27 08:45:00', '2026-10-27 09:00:00', 'DEVUELTO', 'Diego: libro devuelto a tiempo', '98000002', '99000001'),
+(3, 'INDIVIDUAL', '2026-10-27 08:45:00', '2026-10-27 09:00:00', 'DEVUELTO', 'Diego: libro devuelto con retraso y sanción cumplida', '98000002', '99000001'),
 (4, 'INDIVIDUAL', '2026-11-09 08:00:00', '2026-11-09 08:00:00', 'VENCIDO', 'Diego: laptop no devuelta y sanción activa', '98000002', '99000001'),
 (5, 'INDIVIDUAL', '2026-10-31 08:45:00', '2026-10-31 09:00:00', 'DEVUELTO', 'Camila: préstamo antiguo sin observaciones', '98000002', '99000002'),
-(6, 'INDIVIDUAL', '2026-11-11 08:45:00', '2026-11-11 09:00:00', 'ACTIVO', 'Camila: robot educativo con ampliación pendiente', '98000002', '99000002'),
-(7, 'INDIVIDUAL', '2026-11-10 08:00:00', '2026-11-10 08:00:00', 'PARCIALMENTE_DEVUELTO', 'Jorge: visor devuelto con daño, dron pendiente', '98000002', '99000003'),
+(6, 'INDIVIDUAL', @entrega_activa - INTERVAL 15 MINUTE, @entrega_activa, 'ACTIVO', 'Camila: robot educativo con ampliación pendiente', '98000002', '99000002'),
+(7, 'INDIVIDUAL', @entrega_parcial, @entrega_parcial, 'PARCIALMENTE_DEVUELTO', 'Jorge: visor devuelto con daño, dron pendiente', '98000002', '99000003'),
 (8, 'INDIVIDUAL', '2026-10-29 08:45:00', '2026-10-29 09:00:00', 'DEVUELTO', 'Jorge: devolución tardía de ajedrez, sanción levantada', '98000002', '99000003'),
 (9, 'INDIVIDUAL', '2026-11-01 08:45:00', '2026-11-01 09:00:00', 'DEVUELTO', 'Valeria: libro devuelto a tiempo', '98000002', '99000004'),
 (10, 'INDIVIDUAL', '2026-11-08 09:45:00', '2026-11-08 10:00:00', 'VENCIDO', 'Valeria: cámara web vencida sin devolución', '98000002', '99000004'),
-(11, 'INDIVIDUAL', '2026-11-11 08:45:00', '2026-11-11 09:00:00', 'ACTIVO', 'Mateo: brazo robótico, uso supervisado', '98000002', '99000005'),
+(11, 'INDIVIDUAL', @entrega_activa - INTERVAL 15 MINUTE, @entrega_activa, 'ACTIVO', 'Mateo: brazo robótico, uso supervisado', '98000002', '99000005'),
 (12, 'INDIVIDUAL', '2026-11-05 08:45:00', '2026-11-05 09:00:00', 'DEVUELTO', 'Andrea: balón devuelto y reserva atendida', '98000002', '99000006'),
 (13, 'INDIVIDUAL', '2026-11-06 08:00:00', '2026-11-06 08:00:00', 'DEVUELTO', 'Bruno: cargador devuelto dañado', '98000002', '99000007'),
-(14, 'INDIVIDUAL', '2026-11-12 11:45:00', '2026-11-12 12:00:00', 'ACTIVO', 'Fernanda: mesa ping pong prestada hasta las 15 h', '98000002', '99000008'),
-(15, 'INDIVIDUAL', '2026-11-10 08:45:00', '2026-11-10 09:00:00', 'ACTIVO', 'Docente: tablet en préstamo', '98000002', '99000013'),
-(16, 'GRUPAL', '2026-11-11 09:45:00', '2026-11-11 10:00:00', 'ACTIVO', 'Andrea: préstamo grupal, dos bienes y tres participantes', '98000002', '99000006'),
+(14, 'INDIVIDUAL', '2026-11-12 16:45:00', '2026-11-12 17:00:00', 'DEVUELTO', 'Fernanda: mesa de ping pong devuelta dentro del plazo', '98000002', '99000008'),
+(15, 'INDIVIDUAL', @entrega_activa - INTERVAL 15 MINUTE, @entrega_activa, 'ACTIVO', 'Docente: tablet en préstamo', '98000002', '99000013'),
+(16, 'GRUPAL', @entrega_grupal - INTERVAL 15 MINUTE, @entrega_grupal, 'ACTIVO', 'Andrea: préstamo grupal, dos bienes y tres participantes', '98000002', '99000006'),
 (17, 'INDIVIDUAL', '2026-10-29 08:45:00', '2026-10-29 09:00:00', 'DEVUELTO', 'Camila: libro con ampliación aprobada', '98000002', '99000002'),
 (18, 'INDIVIDUAL', '2026-10-19 08:45:00', '2026-10-19 09:00:00', 'DEVUELTO', 'Docente: libro devuelto', '98000002', '99000014'),
 (19, 'INDIVIDUAL', '2026-11-07 08:45:00', '2026-11-07 09:00:00', 'VENCIDO', 'Bruno: cargador extraviado, sanción activa', '98000002', '99000007'),
@@ -634,22 +674,22 @@ INSERT INTO `prestamo` (`id_prestamo`, `tipo_prestamo`, `fecha_solicitud`, `fech
 INSERT INTO `detalle_prestamo` (`id_detalle`, `id_prestamo`, `id_bien`, `id_politica`, `fecha_limite_devolucion`, `condicion_entrega`, `observaciones_entrega`, `fecha_devolucion`, `dni_encargado_devolucion`, `condicion_devolucion`, `observaciones_devolucion`) VALUES
 (1, 1, 1, 24, '2026-10-30 16:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
 (2, 2, 3, 26, '2026-11-06 14:00:00', 'BUENO', 'Entrega con ficha de control', '2026-10-29 14:00:00', '98000002', 'BUENO', 'Ejemplar recibido sin daños'),
-(3, 3, 61, 133, '2026-11-03 09:00:00', 'BUENO', 'Entrega con ficha de control', '2026-10-30 10:00:00', '98000002', 'BUENO', 'Libro completo'),
+(3, 3, 61, 157, '2026-10-29 09:00:00', 'BUENO', 'Entrega con ficha de control', '2026-10-30 10:00:00', '98000002', 'BUENO', 'Libro completo, recibido fuera de plazo'),
 (4, 4, 2, 130, '2026-11-09 16:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
 (5, 5, 66, 133, '2026-11-07 09:00:00', 'BUENO', 'Entrega con ficha de control', '2026-11-02 11:00:00', '98000002', 'BUENO', 'Libro completo'),
-(6, 6, 184, 151, '2026-11-14 09:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
-(7, 7, 180, 154, '2026-11-12 08:00:00', 'BUENO', 'Entrega con ficha de control', '2026-11-11 10:00:00', '98000002', 'DANADO', 'Lente derecho dañado, informe de daño'),
-(8, 7, 182, 151, '2026-11-13 08:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
+(6, 6, 184, 151, @entrega_activa + INTERVAL 3 DAY, 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
+(7, 7, 180, 154, @entrega_parcial + INTERVAL 2 DAY, 'BUENO', 'Entrega con ficha de control', @devolucion_visor, '98000002', 'DANADO', 'Lente derecho dañado, informe de daño'),
+(8, 7, 182, 151, @entrega_parcial + INTERVAL 3 DAY, 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
 (9, 8, 42, 142, '2026-10-29 12:00:00', 'BUENO', 'Entrega con ficha de control', '2026-10-30 10:00:00', '98000002', 'BUENO', 'Un día después del plazo'),
 (10, 9, 54, 133, '2026-11-08 09:00:00', 'BUENO', 'Entrega con ficha de control', '2026-11-03 10:00:00', '98000002', 'BUENO', 'Sin observaciones'),
 (11, 10, 145, 148, '2026-11-08 14:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
-(12, 11, 187, 151, '2026-11-14 09:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
+(12, 11, 187, 151, @entrega_activa + INTERVAL 3 DAY, 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
 (13, 12, 12, 136, '2026-11-05 12:00:00', 'BUENO', 'Entrega con ficha de control', '2026-11-05 11:00:00', '98000002', 'BUENO', 'Balón sin daños'),
 (14, 13, 151, 145, '2026-11-06 12:00:00', 'BUENO', 'Entrega con ficha de control', '2026-11-06 11:00:00', '98000002', 'DANADO', 'Conector del cargador dañado'),
-(15, 14, 7, 136, '2026-11-12 15:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
-(16, 15, 178, 131, '2026-11-15 09:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
-(17, 16, 188, 151, '2026-11-14 10:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
-(18, 16, 195, 151, '2026-11-14 10:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
+(15, 14, 7, 136, '2026-11-12 20:00:00', 'BUENO', 'Entrega con ficha de control', '2026-11-12 19:30:00', '98000002', 'BUENO', 'Mesa recibida en buen estado'),
+(16, 15, 178, 131, @entrega_activa + INTERVAL 5 DAY, 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
+(17, 16, 188, 151, @entrega_grupal + INTERVAL 3 DAY, 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
+(18, 16, 195, 151, @entrega_grupal + INTERVAL 3 DAY, 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
 (19, 17, 70, 133, '2026-11-07 09:00:00', 'BUENO', 'Entrega con ficha de control', '2026-11-06 11:00:00', '98000002', 'BUENO', 'Devolución dentro del plazo ampliado'),
 (20, 18, 86, 134, '2026-11-02 09:00:00', 'BUENO', 'Entrega con ficha de control', '2026-10-26 12:00:00', '98000002', 'BUENO', 'Ejemplar bien conservado'),
 (21, 19, 152, 145, '2026-11-07 13:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
@@ -658,41 +698,57 @@ INSERT INTO `detalle_prestamo` (`id_detalle`, `id_prestamo`, `id_bien`, `id_poli
 -- PRESTAMO GRUPAL: UNA RESPONSABLE Y DOS PARTICIPANTES ADICIONALES.
 INSERT INTO `participante_prestamo` (`id_participante`, `id_prestamo`, `dni_persona`, `rol_participacion`, `responsable`) VALUES
 (1, 16, '99000006', 'Responsable del equipo', 1),
-(2, 16, '99000007', 'Integrante', 0),
-(3, 16, '99000008', 'Integrante', 0);
+(2, 16, '99000009', 'Integrante', 0),
+(3, 16, '99000010', 'Integrante', 0);
 
 -- SOLICITUDES Y RESERVAS: TODOS LOS ESTADOS REPRESENTADOS.
 INSERT INTO `reserva` (`id_reserva`, `id_recurso`, `fecha_solicitud`, `fecha_requerida`, `fecha_preparacion`, `fecha_limite_vencimiento`, `tipo_gestion`, `observaciones`, `salida_solicitada`, `id_bien`, `id_prestamo_ref`, `estado`, `dni_persona`) VALUES
 (1, 2, '2026-10-30 18:38:04', '2026-10-30 18:38:04', NULL, '2026-11-01 18:38:04', 'PRESTAMO', 'Solicitud sin atender, expirada', 0, NULL, NULL, 'EXPIRADA', '99000001'),
 (2, 3, '2026-10-30 18:38:04', '2026-11-01 10:00:00', NULL, '2026-11-01 18:38:04', 'RESERVA', 'Cancelada por la estudiante', 0, NULL, NULL, 'CANCELADA', '99000002'),
-(3, 33, '2026-11-11 09:00:00', '2026-11-13 09:00:00', NULL, '2026-11-13 09:00:00', 'PRESTAMO', 'Rechazada por sanción activa', 0, NULL, NULL, 'RECHAZADA', '99000001'),
-(4, 34, '2026-11-11 11:00:00', '2026-11-12 10:00:00', '2026-11-12 10:00:00', '2026-11-13 10:00:00', 'RESERVA', 'Visor preparado para retirar; plazo de 24 h', 0, 181, NULL, 'LISTA_PARA_RETIRO', '99000002'),
+(3, 33, '2026-11-08 09:00:00', '2026-11-11 09:00:00', NULL, '2026-11-13 09:00:00', 'RESERVA', 'Rechazada al atenderla por una sanción posterior a la solicitud', 0, NULL, NULL, 'RECHAZADA', '99000001'),
+(4, 34, @solicitud_visor, @preparacion_visor, @preparacion_visor, @preparacion_visor + INTERVAL 24 HOUR, 'RESERVA', 'Visor preparado para retirar; plazo de 24 h', 0, 181, NULL, 'LISTA_PARA_RETIRO', '99000002'),
 (5, 4, '2026-11-09 12:00:00', '2026-11-10 10:00:00', NULL, '2026-11-11 12:00:00', 'RESERVA', 'Cancelada antes de preparación', 0, NULL, NULL, 'CANCELADA', '99000003'),
-(6, 38, '2026-11-12 10:00:00', '2026-11-13 10:00:00', NULL, '2026-11-14 10:00:00', 'RESERVA', 'Pendiente de revisar disponibilidad y autorización', 0, NULL, NULL, 'EN_ESPERA', '99000003'),
+(6, 38, @solicitud_reserva, @fecha_reserva, NULL, @fecha_reserva + INTERVAL 2 DAY, 'RESERVA', 'Impresora 3D solicitada para una práctica', 0, NULL, NULL, 'EN_ESPERA', '99000006'),
 (7, 2, '2026-11-03 09:00:00', '2026-11-05 09:00:00', '2026-11-05 09:00:00', '2026-11-06 09:00:00', 'RESERVA', 'No retiró libro antes del vencimiento', 1, 54, NULL, 'EXPIRADA', '99000005'),
 (8, 25, '2026-11-04 09:00:00', '2026-11-05 09:00:00', '2026-11-05 08:30:00', '2026-11-06 08:30:00', 'PRESTAMO', 'Solicitud atendida mediante préstamo 12', 0, 12, 12, 'ATENDIDA', '99000006'),
-(9, 34, '2026-11-12 11:00:00', '2026-11-14 10:00:00', NULL, '2026-11-14 11:00:00', 'RESERVA', 'En cola; los visores están reservado y dañado', 0, NULL, NULL, 'EN_ESPERA', '99000008'),
-(10, 9, '2026-11-05 09:00:00', '2026-11-06 08:00:00', '2026-11-06 08:00:00', '2026-11-07 08:00:00', 'PRESTAMO', 'Solicitud atendida mediante préstamo 13', 0, 151, 13, 'ATENDIDA', '99000007'),
+(9, 34, @solicitud_reserva, @fecha_reserva, NULL, @fecha_reserva + INTERVAL 2 DAY, 'RESERVA', 'En cola mientras un visor está reservado y el otro está dañado', 0, NULL, NULL, 'EN_ESPERA', '99000008'),
+(10, 9, '2026-11-05 09:00:00', '2026-11-06 07:55:00', '2026-11-06 07:55:00', '2026-11-07 07:55:00', 'PRESTAMO', 'Solicitud atendida mediante préstamo 13', 0, 151, 13, 'ATENDIDA', '99000007'),
 (11, 32, '2026-11-11 10:00:00', '2026-11-13 10:00:00', NULL, '2026-11-13 10:00:00', 'PRESTAMO', 'Rechazada: matrícula no vigente', 0, NULL, NULL, 'RECHAZADA', '99000012'),
-(12, 33, '2026-11-12 09:00:00', '2026-11-12 09:00:00', NULL, '2026-11-14 09:00:00', 'PRESTAMO', 'Solicitud de dron pendiente de entrega', 0, NULL, NULL, 'EN_ESPERA', '99000005');
+(12, 33, @solicitud_reserva, @fecha_reserva, NULL, @fecha_reserva + INTERVAL 2 DAY, 'RESERVA', 'Reserva de dron pendiente de preparación', 0, NULL, NULL, 'EN_ESPERA', '99000005');
 
+-- El estado del libro y las ampliaciones descritas tienen sus registros de operación.
+INSERT INTO mantenimiento_bien (id_bien, tipo, motivo, estado_previo, fecha_inicio, dni_apertura)
+VALUES (5, 'CORRECTIVO', 'Reparación de encuadernación', 'DISPONIBLE', '2026-10-28 18:38:04', '98000001');
 
--- INCIDENCIAS Y SANCIONES CON ESTADOS REALISTAS.
+INSERT INTO solicitud_ampliacion (id_prestamo, id_detalle, dni_solicitante, cantidad, unidad, motivo,
+  fecha_solicitud, fecha_limite_anterior, estado, fecha_resolucion, dni_resolucion,
+  fecha_limite_nueva, observacion_resolucion) VALUES
+(6, 6, '99000002', 1, 'DIAS', 'Un día adicional para completar la práctica de robótica.',
+ @entrega_activa + INTERVAL 30 MINUTE, @entrega_activa + INTERVAL 3 DAY, 'PENDIENTE', NULL, NULL, NULL, NULL),
+(17, 19, '99000002', 2, 'DIAS', 'Dos días adicionales para terminar la lectura.',
+ '2026-11-04 14:00:00', '2026-11-05 09:00:00', 'APROBADA', '2026-11-04 15:00:00',
+ '98000002', '2026-11-07 09:00:00', 'Ampliación autorizada antes del vencimiento.');
+
+-- CASOS DE PRUEBA DE SANCIONES POR GRAVEDAD, PLAZO Y REGULARIZACIÓN.
 INSERT INTO `incidencia` (`id_incidencia`, `id_detalle`, `tipo`, `dni_registrador`, `descripcion`, `fecha`, `estado`) VALUES
-(1, 1, 'RETRASO', '98000002', 'Préstamo #1 vencido sin devolución', '2026-11-01 09:00:00', 'EN_REVISION'),
-(2, 4, 'RETRASO', '98000002', 'Diego no devolvió laptop dentro del plazo', '2026-11-10 09:00:00', 'RESUELTA'),
-(3, 7, 'DANIO', '98000002', 'Jorge devolvió visor con el lente derecho dañado', '2026-11-11 10:15:00', 'RESUELTA'),
-(4, 9, 'RETRASO', '98000002', 'Jorge devolvió juego después del horario previsto', '2026-10-30 10:05:00', 'RESUELTA'),
-(5, 11, 'RETRASO', '98000002', 'Valeria no devolvió cámara web a tiempo', '2026-11-09 09:00:00', 'REGISTRADA'),
-(6, 14, 'DANIO', '98000002', 'Bruno devolvió cargador con conector dañado', '2026-11-06 11:15:00', 'RESUELTA'),
-(7, 21, 'PERDIDA', '98000002', 'Pérdida confirmada del cargador prestado a Bruno', '2026-11-10 09:00:00', 'RESUELTA');
+(1, 1, 'RETRASO', NULL, 'Préstamo #1 vencido sin devolución', '2026-10-30 16:00:00', 'REGISTRADA'),
+(2, 4, 'RETRASO', NULL, 'Laptop pendiente de devolución', '2026-11-09 16:00:00', 'REGISTRADA'),
+(3, 7, 'DANIO', '98000002', 'Visor devuelto con el lente derecho dañado', @incidencia_visor, 'REGISTRADA'),
+(4, 9, 'RETRASO', NULL, 'Jorge devolvió el juego después del plazo', '2026-10-29 12:00:00', 'RESUELTA'),
+(5, 11, 'RETRASO', NULL, 'Valeria no devolvió la cámara web a tiempo', '2026-11-08 14:00:00', 'REGISTRADA'),
+(6, 14, 'DANIO', '98000002', 'Daño del conector reportado al recibir el cargador', '2026-11-06 12:00:00', 'RESUELTA'),
+(7, 21, 'PERDIDA', '98000001', 'Pérdida del cargador confirmada por el administrador', '2026-11-10 10:00:00', 'REGISTRADA'),
+(8, 3, 'RETRASO', NULL, 'Libro devuelto fuera de plazo y recibido en buen estado', '2026-10-29 09:00:00', 'RESUELTA');
 
-INSERT INTO `sancion` (`id_sancion`, `id_incidencia_ref`, `motivo`, `fecha`, `descripcion`, `estado`, `fecha_levantamiento`, `dni_levantamiento`, `justificacion_levantamiento`, `gravedad`, `dias_leve`, `dias_grave`, `dias_espera_perdida`, `fecha_inicio_nivel`, `fecha_fin`, `fecha_revision`, `fecha_regularizacion`, `tipo_regularizacion`) VALUES
-(1, 2, 'Mora de laptop', '2026-11-10 10:00:00', 'Debe regularizar la devolución', 'ACTIVA', NULL, NULL, NULL, 'LEVE', 14, 180, 7, '2026-11-09 16:00:00', '2026-11-23 16:00:00', '2026-11-30 16:00:00', NULL, NULL),
-(2, 3, 'Daño en visor de realidad virtual', '2026-11-11 11:00:00', 'Compensación acreditada', 'CUMPLIDA', NULL, NULL, NULL, 'GRAVE', 14, 180, 7, '2026-11-11 11:00:00', '2027-05-10 11:00:00', '2026-12-03 08:00:00', '2026-11-11 10:00:00', 'VERIFICACION'),
-(3, 4, 'Retraso de ajedrez', '2026-10-30 11:00:00', 'Medida levantada tras revisión', 'LEVANTADA', '2026-11-08 11:00:00', '98000002', 'Se revocó tras evaluar circunstancias', 'LEVE', 14, 180, 7, '2026-10-29 12:00:00', '2026-11-12 12:00:00', '2026-11-19 12:00:00', '2026-10-30 10:00:00', 'DEVOLUCION'),
-(4, 6, 'Daño en cargador', '2026-11-06 12:00:00', 'Acta anulada por defecto de fábrica', 'ANULADA', '2026-11-09 10:00:00', '98000002', 'El daño ya existía antes del préstamo', 'GRAVE', 14, 180, 7, '2026-11-06 12:00:00', '2027-05-05 12:00:00', '2026-11-27 12:00:00', '2026-11-09 10:00:00', 'VERIFICACION'),
-(5, 7, 'Pérdida de cargador', '2026-11-10 10:00:00', 'Pendiente de reposición del bien', 'ACTIVA', NULL, NULL, NULL, 'GRAVE', 14, 180, 7, '2026-11-10 10:00:00', '2027-05-09 10:00:00', '2026-11-28 13:00:00', NULL, NULL);
+INSERT INTO `sancion` (`id_sancion`, `id_incidencia_ref`, `motivo`, `fecha`, `descripcion`, `estado`, `fecha_levantamiento`, `dni_levantamiento`, `justificacion_levantamiento`, `gravedad`, `dias_leve`, `dias_grave`, `dias_espera_perdida`, `fecha_inicio_nivel`, `fecha_fin`, `fecha_revision`, `fecha_regularizacion`, `tipo_regularizacion`, `dni_regularizacion`) VALUES
+(1, 2, 'Retraso en la devolución de laptop', '2026-11-09 16:00:00', 'El plazo de sanción terminó y la laptop sigue pendiente de devolución.', 'ACTIVA', NULL, NULL, NULL, 'LEVE', 14, 180, 7, '2026-11-09 16:00:00', '2026-11-23 16:00:00', '2026-11-30 16:00:00', NULL, NULL, NULL),
+(2, 3, 'Daño en visor de realidad virtual', @incidencia_visor, 'El visor se recibió con el lente dañado y está pendiente de reparación.', 'ACTIVA', NULL, NULL, NULL, 'GRAVE', 14, 180, 7, @incidencia_visor, @incidencia_visor + INTERVAL 180 DAY, NULL, NULL, NULL, NULL),
+(3, 4, 'Retraso en la devolución de ajedrez', '2026-10-29 12:00:00', 'Juego recibido completo y en buen estado.', 'LEVANTADA', '2026-11-08 11:00:00', '98000002', 'El encargado verificó la devolución y aceptó la justificación del retraso.', 'LEVE', 14, 180, 7, '2026-10-29 12:00:00', '2026-11-12 12:00:00', '2026-11-19 12:00:00', '2026-10-30 10:00:00', 'DEVOLUCION', '98000002'),
+(4, 6, 'Daño atribuido al préstamo de un cargador', '2026-11-06 12:00:00', 'La revisión del inventario confirmó que el daño era previo a la entrega.', 'ANULADA', '2026-11-09 10:00:00', '98000001', 'El defecto del conector ya existía antes del préstamo.', 'GRAVE', 14, 180, 7, '2026-11-06 12:00:00', '2027-05-05 12:00:00', NULL, NULL, NULL, NULL),
+(5, 7, 'Pérdida confirmada de cargador', '2026-11-10 10:00:00', 'El administrador aplicó una sanción muy grave. Queda pendiente la reposición.', 'ACTIVA', NULL, NULL, NULL, 'MUY_GRAVE', 14, 180, 7, '2026-11-10 10:00:00', NULL, NULL, NULL, NULL, NULL),
+(6, 8, 'Retraso en la devolución de un libro', '2026-10-29 09:00:00', 'Se recibió el libro en buen estado y se cumplió el plazo de sanción.', 'CUMPLIDA', '2026-11-12 09:00:00', NULL, 'Plazo cumplido y devolución aceptada.', 'LEVE', 14, 180, 7, '2026-10-29 09:00:00', '2026-11-12 09:00:00', '2026-11-19 09:00:00', '2026-10-30 10:00:00', 'DEVOLUCION', '98000002'),
+(7, 1, 'Laptop vencida sin devolución', '2026-10-30 16:00:00', 'La laptop sigue pendiente de devolución.', 'ACTIVA', NULL, NULL, NULL, 'LEVE', 14, 180, 7, '2026-10-30 16:00:00', '2026-11-13 16:00:00', '2026-11-20 16:00:00', NULL, NULL, NULL),
+(8, 5, 'Cámara web vencida sin devolución', '2026-11-08 14:00:00', 'La cámara sigue pendiente de devolución.', 'ACTIVA', NULL, NULL, NULL, 'LEVE', 14, 180, 7, '2026-11-08 14:00:00', '2026-11-22 14:00:00', '2026-11-29 14:00:00', NULL, NULL, NULL);
 
 -- AUDITORIA DE TRANSICIONES (ESTADOS ANTERIOR Y NUEVO).
 INSERT INTO `historial_estado` (`id_historial_estado`, `entidad`, `id_entidad`, `estado_anterior`, `estado_nuevo`, `fecha`, `observacion`, `dni_responsable`) VALUES
@@ -717,7 +773,7 @@ INSERT INTO `historial_estado` (`id_historial_estado`, `entidad`, `id_entidad`, 
 (19, 'BIEN_MATERIAL', 61, 'PRESTADO', 'DISPONIBLE', '2026-10-30 10:00:00', 'Devolución de préstamo #3; condición BUENO', '98000002'),
 (20, 'PRESTAMO', 3, 'ACTIVO', 'DEVUELTO', '2026-10-30 10:00:00', 'Devolución completa', '98000002'),
 (21, 'PRESTAMO', 8, 'ACTIVO', 'DEVUELTO', '2026-10-30 10:00:00', 'Devolución completa', '98000002'),
-(22, 'SANCION', 3, NULL, 'ACTIVA', '2026-10-30 11:00:00', 'Sanción por Retraso de ajedrez', '98000002'),
+(22, 'SANCION', 3, NULL, 'ACTIVA', '2026-10-29 12:00:00', 'Sanción leve por retraso en la devolución de ajedrez.', NULL),
 (23, 'PRESTAMO', 1, 'ACTIVO', 'VENCIDO', '2026-10-30 16:01:00', 'Plazo vencido y devolución pendiente', '98000002'),
 (24, 'RESERVA', 1, NULL, 'EN_ESPERA', '2026-10-30 18:38:04', 'Solicitud registrada', '99000001'),
 (25, 'RESERVA', 2, NULL, 'EN_ESPERA', '2026-10-30 18:38:04', 'Solicitud registrada', '99000002'),
@@ -739,18 +795,18 @@ INSERT INTO `historial_estado` (`id_historial_estado`, `entidad`, `id_entidad`, 
 (41, 'BIEN_MATERIAL', 54, 'DISPONIBLE', 'RESERVADO', '2026-11-05 09:00:00', 'Reserva #7 preparada', '98000002'),
 (42, 'PRESTAMO', 12, NULL, 'ACTIVO', '2026-11-05 09:00:00', 'Entrega registrada', '98000002'),
 (43, 'PRESTAMO', 20, NULL, 'ACTIVO', '2026-11-05 09:00:00', 'Entrega registrada', '98000002'),
-(44, 'RESERVA', 8, 'EN_ESPERA', 'ATENDIDA', '2026-11-05 09:00:00', 'Solicitud atendida mediante préstamo 12', '98000002'),
+(44, 'RESERVA', 8, 'LISTA_PARA_RETIRO', 'ATENDIDA', '2026-11-05 09:00:00', 'Solicitud atendida mediante préstamo 12', '98000002'),
 (45, 'RESERVA', 10, NULL, 'EN_ESPERA', '2026-11-05 09:00:00', 'Solicitud registrada', '99000007'),
 (46, 'BIEN_MATERIAL', 12, 'PRESTADO', 'DISPONIBLE', '2026-11-05 11:00:00', 'Devolución de préstamo #12; condición BUENO', '98000002'),
 (47, 'BIEN_MATERIAL', 43, 'PRESTADO', 'DISPONIBLE', '2026-11-05 11:00:00', 'Devolución de préstamo #20; condición BUENO', '98000002'),
 (48, 'PRESTAMO', 12, 'ACTIVO', 'DEVUELTO', '2026-11-05 11:00:00', 'Devolución completa', '98000002'),
 (49, 'PRESTAMO', 20, 'ACTIVO', 'DEVUELTO', '2026-11-05 11:00:00', 'Devolución completa', '98000002'),
 (50, 'BIEN_MATERIAL', 151, 'RESERVADO', 'PRESTADO', '2026-11-06 08:00:00', 'Entrega en préstamo #13', '98000002'),
-(51, 'BIEN_MATERIAL', 151, 'DISPONIBLE', 'RESERVADO', '2026-11-06 08:00:00', 'Reserva #10 preparada', '98000002'),
+(51, 'BIEN_MATERIAL', 151, 'DISPONIBLE', 'RESERVADO', '2026-11-06 07:55:00', 'Reserva #10 preparada', '98000002'),
 (52, 'PRESTAMO', 13, NULL, 'ACTIVO', '2026-11-06 08:00:00', 'Entrega registrada', '98000002'),
-(53, 'RESERVA', 10, 'EN_ESPERA', 'ATENDIDA', '2026-11-06 08:00:00', 'Solicitud atendida mediante préstamo 13', '98000002'),
+(53, 'RESERVA', 10, 'LISTA_PARA_RETIRO', 'ATENDIDA', '2026-11-06 08:00:00', 'Solicitud atendida mediante préstamo 13', '98000002'),
 (54, 'BIEN_MATERIAL', 54, 'RESERVADO', 'DISPONIBLE', '2026-11-06 09:00:00', 'Reserva #7 expirada; bien liberado', '98000002'),
-(55, 'RESERVA', 7, 'EN_ESPERA', 'EXPIRADA', '2026-11-06 09:00:00', 'No retiró libro antes del vencimiento', '98000002'),
+(55, 'RESERVA', 7, 'LISTA_PARA_RETIRO', 'EXPIRADA', '2026-11-06 09:00:00', 'No retiró libro antes del vencimiento', '98000002'),
 (56, 'BIEN_MATERIAL', 70, 'PRESTADO', 'DISPONIBLE', '2026-11-06 11:00:00', 'Devolución de préstamo #17; condición BUENO', '98000002'),
 (57, 'BIEN_MATERIAL', 151, 'PRESTADO', 'DANADO', '2026-11-06 11:00:00', 'Devolución de préstamo #13; condición DANADO', '98000002'),
 (58, 'PRESTAMO', 13, 'ACTIVO', 'DEVUELTO', '2026-11-06 11:00:00', 'Devolución completa', '98000002'),
@@ -765,41 +821,52 @@ INSERT INTO `historial_estado` (`id_historial_estado`, `entidad`, `id_entidad`, 
 (67, 'PRESTAMO', 10, 'ACTIVO', 'VENCIDO', '2026-11-08 14:01:00', 'Plazo vencido y devolución pendiente', '98000002'),
 (68, 'BIEN_MATERIAL', 2, 'DISPONIBLE', 'PRESTADO', '2026-11-09 08:00:00', 'Entrega en préstamo #4', '98000002'),
 (69, 'PRESTAMO', 4, NULL, 'ACTIVO', '2026-11-09 08:00:00', 'Entrega registrada', '98000002'),
-(70, 'SANCION', 4, 'ACTIVA', 'ANULADA', '2026-11-09 10:00:00', 'Acta anulada por defecto de fábrica', '98000002'),
+(70, 'SANCION', 4, 'ACTIVA', 'ANULADA', '2026-11-09 10:00:00', 'El defecto del conector ya existía antes del préstamo.', '98000001'),
 (71, 'RESERVA', 5, NULL, 'EN_ESPERA', '2026-11-09 12:00:00', 'Solicitud registrada', '99000003'),
 (72, 'PRESTAMO', 4, 'ACTIVO', 'VENCIDO', '2026-11-09 16:01:00', 'Plazo vencido y devolución pendiente', '98000002'),
 (73, 'RESERVA', 5, 'EN_ESPERA', 'CANCELADA', '2026-11-09 17:00:00', 'Cancelada antes de preparación', '99000003'),
-(74, 'BIEN_MATERIAL', 180, 'DISPONIBLE', 'PRESTADO', '2026-11-10 08:00:00', 'Entrega en préstamo #7', '98000002'),
-(75, 'BIEN_MATERIAL', 182, 'DISPONIBLE', 'PRESTADO', '2026-11-10 08:00:00', 'Entrega en préstamo #7', '98000002'),
-(76, 'PRESTAMO', 7, NULL, 'ACTIVO', '2026-11-10 08:00:00', 'Entrega registrada', '98000002'),
-(77, 'BIEN_MATERIAL', 152, 'PRESTADO', 'PERDIDO', '2026-11-10 09:00:00', 'Pérdida confirmada en préstamo #19', '98000002'),
-(78, 'BIEN_MATERIAL', 178, 'DISPONIBLE', 'PRESTADO', '2026-11-10 09:00:00', 'Entrega en préstamo #15', '98000002'),
-(79, 'PRESTAMO', 15, NULL, 'ACTIVO', '2026-11-10 09:00:00', 'Entrega registrada', '98000002'),
-(80, 'SANCION', 1, NULL, 'ACTIVA', '2026-11-10 10:00:00', 'Sanción por Mora de laptop', '98000002'),
-(81, 'SANCION', 5, NULL, 'ACTIVA', '2026-11-10 10:00:00', 'Sanción por Pérdida de cargador', '98000002'),
-(82, 'BIEN_MATERIAL', 184, 'DISPONIBLE', 'PRESTADO', '2026-11-11 09:00:00', 'Entrega en préstamo #6', '98000002'),
-(83, 'BIEN_MATERIAL', 187, 'DISPONIBLE', 'PRESTADO', '2026-11-11 09:00:00', 'Entrega en préstamo #11', '98000002'),
-(84, 'PRESTAMO', 6, NULL, 'ACTIVO', '2026-11-11 09:00:00', 'Entrega registrada', '98000002'),
-(85, 'PRESTAMO', 11, NULL, 'ACTIVO', '2026-11-11 09:00:00', 'Entrega registrada', '98000002'),
-(86, 'RESERVA', 3, NULL, 'EN_ESPERA', '2026-11-11 09:00:00', 'Solicitud registrada', '99000001'),
+(74, 'BIEN_MATERIAL', 180, 'DISPONIBLE', 'PRESTADO', @entrega_parcial, 'Entrega en préstamo #7', '98000002'),
+(75, 'BIEN_MATERIAL', 182, 'DISPONIBLE', 'PRESTADO', @entrega_parcial, 'Entrega en préstamo #7', '98000002'),
+(76, 'PRESTAMO', 7, NULL, 'ACTIVO', @entrega_parcial, 'Entrega registrada', '98000002'),
+(77, 'BIEN_MATERIAL', 152, 'PRESTADO', 'PERDIDO', '2026-11-10 10:00:00', 'Pérdida confirmada en préstamo #19', '98000001'),
+(78, 'BIEN_MATERIAL', 178, 'DISPONIBLE', 'PRESTADO', @entrega_activa, 'Entrega en préstamo #15', '98000002'),
+(79, 'PRESTAMO', 15, NULL, 'ACTIVO', @entrega_activa, 'Entrega registrada', '98000002'),
+(80, 'SANCION', 1, NULL, 'ACTIVA', '2026-11-09 16:00:00', 'Sanción leve por retraso en la devolución de laptop.', NULL),
+(81, 'SANCION', 5, NULL, 'ACTIVA', '2026-11-10 10:00:00', 'Sanción muy grave por pérdida confirmada de cargador.', '98000001'),
+(82, 'BIEN_MATERIAL', 184, 'DISPONIBLE', 'PRESTADO', @entrega_activa, 'Entrega en préstamo #6', '98000002'),
+(83, 'BIEN_MATERIAL', 187, 'DISPONIBLE', 'PRESTADO', @entrega_activa, 'Entrega en préstamo #11', '98000002'),
+(84, 'PRESTAMO', 6, NULL, 'ACTIVO', @entrega_activa, 'Entrega registrada', '98000002'),
+(85, 'PRESTAMO', 11, NULL, 'ACTIVO', @entrega_activa, 'Entrega registrada', '98000002'),
+(86, 'RESERVA', 3, NULL, 'EN_ESPERA', '2026-11-08 09:00:00', 'Solicitud registrada', '99000001'),
 (87, 'RESERVA', 3, 'EN_ESPERA', 'RECHAZADA', '2026-11-11 09:15:00', 'Rechazada por sanción activa', '98000002'),
-(88, 'BIEN_MATERIAL', 180, 'PRESTADO', 'DANADO', '2026-11-11 10:00:00', 'Devolución de préstamo #7; condición DANADO', '98000002'),
-(89, 'BIEN_MATERIAL', 188, 'DISPONIBLE', 'PRESTADO', '2026-11-11 10:00:00', 'Entrega en préstamo #16', '98000002'),
-(90, 'BIEN_MATERIAL', 195, 'DISPONIBLE', 'PRESTADO', '2026-11-11 10:00:00', 'Entrega en préstamo #16', '98000002'),
-(91, 'PRESTAMO', 7, 'ACTIVO', 'PARCIALMENTE_DEVUELTO', '2026-11-11 10:00:00', 'Recepción parcial; restan bienes por devolver', '98000002'),
-(92, 'PRESTAMO', 16, NULL, 'ACTIVO', '2026-11-11 10:00:00', 'Entrega registrada', '98000002'),
+(88, 'BIEN_MATERIAL', 180, 'PRESTADO', 'DANADO', @devolucion_visor, 'Devolución de préstamo #7; condición DANADO', '98000002'),
+(89, 'BIEN_MATERIAL', 188, 'DISPONIBLE', 'PRESTADO', @entrega_grupal, 'Entrega en préstamo #16', '98000002'),
+(90, 'BIEN_MATERIAL', 195, 'DISPONIBLE', 'PRESTADO', @entrega_grupal, 'Entrega en préstamo #16', '98000002'),
+(91, 'PRESTAMO', 7, 'ACTIVO', 'PARCIALMENTE_DEVUELTO', @devolucion_visor, 'Recepción parcial; restan bienes por devolver', '98000002'),
+(92, 'PRESTAMO', 16, NULL, 'ACTIVO', @entrega_grupal, 'Entrega registrada', '98000002'),
 (93, 'RESERVA', 11, NULL, 'EN_ESPERA', '2026-11-11 10:00:00', 'Solicitud registrada', '99000012'),
 (94, 'RESERVA', 11, 'EN_ESPERA', 'RECHAZADA', '2026-11-11 10:15:00', 'Rechazada: matrícula no vigente', '98000002'),
-(95, 'RESERVA', 4, NULL, 'EN_ESPERA', '2026-11-11 11:00:00', 'Solicitud registrada', '99000002'),
-(96, 'SANCION', 2, NULL, 'ACTIVA', '2026-11-11 11:00:00', 'Sanción por Daño en visor de realidad virtual', '98000002'),
-(97, 'RESERVA', 12, NULL, 'EN_ESPERA', '2026-11-12 09:00:00', 'Solicitud registrada', '99000005'),
-(98, 'SANCION', 2, 'ACTIVA', 'CUMPLIDA', '2026-11-12 09:00:00', 'Compensación acreditada', '98000002'),
-(99, 'BIEN_MATERIAL', 181, 'DISPONIBLE', 'RESERVADO', '2026-11-12 10:00:00', 'Reserva #4 preparada', '98000002'),
-(100, 'RESERVA', 4, 'EN_ESPERA', 'LISTA_PARA_RETIRO', '2026-11-12 10:00:00', 'Visor preparado para retirar; plazo de 24 h', '98000002'),
-(101, 'RESERVA', 6, NULL, 'EN_ESPERA', '2026-11-12 10:00:00', 'Solicitud registrada', '99000003'),
-(102, 'RESERVA', 9, NULL, 'EN_ESPERA', '2026-11-12 11:00:00', 'Solicitud registrada', '99000008'),
-(103, 'BIEN_MATERIAL', 7, 'DISPONIBLE', 'PRESTADO', '2026-11-12 12:00:00', 'Entrega en préstamo #14', '98000002'),
-(104, 'PRESTAMO', 14, NULL, 'ACTIVO', '2026-11-12 12:00:00', 'Entrega registrada', '98000002');
+(95, 'RESERVA', 4, NULL, 'EN_ESPERA', @solicitud_visor, 'Solicitud registrada', '99000002'),
+(96, 'SANCION', 2, NULL, 'ACTIVA', @incidencia_visor, 'Sanción grave por daño en visor de realidad virtual.', '98000002'),
+(97, 'RESERVA', 12, NULL, 'EN_ESPERA', @solicitud_reserva, 'Solicitud registrada', '99000005'),
+(98, 'SANCION', 6, 'ACTIVA', 'CUMPLIDA', '2026-11-12 09:00:00', 'Plazo cumplido y devolución aceptada.', NULL),
+(99, 'BIEN_MATERIAL', 181, 'DISPONIBLE', 'RESERVADO', @preparacion_visor, 'Reserva #4 preparada', '98000002'),
+(100, 'RESERVA', 4, 'EN_ESPERA', 'LISTA_PARA_RETIRO', @preparacion_visor, 'Visor preparado para retirar; plazo de 24 h', '98000002'),
+(101, 'RESERVA', 6, NULL, 'EN_ESPERA', @solicitud_reserva, 'Solicitud registrada', '99000006'),
+(102, 'RESERVA', 9, NULL, 'EN_ESPERA', @solicitud_reserva, 'Solicitud registrada', '99000008'),
+(103, 'BIEN_MATERIAL', 7, 'DISPONIBLE', 'PRESTADO', '2026-11-12 17:00:00', 'Entrega en préstamo #14', '98000002'),
+(104, 'PRESTAMO', 14, NULL, 'ACTIVO', '2026-11-12 17:00:00', 'Entrega registrada', '98000002'),
+(105, 'SANCION', 6, NULL, 'ACTIVA', '2026-10-29 09:00:00', 'Sanción leve por devolución fuera de plazo.', NULL),
+(106, 'SANCION', 6, 'ACTIVA', 'ACTIVA', '2026-10-30 10:00:00', 'Regularización: libro recibido en buen estado.', '98000002'),
+(107, 'BIEN_MATERIAL', 7, 'PRESTADO', 'DISPONIBLE', '2026-11-12 19:30:00', 'Mesa recibida en buen estado.', '98000002'),
+(108, 'PRESTAMO', 14, 'ACTIVO', 'DEVUELTO', '2026-11-12 19:30:00', 'Devolución completa.', '98000002'),
+(109, 'SANCION', 7, NULL, 'ACTIVA', '2026-10-30 16:00:00', 'Sanción leve por laptop vencida.', NULL),
+(110, 'SANCION', 8, NULL, 'ACTIVA', '2026-11-08 14:00:00', 'Sanción leve por cámara web vencida.', NULL),
+(111, 'PRESTAMO', 17, 'ACTIVO', 'ACTIVO', '2026-11-04 15:00:00', 'Ampliación de dos días aprobada para el libro.', '98000002'),
+(112, 'RESERVA', 7, 'EN_ESPERA', 'LISTA_PARA_RETIRO', '2026-11-05 09:00:00', 'Libro preparado para el retiro.', '98000002'),
+(113, 'RESERVA', 8, 'EN_ESPERA', 'LISTA_PARA_RETIRO', '2026-11-05 08:30:00', 'Balón preparado para el retiro.', '98000002'),
+(114, 'RESERVA', 10, 'EN_ESPERA', 'LISTA_PARA_RETIRO', '2026-11-06 07:55:00', 'Cargador preparado para el retiro.', '98000002'),
+(115, 'SANCION', 3, 'ACTIVA', 'ACTIVA', '2026-10-30 10:00:00', 'Regularización: ajedrez recibido en buen estado.', '98000002');
 
 COMMIT;
 
@@ -827,3 +894,7 @@ GROUP BY d.id_bien HAVING COUNT(*)>1;
 SELECT rv.id_reserva,rv.id_recurso,b.id_recurso AS recurso_del_bien
 FROM reserva rv JOIN bien_material b ON b.id_bien=rv.id_bien
 WHERE rv.id_recurso<>b.id_recurso;
+
+-- Resumen de la carga para verificar la instalación antes de iniciar la aplicación.
+SELECT (SELECT COUNT(*) FROM usuario_sistema) AS cuentas_de_prueba,
+       (SELECT COUNT(*) FROM sancion) AS sanciones_de_prueba;

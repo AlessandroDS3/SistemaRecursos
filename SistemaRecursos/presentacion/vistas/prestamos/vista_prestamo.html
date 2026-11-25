@@ -436,7 +436,7 @@
   </table>
   </div>
   {% if gestionar %}
-    {% if prestamo.estado_actual not in ('DEVUELTO', 'REGULARIZADO') %}
+    {% if hay_devolucion_pendiente and prestamo.estado_actual not in ('DEVUELTO', 'REGULARIZADO') %}
       <div class="acciones al-final">
         <button>Registrar devolución</button>
       </div>
@@ -557,8 +557,13 @@
           <input type="hidden" name="volver" value="{{ volver }}">
           <strong>{{ d.codigo_inventario }} · {{ d.recurso }}
           </strong>{{ campo('motivo','Descripción de la pérdida',requerido=true,formulario=formulario_perdida) }}
-          <p class="suave">Confirma la pérdida: se aplicará una grave y el bien seguirá pendiente de recuperación o reposición.</p>
-          <button class="secundario">Confirmar pérdida y aplicar grave</button>
+          {% if g.usuario.rol == 'ADMINISTRADOR' %}
+            {{ opciones('gravedad', 'Gravedad de la sanción', ('GRAVE', 'MUY_GRAVE'), 'GRAVE', formulario_perdida) }}
+            <p class="suave">El bien quedará pendiente de recuperación o reposición.</p>
+          {% else %}
+            <p class="suave">Se aplicará una sanción grave. El bien quedará pendiente de recuperación o reposición.</p>
+          {% endif %}
+          <button class="secundario">Confirmar pérdida</button>
         </form>
       {% else %}
         <p>No hay bienes prestados pendientes que se puedan reportar como perdidos.</p>

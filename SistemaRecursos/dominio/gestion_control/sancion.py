@@ -150,16 +150,19 @@ def validar_regularizacion(sancion, tipo, observacion):
 
 def alertas_revision(sancion, ahora):
     pendiente = not sancion.get('fecha_devolucion') and not sancion.get('fecha_cierre_regularizacion')
+    fecha_revision = sancion.get('fecha_revision')
+    fecha_fin = sancion.get('fecha_fin')
     limite_local = sancion['fecha_limite_devolucion'].replace(tzinfo=timezone.utc).astimezone(LIMA)
     recepcion_o_ahora = sancion.get('fecha_devolucion') or ahora
     revision_local = recepcion_o_ahora.replace(tzinfo=timezone.utc).astimezone(LIMA)
     return dict(
         posible_perdida=(sancion['estado'] == 'ACTIVA' and sancion['gravedad'] == 'LEVE'
-                         and pendiente and sancion['fecha_revision'] <= ahora),
+                         and pendiente and fecha_revision is not None and fecha_revision <= ahora),
         revisar_custodia=(sancion['estado'] == 'ACTIVA' and not sancion.get('fecha_cierre_regularizacion')
                          and not sancion.get('permite_salida', True)
                          and sancion.get('tipo') not in ('CUSTODIA', 'SALIDA_NO_AUTORIZADA')
                          and limite_local.date() < revision_local.date()),
         revision_administrador=(sancion['estado'] == 'ACTIVA' and sancion['gravedad'] == 'GRAVE'
-                               and not esta_regularizado(sancion) and sancion['fecha_fin'] <= ahora),
+                               and not esta_regularizado(sancion)
+                               and fecha_fin is not None and fecha_fin <= ahora),
     )

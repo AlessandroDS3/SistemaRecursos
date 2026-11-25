@@ -184,9 +184,10 @@ class ControladorPrestamo:
     )
     def registrar_perdida_bien_material(self, identificador, detalle_id):
         self.servicio.registrar_perdida_bien_material(
-            identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario
+            identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario,
+            gravedad=request.form.get('gravedad', 'GRAVE'),
         )
-        flash('Pérdida registrada; el bien continúa pendiente de recuperación.')
+        flash('Pérdida registrada. El bien queda pendiente de recuperación o reposición.')
         return redirect(detalle_prestamo(identificador))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')

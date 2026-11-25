@@ -131,7 +131,7 @@ class ServicioAplicacionPrestamo:
                 prestamo, nuevo, cuenta['dni_persona'], f'Recepción de {len(detalles)} bien(es).'
             )
 
-    def registrar_perdida_bien_material(self, identificador, detalle_id, motivo, actor):
+    def registrar_perdida_bien_material(self, identificador, detalle_id, motivo, actor, *, gravedad='GRAVE'):
         motivo = texto(motivo, 'Motivo de pérdida', 255, True)
         with self.repositorio.transaccion() as operacion:
             cuenta = exigir_permiso(
@@ -149,7 +149,7 @@ class ServicioAplicacionPrestamo:
                     or detalle['estado_bien'] != 'PRESTADO'):
                 raise Conflicto('El bien debe estar prestado y pendiente para reportar su pérdida.')
             registrar_falta(
-                operacion.sanciones, detalle, 'PERDIDA', 'GRAVE', motivo,
+                operacion.sanciones, detalle, 'PERDIDA', gravedad, motivo,
                 cuenta, operacion.consultar_fecha_actual(),
             )
             operacion.registrar_perdida_bien_material(

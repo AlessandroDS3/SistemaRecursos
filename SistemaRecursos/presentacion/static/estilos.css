@@ -1090,7 +1090,7 @@ img {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: radial-gradient(70% 55% at 95% 0%, #7a0d2e 0%, transparent 65%), #111113;
+    background: linear-gradient(145deg, #851b3d 0%, #65122d 48%, #390c20 100%);
     border-radius: 24px;
     color: #f4f4f5;
     padding: 34px 38px 30px;
@@ -1128,7 +1128,7 @@ img {
     padding-top: 16px;
     border-top: 1px solid #ffffff24;
     font-size: var(--letra-pequena);
-    color: #a1a1a8;
+    color: #ead3dc;
     line-height: 1.5;
 }
 

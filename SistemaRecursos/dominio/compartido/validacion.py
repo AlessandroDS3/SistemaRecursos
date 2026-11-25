@@ -70,7 +70,7 @@ def fecha_local(valor):
 
 def ids(valores):
     if not isinstance(valores, (list, tuple)) or not 1 <= len(valores) <= 100:
-        raise ValueError('Selecciona entre uno y cien bienes.')
+        raise ValueError('Selecciona los bienes.')
     numeros = [entero(v) for v in valores]
     if len(set(numeros)) != len(numeros):
         raise ValueError('No repitas el mismo bien.')

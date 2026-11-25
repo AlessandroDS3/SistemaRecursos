@@ -50,6 +50,16 @@ class ReglasSancionTest(unittest.TestCase):
         self.sancion['fecha_devolucion'] = self.ahora
         self.assertFalse(alertas_revision(self.sancion, self.ahora + timedelta(days=30))['posible_perdida'])
 
+    def test_alertas_omiten_plazos_sin_fecha(self):
+        ahora = self.ahora + timedelta(days=30)
+        self.sancion['fecha_revision'] = None
+        resultado = alertas_revision(self.sancion, ahora)
+        self.assertFalse(resultado['posible_perdida'])
+        self.assertTrue(resultado['revisar_custodia'])
+
+        self.sancion.update(gravedad='GRAVE', fecha_fin=None)
+        self.assertFalse(alertas_revision(self.sancion, ahora)['revision_administrador'])
+
     def test_custodia_usa_fecha_de_lima(self):
         self.sancion['fecha_limite_devolucion'] = datetime(2026, 11, 22, 21)  # 16:00 Lima
         self.assertFalse(alertas_revision(self.sancion, datetime(2026, 11, 23, 1))['revisar_custodia'])

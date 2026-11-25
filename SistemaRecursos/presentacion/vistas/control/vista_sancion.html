@@ -34,7 +34,6 @@
         {% if sancion.id_bien_reposicion %}<dt>Bien de reposición</dt><dd>#{{ sancion.id_bien_reposicion }}</dd>{% endif %}
       </dl>
       {% if sancion.observacion_regularizacion %}<p>{{ sancion.observacion_regularizacion }}</p>{% endif %}
-      <p class="suave">Cumplir el plazo y regularizar el bien son condiciones independientes. Cada sanción conserva los plazos que tenía al aplicarse: leve {{ sancion.dias_leve }} días, grave {{ sancion.dias_grave }} días.</p>
       {% if sancion.posible_perdida %}<p class="aviso" role="status">Posible pérdida: se cumplió el plazo adicional sin devolución. Requiere confirmación del encargado.</p>{% endif %}
       {% if sancion.revisar_custodia %}<p class="aviso" role="status">Revisar custodia: el bien de uso interno no fue devuelto en su jornada. No confirma por sí solo una salida sin autorización.</p>{% endif %}
       {% if sancion.revision_administrador %}<p class="aviso" role="status">El periodo grave terminó sin regularización. El administrador debe revisar el caso; el bloqueo continúa.</p>{% endif %}
