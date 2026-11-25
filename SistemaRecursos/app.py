@@ -35,6 +35,7 @@ from servicios.control.servicio_procesador import ServicioAplicacionProcesador
 from arranque.procesador_vencimientos import iniciar_procesador_vencimientos
 from arranque.esquema_sanciones import comprobar_esquema_sanciones
 from arranque.esquema_cierre import comprobar_esquema_cierre
+from arranque.esquema_horario import comprobar_esquema_horario
 from dominio.gestion_personas_usuarios.sesion import DURACION_MAXIMA
 
 from presentacion.controladores.controlador_inicio import registrar_inicio
@@ -153,6 +154,7 @@ if __name__ == '__main__':
     for comprobar, opcion in (
         (comprobar_esquema_sanciones, '-MigrarSanciones'),
         (comprobar_esquema_cierre, '-MigrarCierre'),
+        (comprobar_esquema_horario, '-MigrarHorario'),
     ):
         try:
             comprobar(MySQLConnection())

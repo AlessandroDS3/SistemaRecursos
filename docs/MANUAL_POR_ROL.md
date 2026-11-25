@@ -63,6 +63,8 @@ Además de lo anterior:
 
 Las entregas solo se registran dentro del horario de atención. Los bienes en mantenimiento,
 dañados, perdidos o reservados para otra persona no aparecen como disponibles.
+En un préstamo grupal, todos los bienes pendientes cuentan para el cupo de cada integrante.
+Al devolver o regularizar un bien, se libera ese cupo para todos los integrantes.
 
 ### Reservas
 
@@ -136,7 +138,8 @@ del bien. Un bien solo vuelve a estar disponible cerrando su mantenimiento.
 ### Reglas del servicio
 
 - **Políticas de préstamo:** plazo por tipo de persona y categoría (en horas o días) y permiso de salida.
-- **Máximo de artículos** por tipo de persona y **horario de atención**.
+- **Máximo de artículos** por tipo de persona y **horario de atención**. Elige los días y la
+  hora de apertura y cierre en Lima. Por defecto, de lunes a viernes de 08:00 a 16:00.
 - **Sanciones → Configurar plazos:** días de la leve, de la grave y espera para revisar pérdidas.
   Cambiarlos no modifica sanciones ya aplicadas.
 - Solo el administrador aplica y levanta sanciones **muy graves**.

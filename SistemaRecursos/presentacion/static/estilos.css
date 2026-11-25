@@ -2541,7 +2541,11 @@ html [hidden], body[hidden] {
 .campos-configuracion-compacta label { gap: 4px; font-size: var(--letra-pequena); }
 .campos-configuracion-compacta input { min-height: 36px; padding: 6px 14px; }
 .bloque-maximos input { width: 92px; }
-.bloque-horario input { width: 120px; }
+.bloque-horario input[type="time"] { width: 120px; }
+.dias-atencion { min-width: 0; border: 0; margin: 0 0 12px; padding: 0; }
+.dias-atencion legend { margin-bottom: 4px; font-size: var(--letra-pequena); }
+.dias-atencion > div { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.dias-atencion .check { margin: 0; font-size: var(--letra-pequena); }
 .campos-configuracion-compacta button { min-height: 36px; padding: 6px 16px; white-space: nowrap; }
 @media (max-width: 1150px) {
     .configuracion-compacta .bloque-horario { border-left: 0; padding-left: 0; }

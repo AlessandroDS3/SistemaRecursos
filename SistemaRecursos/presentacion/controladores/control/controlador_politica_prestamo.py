@@ -1,4 +1,5 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from dominio.gestion_control.politica_prestamo import DIAS_LABORABLES, NOMBRES_DIAS, dias_habilitados
 from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
 from presentacion.seguridad import requiere_permiso
 from presentacion.formularios import recuperar_formulario
@@ -45,13 +46,21 @@ class ControladorPoliticaPrestamo:
     def consultar_politicas_prestamo(self):
         politicas = self.servicio.consultar_politicas_prestamo()
         matriz = {(p['id_categoria'], p['tipo_persona']): p for p in politicas}
+        configuracion = self.servicio.consultar_configuracion_general()
+        dias = (
+            request.form.getlist('dias_atencion')
+            if request.endpoint == 'politicas.guardar_configuracion_general'
+            else tuple(map(str, dias_habilitados(configuracion.get('dias_atencion', DIAS_LABORABLES))))
+        )
         return render_template(
             'control/vista_politica_prestamo.html',
             modo='lista',
             politicas=politicas,
             matriz=matriz,
             categorias=self.recursos.consultar_categorias(),
-            configuracion=self.servicio.consultar_configuracion_general(),
+            configuracion=configuracion,
+            dias_elegidos=dias,
+            dias_semana=tuple(enumerate(NOMBRES_DIAS)),
             limites=self.servicio.consultar_limites_articulos(),
             tipos=TIPOS_PERSONA,
         )
@@ -97,7 +106,8 @@ class ControladorPoliticaPrestamo:
     @requiere_permiso('POLITICAS_GESTIONAR')
     @recuperar_formulario(lambda self: self.consultar_politicas_prestamo())
     def guardar_configuracion_general(self):
-        self.servicio.guardar_configuracion_general(request.form.to_dict(), g.usuario.id_usuario)
+        datos = dict(request.form, dias_atencion=request.form.getlist('dias_atencion'))
+        self.servicio.guardar_configuracion_general(datos, g.usuario.id_usuario)
         flash('Horario y plazos de reserva guardados.')
         return redirect(url_for(RUTA_POLITICAS))
 

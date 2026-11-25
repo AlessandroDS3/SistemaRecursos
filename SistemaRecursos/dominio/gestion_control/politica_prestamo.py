@@ -4,6 +4,13 @@ from datetime import datetime, time, timedelta, timezone
 from dominio.compartido.validacion import LIMA, entero
 from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
 
+NOMBRES_DIAS = ('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo')
+DIAS_LABORABLES = 0b0011111  # Un bit por día, empezando por el lunes.
+
+
+def dias_habilitados(mascara):
+    return tuple(dia for dia in range(len(NOMBRES_DIAS)) if mascara & (1 << dia))
+
 
 def hora(valor):
     if isinstance(valor, timedelta):
@@ -25,14 +32,23 @@ def hora(valor):
 class HorarioAtencion:
     hora_apertura: time = time(8)
     hora_cierre: time = time(16)
+    dias_atencion: int = DIAS_LABORABLES
 
     def __post_init__(self):
         self.hora_apertura, self.hora_cierre = hora(self.hora_apertura), hora(self.hora_cierre)
         if self.hora_apertura >= self.hora_cierre:
             raise ValueError('La apertura debe ser anterior al cierre.')
+        self.dias_atencion = entero(self.dias_atencion, 'Días de atención', maximo=127)
+
+    @classmethod
+    def desde_datos(cls, datos):
+        return cls(**{campo: datos[campo] for campo in cls.__dataclass_fields__ if campo in datos})
 
     def cierre(self, fecha):
         local = fecha.replace(tzinfo=timezone.utc).astimezone(LIMA)
+        if local.weekday() not in dias_habilitados(self.dias_atencion):
+            dias = ', '.join(NOMBRES_DIAS[dia].lower() for dia in dias_habilitados(self.dias_atencion))
+            raise ValueError(f'No hay atención ese día. Días de atención: {dias}.')
         if not self.hora_apertura <= local.time() < self.hora_cierre:
             raise ValueError(
                 f'La atención es de {self.hora_apertura:%H:%M} a {self.hora_cierre:%H:%M}.'

@@ -64,8 +64,15 @@ class ServicioAplicacionPoliticaPrestamo:
         requeridos = ('hora_apertura', 'hora_cierre', *ConfiguracionReservas.__dataclass_fields__)
         if any(campo not in datos for campo in requeridos):
             raise ValueError('Envía el horario y los cuatro campos de vencimiento juntos.')
+        dias = datos.get('dias_atencion')
+        if not isinstance(dias, (list, tuple)) or not dias:
+            raise ValueError('Selecciona al menos un día de atención.')
+        dias_atencion = sum(
+            1 << dia for dia in {entero(valor, 'Día de atención', minimo=0, maximo=6) for valor in dias}
+        )
         horario = HorarioAtencion(
-            hora_apertura=datos.get('hora_apertura'), hora_cierre=datos.get('hora_cierre')
+            hora_apertura=datos['hora_apertura'], hora_cierre=datos['hora_cierre'],
+            dias_atencion=dias_atencion,
         )
         plazos = ConfiguracionReservas(
             **{k: datos[k] for k in ConfiguracionReservas.__dataclass_fields__ if k in datos}
@@ -73,6 +80,7 @@ class ServicioAplicacionPoliticaPrestamo:
         valores = {
             "hora_apertura": horario.hora_apertura,
             "hora_cierre": horario.hora_cierre,
+            "dias_atencion": horario.dias_atencion,
             "plazo_espera": plazos.plazo_espera,
             "unidad_espera": plazos.unidad_espera,
             "plazo_retiro": plazos.plazo_retiro,

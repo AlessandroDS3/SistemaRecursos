@@ -98,7 +98,7 @@
         <select name="id_recurso" data-condiciones-reserva required>
           {% for r in recursos %}
             <option value="{{ r.id_recurso }}"
-                    data-condiciones="{% if r.plazo_maximo %}Plazo máximo: {{ r.plazo_maximo }} {{ r.unidad_plazo|lower }}. Salida externa: {{ 'permitida' if r.permite_salida else 'no permitida' }}. Atención: {{ r.hora_apertura|hora }} a {{ r.hora_cierre|hora }}; los plazos en horas terminan al cierre.{% else %}No hay política para tu tipo de persona.{% endif %}"
+                    data-condiciones="{% if r.plazo_maximo %}Plazo máximo: {{ r.plazo_maximo }} {{ r.unidad_plazo|lower }}. Salida externa: {{ 'permitida' if r.permite_salida else 'no permitida' }}. {% if r.dias_atencion %}Atención de {{ r.dias_atencion|dias_atencion_texto }}, de {{ r.hora_apertura|hora }} a {{ r.hora_cierre|hora }} (Lima).{% endif %}{% else %}No hay política para tu tipo de persona.{% endif %}"
                     {% if not r.plazo_maximo %}disabled{% endif %}
                     {% if seleccionado==r.id_recurso|string %}selected{% endif %}>{{ r.nombre }}{% if r.plazo_maximo %} · {{ r.plazo_maximo }} {{ r.unidad_plazo|lower }}{% endif %}
             </option>
@@ -109,7 +109,7 @@
     </div>
     <p class="aviso" data-texto-condiciones-reserva aria-live="polite"></p>
     <p>
-      Elige una fecha y hora futuras en hora de Lima. Podrás recoger el bien cuando la reserva figure como lista para retiro.
+      Elige una fecha y hora futuras dentro del horario de atención. Podrás recoger el bien cuando la reserva figure como lista para retiro.
     </p>
     {{ campo('observaciones','Observaciones',maximo=220) }}
     <label class="check">
@@ -193,7 +193,9 @@
     {% if condiciones and condiciones.plazo_maximo %}
       <p>Plazo máximo: {{ condiciones.plazo_maximo }} {{ condiciones.unidad_plazo|lower }}.
         Salida de la institución: {{ 'permitida' if condiciones.permite_salida else 'no permitida' }}.</p>
-      <p class="suave">Atención: {{ condiciones.hora_apertura|hora }} a {{ condiciones.hora_cierre|hora }}. Los plazos por horas terminan al cierre.</p>
+      {% if condiciones.dias_atencion %}
+        <p class="suave">Atención de {{ condiciones.dias_atencion|dias_atencion_texto }}, de {{ condiciones.hora_apertura|hora }} a {{ condiciones.hora_cierre|hora }} (Lima). Los préstamos por horas terminan al cierre.</p>
+      {% endif %}
     {% else %}<p>No hay una política vigente para el tipo de persona del solicitante y esta categoría.</p>{% endif %}
   </details>
   {% if pendiente %}

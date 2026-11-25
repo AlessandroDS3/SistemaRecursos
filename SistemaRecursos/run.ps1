@@ -1,4 +1,4 @@
-param([switch]$MigrarSanciones, [switch]$MigrarCierre)
+param([switch]$MigrarSanciones, [switch]$MigrarCierre, [switch]$MigrarHorario)
 
 $ErrorActionPreference = 'Stop'
 
@@ -52,6 +52,12 @@ try {
         & $pythonProyecto -m arranque.esquema_cierre
         if ($LASTEXITCODE -ne 0) {
             throw 'No se pudo actualizar el esquema de cierre de pendientes.'
+        }
+    }
+    if ($MigrarHorario) {
+        & $pythonProyecto -m arranque.esquema_horario
+        if ($LASTEXITCODE -ne 0) {
+            throw 'No se pudo actualizar el horario de atencion.'
         }
     }
     & $pythonProyecto (Join-Path $PSScriptRoot 'app.py')

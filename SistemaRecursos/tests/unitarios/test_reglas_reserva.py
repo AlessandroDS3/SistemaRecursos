@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from dominio.compartido.validacion import fecha_local
-from dominio.gestion_control.politica_prestamo import ConfiguracionReservas
+from dominio.gestion_control.politica_prestamo import ConfiguracionReservas, HorarioAtencion
 from servicios.prestamos.servicio_reserva import ServicioAplicacionReserva
 
 
@@ -60,6 +60,15 @@ class CierreReservaTest(unittest.TestCase):
 
 
 class FechasReservaTest(unittest.TestCase):
+    def test_horario_valida_el_dia_y_las_horas_en_lima(self):
+        horario = HorarioAtencion()
+        for fecha in ('2026-11-28T10:00', '2026-11-27T16:00', '2026-11-27T07:59'):
+            with self.subTest(fecha=fecha), self.assertRaises(ValueError):
+                horario.cierre(fecha_local(fecha))
+        self.assertEqual(horario.cierre(fecha_local('2026-11-27T08:00')), datetime(2026, 11, 27, 21))
+        con_sabado = HorarioAtencion(dias_atencion=0b0111111)
+        self.assertEqual(con_sabado.cierre(fecha_local('2026-11-28T10:00')), datetime(2026, 11, 28, 21))
+
     def test_conversion_local_fuera_de_rango_es_error_de_validacion(self):
         with self.assertRaises(ValueError):
             fecha_local('9999-12-31T23:59')

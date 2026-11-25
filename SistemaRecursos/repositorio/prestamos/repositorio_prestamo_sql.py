@@ -39,12 +39,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             (tipo,),
             una=True,
         )
-        pendientes = self.consultar_sql(
-            '''SELECT COUNT(*) AS total FROM detalle_prestamo d
-            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE p.dni_persona=%s AND d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL''',
-            (documento,),
-            una=True,
-        )
+        pendientes = self._consultar_bienes_pendientes((documento,))[documento]
         horario = self.consultar_sql(
             '''SELECT TIME_FORMAT(hora_apertura,'%H:%i') AS apertura,
             TIME_FORMAT(hora_cierre,'%H:%i') AS cierre FROM configuracion_general WHERE id_configuracion=1''',
@@ -54,7 +49,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             persona=persona,
             politicas=politicas,
             limite=limite['maximo_articulos'] if limite else None,
-            pendientes=pendientes['total'],
+            pendientes=len(pendientes),
             horario=horario,
         )
 
@@ -157,6 +152,24 @@ class RepositorioPrestamoSQL(RepositorioSQL):
         )
         return fila
 
+    def _consultar_bienes_pendientes(self, documentos, bloquear=False):
+        pendientes = {documento: {} for documento in documentos}
+        marcas = ','.join(['%s'] * len(documentos))
+        # La lectura con bloqueo ve entregas confirmadas aunque la transacción ya haya leído al encargado.
+        bloqueo = ' FOR SHARE' if bloquear else ''
+        for origen in ('prestamo', 'participante_prestamo'):
+            filas = self.consultar_sql(
+                f'''SELECT p.dni_persona,d.id_detalle,d.fecha_limite_devolucion<UTC_TIMESTAMP() AS vencido
+                FROM {origen} p JOIN detalle_prestamo d ON d.id_prestamo=p.id_prestamo
+                WHERE p.dni_persona IN ({marcas}) AND d.fecha_devolucion IS NULL
+                AND d.fecha_regularizacion IS NULL''' + bloqueo,
+                documentos,
+            )
+            for fila in filas:
+                # El responsable puede figurar también entre los participantes del mismo préstamo.
+                pendientes[fila['dni_persona']][fila['id_detalle']] = fila['vencido']
+        return pendientes
+
     def consultar_contexto_entrega_prestamo(self, solicitud) -> ContextoEntrega:
         documentos = tuple(sorted(set([*solicitud.solicitantes, solicitud.dni_encargado])))
         marcas = ','.join(['%s'] * len(documentos))
@@ -167,27 +180,12 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             )
         }
         participantes = tuple(sorted(set(solicitud.solicitantes)))
-        marcas_personas = ','.join(['%s'] * len(participantes))
-        vencidos = self.consultar_sql(
-            f'''SELECT d.id_detalle FROM detalle_prestamo d
-            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL
-            AND d.fecha_limite_devolucion<UTC_TIMESTAMP() AND (p.dni_persona IN ({marcas_personas})
-            OR EXISTS(SELECT 1 FROM participante_prestamo pp WHERE pp.id_prestamo=p.id_prestamo
-                AND pp.dni_persona IN ({marcas_personas}))) LIMIT 1''',
-            participantes * 2,
-        )
+        pendientes = self._consultar_bienes_pendientes(participantes, bloquear=True)
         tipo = personas.get(solicitud.dni_persona, {}).get('tipo')
-        limite = self.consultar_sql(
-            'SELECT maximo_articulos FROM limite_articulos_prestamo WHERE tipo_persona=%s FOR UPDATE',
-            (tipo,),
-            una=True,
-        )
-        pendientes = self.consultar_sql(
-            '''SELECT COUNT(*) AS total FROM detalle_prestamo d
-            JOIN prestamo p ON p.id_prestamo=d.id_prestamo WHERE p.dni_persona=%s AND d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL''',
-            (solicitud.dni_persona,),
-            una=True,
-        )['total']
+        limites = {
+            fila['tipo_persona']: fila['maximo_articulos']
+            for fila in self.consultar_sql('SELECT * FROM limite_articulos_prestamo FOR SHARE')
+        }
         ids = tuple(sorted(solicitud.bienes))
         marcas_bienes = ','.join(['%s'] * len(ids))
         bienes = self.consultar_sql(
@@ -207,15 +205,16 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             (tipo,),
         )
         configuracion = self.consultar_sql(
-            'SELECT hora_apertura,hora_cierre FROM configuracion_general WHERE id_configuracion=1 FOR UPDATE',
+            'SELECT hora_apertura,hora_cierre,dias_atencion FROM configuracion_general '
+            'WHERE id_configuracion=1 FOR UPDATE',
             una=True,
         )
         return dict(
             personas=personas,
             sancion=self.sanciones.existen_sanciones_activas(participantes),
-            vencido=bool(vencidos),
-            limite=limite['maximo_articulos'] if limite else None,
-            pendientes=pendientes,
+            vencido=any(any(bienes.values()) for bienes in pendientes.values()),
+            limites_por_persona={dni: limites.get(personas.get(dni, {}).get('tipo')) for dni in participantes},
+            pendientes_por_persona={dni: len(bienes) for dni, bienes in pendientes.items()},
             bienes=bienes,
             entregas_pendientes=bool(entregas),
             politicas={p['id_categoria']: p for p in politicas},

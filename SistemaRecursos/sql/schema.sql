@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS configuracion_general (
   id_configuracion TINYINT PRIMARY KEY CHECK (id_configuracion=1),
   hora_apertura TIME NOT NULL,
   hora_cierre TIME NOT NULL,
+  dias_atencion TINYINT UNSIGNED NOT NULL DEFAULT 31 CHECK (dias_atencion BETWEEN 1 AND 127),
   plazo_espera INT NOT NULL,
   unidad_espera ENUM('HORAS','DIAS') NOT NULL DEFAULT 'DIAS',
   plazo_retiro INT NOT NULL,

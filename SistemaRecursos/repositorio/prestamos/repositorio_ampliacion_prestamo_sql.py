@@ -28,7 +28,8 @@ class RepositorioAmpliacionPrestamoSQL(RepositorioSQL):
             una=True,
         )
         horario = self.consultar_sql(
-            'SELECT hora_apertura,hora_cierre FROM configuracion_general WHERE id_configuracion=1 FOR UPDATE',
+            'SELECT hora_apertura,hora_cierre,dias_atencion FROM configuracion_general '
+            'WHERE id_configuracion=1 FOR UPDATE',
             una=True,
         )
         contexto['politica'] = politica

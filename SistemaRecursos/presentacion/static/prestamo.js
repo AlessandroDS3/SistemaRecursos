@@ -190,7 +190,9 @@ if (formularioPrestamo) {
     const cierre = formularioPrestamo.dataset.cierre;
     const hora = partes.hour + ":" + partes.minute;
     const fecha = partes.year + "-" + partes.month + "-" + partes.day;
-    return { cerrado: !apertura || !cierre || hora < apertura || hora >= cierre,
+    const diaLima = (new Date(fecha + "T00:00:00Z").getUTCDay() + 6) % 7;
+    const atiendeHoy = formularioPrestamo.dataset.dias.split(",").includes(String(diaLima));
+    return { cerrado: !atiendeHoy || !apertura || !cierre || hora < apertura || hora >= cierre,
       cierre: new Date(fecha + "T" + cierre + ":00-05:00") };
   }
 

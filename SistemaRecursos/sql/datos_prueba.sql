@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS configuracion_general (
   id_configuracion TINYINT PRIMARY KEY CHECK (id_configuracion=1),
   hora_apertura TIME NOT NULL,
   hora_cierre TIME NOT NULL,
+  dias_atencion TINYINT UNSIGNED NOT NULL DEFAULT 31 CHECK (dias_atencion BETWEEN 1 AND 127),
   plazo_espera INT NOT NULL,
   unidad_espera ENUM('HORAS','DIAS') NOT NULL DEFAULT 'DIAS',
   plazo_retiro INT NOT NULL,
@@ -338,7 +339,9 @@ SET @incidencia_visor = @devolucion_visor + INTERVAL 15 MINUTE;
 SET @solicitud_visor = @ahora_prueba - INTERVAL 1 DAY;
 SET @preparacion_visor = @ahora_prueba - INTERVAL 1 HOUR;
 SET @solicitud_reserva = @ahora_prueba - INTERVAL 30 MINUTE;
-SET @fecha_reserva = @ahora_prueba + INTERVAL 1 DAY;
+SET @dia_retiro = @ayer_lima + INTERVAL 2 DAY;
+SET @dia_retiro = @dia_retiro + INTERVAL (CASE WEEKDAY(@dia_retiro) WHEN 5 THEN 2 WHEN 6 THEN 1 ELSE 0 END) DAY;
+SET @fecha_reserva = TIMESTAMP(@dia_retiro, '14:00:00'); -- 09:00 en Lima
 
 INSERT INTO `persona` (`nombres`, `apellidos`, `dni`, `telefono`, `correo`, `estado`) VALUES
 ('Ana', 'Torres', '02167885', '', 'ana@ejemplo.gmail', 'ACTIVA'),

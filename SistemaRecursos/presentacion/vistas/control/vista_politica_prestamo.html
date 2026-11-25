@@ -22,9 +22,21 @@
       <form method="post" action="{{ url_for('politicas.guardar_configuracion_general') }}" id="configuracion-general" class="bloque-horario">
         {{ csrf() }}
         <h2>Horario de atención</h2>
+        <fieldset class="dias-atencion">
+          <legend>Días de atención</legend>
+          <div>
+            {% for dia, nombre in dias_semana %}
+              <label class="check">
+                <input type="checkbox" name="dias_atencion" value="{{ dia }}"
+                       {% if dia|string in dias_elegidos %}checked{% endif %}>
+                {{ nombre }}
+              </label>
+            {% endfor %}
+          </div>
+        </fieldset>
         <div class="campos-configuracion-compacta">
-          {{ campo('hora_apertura','Apertura',configuracion.hora_apertura|hora,tipo='time',requerido=true) }}
-          {{ campo('hora_cierre','Cierre',configuracion.hora_cierre|hora,tipo='time',requerido=true) }}
+          {{ campo('hora_apertura','Apertura (Lima)',configuracion.hora_apertura|default('08:00')|hora,tipo='time',requerido=true) }}
+          {{ campo('hora_cierre','Cierre (Lima)',configuracion.hora_cierre|default('16:00')|hora,tipo='time',requerido=true) }}
           <button>Guardar</button>
         </div>
       </form>

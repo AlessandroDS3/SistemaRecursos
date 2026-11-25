@@ -25,7 +25,7 @@ class RepositorioReservaSQL(RepositorioSQL):
         persona = self.consultar_sql(PERSONAS + ' WHERE p.dni=%s', (documento,), una=True)
         return self.consultar_sql(
             '''SELECT r.id_recurso,r.nombre,p.plazo_maximo,p.unidad_plazo,p.permite_salida,
-            c.hora_apertura,c.hora_cierre
+            c.hora_apertura,c.hora_cierre,c.dias_atencion
             FROM recurso r LEFT JOIN politica_prestamo p ON p.id_categoria=r.id_categoria
             AND p.tipo_persona=%s AND p.vigente=TRUE
             LEFT JOIN configuracion_general c ON c.id_configuracion=1 ORDER BY r.nombre''',

@@ -8,6 +8,7 @@ su propia base, nunca la de la aplicación.
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from threading import Barrier
 import unittest
 from unittest.mock import patch
 
@@ -58,15 +59,16 @@ class CierreMySQLTest(BaseMySQLTest):
                 plazo_maximo,unidad_plazo) VALUES(1,'ESTUDIANTE',1,3,'DIAS')""")
             cur.execute("INSERT INTO limite_articulos_prestamo VALUES('ESTUDIANTE',3)")
             cur.execute("""INSERT INTO configuracion_general(id_configuracion,hora_apertura,hora_cierre,
-                plazo_espera,plazo_retiro) VALUES(1,'00:00','23:59',2,24)""")
+                dias_atencion,plazo_espera,plazo_retiro) VALUES(1,'00:00','23:59',127,2,24)""")
         self.servicios = crear_servicios(self.conexion)
 
     # Utilidades
 
-    def prestar(self, bienes=(1,), persona='20000001'):
+    def prestar(self, bienes=(1,), persona='20000001', participantes=(), actor=2):
         return self.servicios['prestamos'].registrar_prestamo(dict(
             dni_persona=persona, bienes=[str(b) for b in bienes], acepta_condiciones='1',
-        ), 2)
+            tipo_prestamo='GRUPAL' if participantes else 'INDIVIDUAL', participantes=participantes,
+        ), actor)
 
     def detalle(self, prestamo, bien):
         return self.consulta('SELECT * FROM detalle_prestamo WHERE id_prestamo=%s AND id_bien=%s',
@@ -311,6 +313,48 @@ class CierreMySQLTest(BaseMySQLTest):
                                         ('20000001', '20000002')))
         self.assertEqual(sum(estado == 'ok' for estado, _ in resultados), 1, resultados)
         self.assertEqual(self.consulta('SELECT COUNT(*) n FROM detalle_prestamo WHERE id_bien=3')[0]['n'], 1)
+
+    def _preparar_prueba_cupo_grupal(self):
+        self.consulta("INSERT INTO persona(dni,nombres,apellidos) VALUES('20000003','Rosa','Prueba')")
+        self.consulta("INSERT INTO estudiante(dni,cui) VALUES('20000003','20000003')")
+        self.consulta("INSERT INTO bien_material(id_bien,id_recurso,codigo_inventario) VALUES(4,1,'LAP-4')")
+
+    def test_cn06_integrante_acumula_cupo_entre_grupos_y_libera_al_devolver(self):
+        self._preparar_prueba_cupo_grupal()
+        prestamos = self.servicios['prestamos']
+        integrante = '20000002'
+        primero = self.prestar([1, 2], '20000001', [integrante])
+        self.assertEqual(prestamos.consultar_condiciones_prestamo('20000001')['pendientes'], 2)
+        self.prestar([3], '20000003', [integrante])
+        self.assertEqual(prestamos.consultar_condiciones_prestamo(integrante)['pendientes'], 3)
+        with self.assertRaisesRegex(Conflicto, 'Diego Prueba tiene 3 bienes pendientes'):
+            self.prestar([4], '20000003', [integrante])
+        with self.assertRaises(Conflicto):
+            self.prestar([4], integrante)
+
+        detalle = self.detalle(primero, 1)['id_detalle']
+        prestamos.registrar_devolucion(primero, dict(detalles=[str(detalle)], **{f'condicion_{detalle}': 'BUENO'}), 2)
+        self.assertEqual(prestamos.consultar_condiciones_prestamo('20000001')['pendientes'], 1)
+        self.assertEqual(prestamos.consultar_condiciones_prestamo(integrante)['pendientes'], 2)
+        self.assertTrue(self.prestar([4], integrante))
+
+    def test_cn06_entregas_simultaneas_comparten_el_cupo_del_integrante(self):
+        self._preparar_prueba_cupo_grupal()
+        integrante = '20000002'
+        self.prestar([1, 2], '20000001', [integrante])
+        inicio = Barrier(2)
+
+        def entregar(datos):
+            bien, responsable, actor = datos
+            inicio.wait(timeout=5)
+            return intentar(self.prestar, [bien], responsable, [integrante], actor)
+
+        with ThreadPoolExecutor(max_workers=2) as hilos:
+            resultados = list(hilos.map(entregar, ((3, '20000001', 1), (4, '20000003', 2))))
+        self.assertEqual(sum(estado == 'ok' for estado, _ in resultados), 1, resultados)
+        bloqueado = next(resultado for estado, resultado in resultados if estado == 'error')
+        self.assertIsInstance(bloqueado, Conflicto)
+        self.assertIn('Diego Prueba', str(bloqueado))
 
     # OPE-01
 

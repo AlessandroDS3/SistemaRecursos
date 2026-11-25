@@ -106,7 +106,8 @@
   {% elif modo=="formulario" %}
     <h1>Registrar préstamo</h1>
     {% if politicas %}
-      <form method="post" action="{{ url_for('prestamos.registrar_prestamo') }}" class="formulario-prestamo prestamo-disposicion" id="form-prestamo" data-apertura="{{ horario.hora_apertura|hora if horario else '08:00' }}" data-cierre="{{ horario.hora_cierre|hora if horario else '16:00' }}" data-personas-url="{{ url_for('personas.buscar_personas') }}" data-bienes-url="{{ url_for('prestamos.consultar_bienes_disponibles') }}" data-recurso="{{ recurso_contexto.id_recurso if recurso_contexto else '' }}" data-bien='{{ bien_inicial|tojson }}' data-bienes-iniciales='{{ bienes|tojson }}'>
+      {% set dias_horario = horario.dias_atencion|default(dias_laborables) %}
+      <form method="post" action="{{ url_for('prestamos.registrar_prestamo') }}" class="formulario-prestamo prestamo-disposicion" id="form-prestamo" data-apertura="{{ horario.hora_apertura|hora if horario else '08:00' }}" data-cierre="{{ horario.hora_cierre|hora if horario else '16:00' }}" data-dias="{{ dias_horario|dias_habilitados|join(',') }}" data-personas-url="{{ url_for('personas.buscar_personas') }}" data-bienes-url="{{ url_for('prestamos.consultar_bienes_disponibles') }}" data-recurso="{{ recurso_contexto.id_recurso if recurso_contexto else '' }}" data-bien='{{ bien_inicial|tojson }}' data-bienes-iniciales='{{ bienes|tojson }}'>
         <input type="hidden" data-bienes-recuperados='{{ bienes_recuperados|tojson }}'>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="volver" value="{{ volver }}">
@@ -224,7 +225,7 @@
               Agrega al menos un bien.
             </p>
           </section>
-          <p class="suave">Atención: {{ horario.hora_apertura|hora if horario else '08:00' }} a {{ horario.hora_cierre|hora if horario else '16:00' }}. Los préstamos por horas terminan como máximo al cierre.</p>
+          <p class="suave">Atención de {{ dias_horario|dias_atencion_texto }}, de {{ horario.hora_apertura|hora if horario else '08:00' }} a {{ horario.hora_cierre|hora if horario else '16:00' }} (Lima). Los préstamos por horas terminan como máximo al cierre.</p>
           <p id="atencion-cerrada" class="aviso" tabindex="-1" hidden>La atención está cerrada. Registra la entrega dentro del horario indicado.</p>
           <p id="politica-faltante" class="aviso" tabindex="-1" hidden>
             Configura las políticas faltantes antes de prestar.

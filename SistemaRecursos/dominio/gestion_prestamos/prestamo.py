@@ -26,8 +26,8 @@ class ContextoEntrega(TypedDict):
     personas: dict[str, dict]
     sancion: bool
     vencido: bool
-    limite: int | None
-    pendientes: int
+    limites_por_persona: dict[str, int | None]
+    pendientes_por_persona: dict[str, int]
     bienes: list[dict]
     entregas_pendientes: bool
     politicas: dict[int, dict]
@@ -84,13 +84,18 @@ class SolicitudPrestamo:
             raise Conflicto('El solicitante o un integrante tiene una sanción activa.')
         if contexto['vencido']:
             raise Conflicto('El solicitante o un integrante tiene bienes vencidos pendientes.')
-        limite = contexto['limite']
-        if limite is None:
-            raise ValueError('Configura el límite de artículos de este tipo de persona.')
-        if contexto['pendientes'] + len(self.bienes) > limite:
-            raise Conflicto(
-                'La entrega supera el máximo total de artículos pendientes del solicitante.'
-            )
+        for documento in self.solicitantes:
+            persona = contexto['personas'][documento]
+            limite = contexto['limites_por_persona'][documento]
+            pendientes = contexto['pendientes_por_persona'][documento]
+            if limite is None:
+                raise ValueError(f'Configura el límite de artículos para el tipo {persona["tipo"].lower()}.')
+            if pendientes + len(self.bienes) > limite:
+                nombre = f'{persona["nombres"]} {persona["apellidos"]}'
+                raise Conflicto(
+                    f'{nombre} tiene {pendientes} bienes pendientes. '
+                    f'Con esta entrega superaría su límite de {limite}.'
+                )
         bienes = contexto['bienes']
         if {b['id_bien'] for b in bienes} != set(self.bienes):
             raise NoEncontrado('Uno de los bienes no existe.')

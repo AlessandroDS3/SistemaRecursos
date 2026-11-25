@@ -3,7 +3,7 @@ from typing import Mapping
 
 from dominio.compartido.validacion import Conflicto, NoEncontrado, dni, entero, texto
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
-from dominio.gestion_control.politica_prestamo import ConfiguracionReservas
+from dominio.gestion_control.politica_prestamo import ConfiguracionReservas, HorarioAtencion
 from dominio.gestion_prestamos.contratos_prestamos import IRepositorioReserva
 from dominio.gestion_prestamos.prestamo import SolicitudPrestamo
 from dominio.gestion_prestamos.reserva import (
@@ -79,8 +79,9 @@ class ServicioAplicacionReserva:
             reserva = nueva_reserva(datos, cuenta['dni_persona'], op.consultar_fecha_actual())
             contexto = op.consultar_contexto_reserva(reserva['dni_persona'], reserva['id_recurso'])
             validar_solicitud(reserva, contexto, comprobar_duplicada=True)
-            configuracion = self._consultar_configuracion_reservas(op)
-            reserva['fecha_limite_vencimiento'] = configuracion.vencimiento(
+            configuracion = self._consultar_configuracion_general(op)
+            HorarioAtencion.desde_datos(configuracion).cierre(reserva['fecha_requerida'])
+            reserva['fecha_limite_vencimiento'] = self._plazos_reserva(configuracion).vencimiento(
                 reserva['fecha_requerida'], 'espera'
             )
             identificador = op.registrar_reserva(reserva)
@@ -95,10 +96,14 @@ class ServicioAplicacionReserva:
             return identificador
 
     @staticmethod
-    def _consultar_configuracion_reservas(op: IRepositorioReserva) -> ConfiguracionReservas:
+    def _consultar_configuracion_general(op: IRepositorioReserva) -> dict:
         fila = op.consultar_configuracion_general()
         if fila is None:
             raise ValueError('Configura los plazos de reserva en Políticas.')
+        return fila
+
+    @staticmethod
+    def _plazos_reserva(fila: dict) -> ConfiguracionReservas:
         return ConfiguracionReservas(
             **{k: fila[k] for k in ConfiguracionReservas.__dataclass_fields__}
         )
@@ -148,13 +153,12 @@ class ServicioAplicacionReserva:
             cuenta['dni_persona'],
             reserva['id_reserva'],
         )
+        plazos = self._plazos_reserva(self._consultar_configuracion_general(op))
         cambios: CambiosReserva = {
             'estado': LISTA_PARA_RETIRO,
             'id_bien': bien['id_bien'],
             'fecha_preparacion': ahora,
-            'fecha_limite_vencimiento': self._consultar_configuracion_reservas(op).vencimiento(
-                ahora, 'retiro'
-            ),
+            'fecha_limite_vencimiento': plazos.vencimiento(ahora, 'retiro'),
         }
         return cambios, 'Bien preparado para retiro.'
 
