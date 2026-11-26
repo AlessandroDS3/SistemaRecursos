@@ -85,6 +85,23 @@ independiente. Ambos deben apuntar a la misma base. El procesador revisa cada 30
 coordina la ejecución por base y vuelve a intentar los ciclos que fallan. Inicio muestra
 la última revisión correcta y un aviso si queda desactualizada.
 
+### Actualizar una base que ya tiene reservas
+
+Si instalaste el sistema antes de que admitiera reservas de varios bienes, selecciona
+tu base en MySQL Workbench y ejecuta una sola vez este ajuste de la tabla existente
+antes de iniciar la aplicación actualizada.
+
+```sql
+ALTER TABLE reserva
+  ADD COLUMN id_reserva_principal INT NULL,
+  ADD COLUMN participantes JSON NULL,
+  ADD CONSTRAINT fk_reserva_principal
+    FOREIGN KEY (id_reserva_principal) REFERENCES reserva(id_reserva);
+```
+
+Las reservas existentes siguen disponibles como reservas individuales de un bien.
+Las instalaciones nuevas con `schema.sql` o `datos_prueba.sql` ya incluyen estas columnas.
+
 ## 3. Pruebas automáticas
 
 Desde `SistemaRecursos`:

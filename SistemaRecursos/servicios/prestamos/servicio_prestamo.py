@@ -140,7 +140,7 @@ class ServicioAplicacionPrestamo:
     def registrar_entrega_prestamo_en_transaccion(
         operacion: IRepositorioPrestamo,
         solicitud: SolicitudPrestamo,
-        bien_reservado: int | None = None,
+        bienes_reservados: frozenset[int] = frozenset(),
         reserva_origen: int | None = None,
         codigo=None,
     ) -> int:
@@ -151,7 +151,7 @@ class ServicioAplicacionPrestamo:
         Revalida elegibilidad, sanciones, cupo, inventario y política en ambos caminos.
         """
         datos_prestamo = operacion.consultar_datos_para_validar_prestamo(solicitud, reserva_origen)
-        plan = solicitud.validar_entrega_y_calcular_plazos(datos_prestamo, bien_reservado)
+        plan = solicitud.validar_entrega_y_calcular_plazos(datos_prestamo, bienes_reservados)
         autorizacion = None
         if solicitud.dni_encargado in solicitud.solicitantes:
             autorizacion = ServicioAplicacionPrestamo.validar_autorizacion_propia(

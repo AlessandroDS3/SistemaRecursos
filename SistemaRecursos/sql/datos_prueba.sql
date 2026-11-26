@@ -196,6 +196,8 @@ CREATE TABLE IF NOT EXISTS reserva (
   salida_solicitada BOOLEAN NOT NULL DEFAULT FALSE,
   id_bien       INT NULL,
   id_prestamo_ref   INT NULL,
+  id_reserva_principal INT NULL,
+  participantes JSON NULL,
   estado            ENUM('EN_ESPERA','LISTA_PARA_RETIRO','ATENDIDA','CANCELADA','EXPIRADA','RECHAZADA') NOT NULL DEFAULT 'EN_ESPERA',
   INDEX idx_reserva_cola (id_recurso,estado,fecha_solicitud,id_reserva),
   INDEX idx_reserva_persona_estado (dni_persona,estado),
@@ -203,6 +205,7 @@ CREATE TABLE IF NOT EXISTS reserva (
   FOREIGN KEY (dni_persona) REFERENCES persona(dni) ON UPDATE CASCADE,
   FOREIGN KEY (id_recurso) REFERENCES recurso(id_recurso),
   CONSTRAINT fk_reserva_bien FOREIGN KEY (id_bien) REFERENCES bien_material(id_bien),
+  CONSTRAINT fk_reserva_principal FOREIGN KEY (id_reserva_principal) REFERENCES reserva(id_reserva),
   CONSTRAINT fk_reserva_prestamo FOREIGN KEY (id_prestamo_ref) REFERENCES prestamo(id_prestamo)
 ) ENGINE=InnoDB;
 -- 5. CONTROL: INCIDENCIAS Y SANCIONES

@@ -117,7 +117,7 @@
   <section id="reservas-historial"><h2>Solicitudes y reservas</h2>
     {% if filtro.tipo == 'historial_bien' %}<p class="suave">Solicitudes que conservan una asignación registrada a este bien.</p>{% endif %}
     <div class="tabla panel"><table><thead><tr><th>Solicitud</th><th>Recurso</th><th>Solicitante</th><th>Registrada</th><th>Retiro solicitado</th><th>Estado actual</th></tr></thead><tbody>
-    {% for r in reservas %}<tr><td>#{{ r.id_reserva }}<small>{{ r.tipo_gestion|etiqueta_reporte }}</small></td><td>{{ r.recurso }}<small>{{ r.codigo_inventario or 'Sin bien asignado' }}</small></td><td>{{ r.solicitante }}<small>DNI: {{ r.dni_persona }}</small></td><td>{{ r.fecha_solicitud|fecha }}</td><td>{{ r.fecha_requerida|fecha }}</td><td>{{ insignia_de_estado(r.estado) }}</td></tr>{% endfor %}
+    {% for r in reservas %}<tr><td>#{{ r.id_reserva }}<small>{{ r.tipo_gestion|etiqueta_reporte }}</small></td><td>{% for bien in r.bienes %}{{ bien.recurso }}<small>{{ bien.codigo_inventario or 'Sin bien asignado' }}</small>{% endfor %}</td><td>{{ r.solicitante }}<small>DNI: {{ r.dni_persona }}</small></td><td>{{ r.fecha_solicitud|fecha }}</td><td>{{ r.fecha_requerida|fecha }}</td><td>{{ insignia_de_estado(r.estado) }}</td></tr>{% endfor %}
     </tbody></table></div>
   </section>
   {% endif %}

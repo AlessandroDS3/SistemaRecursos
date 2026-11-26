@@ -182,7 +182,11 @@ def construir_cronologia_historial(datos):
             f'Sanción #{h["id_sancion"]}',
             dni_registrador=h.get('dni_responsable'),
         )
-    for r in datos['reservas']:
+    reservas_por_id = {}
+    for linea in datos['reservas']:
+        reserva = reservas_por_id.setdefault(linea['id_reserva'], dict(linea, bienes=[]))
+        reserva['bienes'].append(linea)
+    for r in reservas_por_id.values():
         agregar_evento_a_cronologia(
             r,
             r['fecha_solicitud'],
@@ -207,6 +211,7 @@ def construir_cronologia_historial(datos):
     ]
     return dict(
         datos,
+        reservas=list(reservas_por_id.values()),
         filas=filas,
         prestamos_agrupados=prestamos,
         resumen=dict(

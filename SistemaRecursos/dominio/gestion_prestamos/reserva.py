@@ -1,5 +1,6 @@
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+import json
 from typing import Literal, Mapping, TypedDict
 
 from dominio.compartido.codigos import Codigo
@@ -16,6 +17,7 @@ from dominio.gestion_personas_usuarios.persona import (
     PersonaParaPrestamo,
     validar_elegibilidad_del_solicitante,
 )
+from dominio.gestion_prestamos.prestamo import validar_integrantes
 
 
 class EstadoReserva(Codigo):
@@ -66,10 +68,14 @@ class ResumenReserva(TypedDict):
     id_prestamo_ref: int | None
     recurso: str
     solicitante: str
+    id_reserva_principal: int | None
+    participantes: str | list[str] | None
 
 
 class ReservaEnCola(ResumenReserva):
     posicion: int | None
+    cantidad_bienes: int
+    recursos: str
 
 
 class DetalleReserva(ResumenReserva, total=False):
@@ -78,6 +84,7 @@ class DetalleReserva(ResumenReserva, total=False):
     recurso_bien: int | None
     historial: list[FilaHistorialEstado]
     ventana_atencion: VentanaReserva
+    bienes: list['DetalleReserva']
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -97,6 +104,23 @@ def ventana_atencion_reserva(
     return 'FUTURA' if requerida > ahora else 'ABIERTA'
 
 
+def validar_recursos_de_reserva(datos: Mapping) -> list[int]:
+    lineas = datos.get('recursos', [(datos.get('id_recurso'), 1)])
+    if not isinstance(lineas, (list, tuple)) or not lineas:
+        raise ValueError('Selecciona los bienes.')
+    recursos: list[int] = []
+    for linea in lineas:
+        if not isinstance(linea, (list, tuple)) or len(linea) != 2:
+            raise ValueError('Indica la cantidad de cada recurso.')
+        recurso, cantidad = linea
+        recurso = validar_entero(recurso, 'Recurso')
+        cantidad = validar_entero(cantidad, 'Cantidad')
+        if len(recursos) + cantidad > 100:
+            raise ValueError('La cantidad supera el máximo de bienes de una reserva.')
+        recursos.extend([recurso] * cantidad)
+    return recursos
+
+
 @dataclass(frozen=True, kw_only=True)
 class Reserva:
     dni_persona: str
@@ -112,9 +136,11 @@ class Reserva:
     id_bien: int | None = None
     fecha_preparacion: datetime | None = None
     id_prestamo_ref: int | None = None
+    id_reserva_principal: int | None = None
+    participantes: tuple[str, ...] = ()
 
     @classmethod
-    def desde_formulario(cls, datos: Mapping[str, str], documento: str, ahora: datetime) -> 'Reserva':
+    def desde_formulario(cls, datos: Mapping, documento: str, ahora: datetime) -> 'Reserva':
         if datos.get('tipo_gestion', 'RESERVA') != 'RESERVA':
             raise ValueError('El préstamo inmediato se registra presencialmente con el encargado.')
         if datos.get('acepta_condiciones') != '1':
@@ -124,15 +150,21 @@ class Reserva:
             raise ValueError('La reserva debe indicar una fecha futura.')
         if requerida - ahora > ANTICIPACION_MAXIMA:
             raise ValueError('Puedes reservar con un máximo de 7 días de anticipación.')
+        documento = validar_dni(documento)
+        participantes = validar_integrantes(
+            documento, datos.get('participantes', []), datos.get('tipo_prestamo', 'INDIVIDUAL'),
+        )
         return cls(
-            dni_persona=validar_dni(documento), id_recurso=validar_entero(datos.get('id_recurso'), 'Recurso'),
+            dni_persona=documento, id_recurso=validar_entero(datos.get('id_recurso'), 'Recurso'),
             fecha_solicitud=ahora, fecha_requerida=requerida,
             observaciones=validar_texto(datos.get('observaciones'), 'Observaciones', 220),
             salida_solicitada=datos.get('salida_solicitada') == '1',
+            participantes=tuple(participantes),
         )
 
     @classmethod
     def desde_detalle(cls, fila: ResumenReserva) -> 'Reserva':
+        participantes = fila.get('participantes')
         return cls(
             id_reserva=fila['id_reserva'], dni_persona=fila['dni_persona'], id_recurso=fila['id_recurso'],
             fecha_solicitud=fila['fecha_solicitud'], fecha_requerida=fila['fecha_requerida'],
@@ -140,6 +172,8 @@ class Reserva:
             observaciones=fila['observaciones'] or '', salida_solicitada=bool(fila['salida_solicitada']),
             fecha_limite_vencimiento=fila['fecha_limite_vencimiento'], id_bien=fila['id_bien'],
             fecha_preparacion=fila['fecha_preparacion'], id_prestamo_ref=fila['id_prestamo_ref'],
+            id_reserva_principal=fila.get('id_reserva_principal'),
+            participantes=tuple(json.loads(participantes) if isinstance(participantes, str) else participantes or ()),
         )
 
     def con_plazo_de_espera(self, limite: datetime) -> 'Reserva':
@@ -187,15 +221,20 @@ class Reserva:
 def validar_solicitante_y_recurso_para_reserva(
     reserva: Reserva, contexto: DatosParaValidarReserva, comprobar_duplicada: bool = False
 ) -> PersonaParaPrestamo:
-    persona = validar_elegibilidad_del_solicitante(contexto.persona)
+    persona = validar_integrante_de_reserva(contexto)
     if not contexto.existe_recurso:
         raise NoEncontrado('Recurso inexistente.')
-    if contexto.bloqueado:
-        raise Conflicto('El solicitante tiene bienes vencidos o una sanción activa.')
     if contexto.permite_salida is None:
         raise ValueError('No hay una política vigente para este recurso y tipo de persona.')
     if reserva.salida_solicitada and not contexto.permite_salida:
         raise ValueError('La política no permite la salida externa.')
     if comprobar_duplicada and contexto.duplicada:
         raise Conflicto('Ya tienes una solicitud o reserva pendiente para este recurso.')
+    return persona
+
+
+def validar_integrante_de_reserva(contexto: DatosParaValidarReserva) -> PersonaParaPrestamo:
+    persona = validar_elegibilidad_del_solicitante(contexto.persona)
+    if contexto.bloqueado:
+        raise Conflicto(f'{persona["nombres"]} {persona["apellidos"]} tiene bienes vencidos o una sanción activa.')
     return persona

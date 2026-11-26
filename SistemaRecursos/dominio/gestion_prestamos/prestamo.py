@@ -96,8 +96,21 @@ def validar_cupo_articulos(persona: PersonaParaPrestamo, cupo: CupoArticulos, nu
     nombre = f'{persona["nombres"]} {persona["apellidos"]}'
     ocupados = f'{cupo.pendientes} bienes pendientes'
     if cupo.reservas:
-        ocupados += f' y {cupo.reservas} reservas activas'
+        ocupados += f' y {cupo.reservas} bienes en reservas activas'
     raise Conflicto(f'{nombre} tiene {ocupados}. Esta operación superaría su límite de {cupo.limite}.')
+
+
+def validar_integrantes(
+    titular: str, participantes: list[str] | tuple[str, ...], tipo: str,
+) -> list[str]:
+    if not isinstance(participantes, (list, tuple)) or len(participantes) > 100:
+        raise ValueError('Participantes inválidos.')
+    documentos = [validar_dni(d) for d in participantes]
+    if len(set(documentos)) != len(documentos) or titular in documentos:
+        raise ValueError('No repitas al responsable ni a los integrantes.')
+    if tipo not in tuple(TipoPrestamo) or (tipo == TipoPrestamo.GRUPAL) != bool(documentos):
+        raise ValueError('Agrega integrantes para la modalidad grupal o elige individual.')
+    return documentos
 
 
 @dataclass(kw_only=True)
@@ -113,20 +126,7 @@ class SolicitudPrestamo:
     def __post_init__(self):
         self.dni_persona, self.dni_encargado = validar_dni(self.dni_persona), validar_dni(self.dni_encargado)
         self.bienes = validar_lista_de_ids_de_bienes(self.bienes)
-        if not isinstance(self.participantes, (list, tuple)) or len(self.participantes) > 100:
-            raise ValueError('Participantes inválidos.')
-        self.participantes = [validar_dni(d) for d in self.participantes]
-        if (
-            len(set(self.participantes)) != len(self.participantes)
-            or self.dni_persona in self.participantes
-        ):
-            raise ValueError('No repitas al responsable ni a los integrantes.')
-        if self.tipo_prestamo not in tuple(TipoPrestamo) or (
-            (self.tipo_prestamo == TipoPrestamo.GRUPAL) != bool(self.participantes)
-        ):
-            raise ValueError(
-                'El préstamo grupal requiere otros integrantes; el individual no los admite.'
-            )
+        self.participantes = validar_integrantes(self.dni_persona, self.participantes, self.tipo_prestamo)
         self.observaciones = validar_texto(self.observaciones, 'Observaciones', 220)
         self.tipo_prestamo = TipoPrestamo(self.tipo_prestamo)
 
@@ -144,7 +144,7 @@ class SolicitudPrestamo:
         return uso + self.observaciones
 
     def validar_entrega_y_calcular_plazos(
-        self, datos: DatosParaValidarPrestamo, bien_reservado: int | None = None,
+        self, datos: DatosParaValidarPrestamo, bienes_reservados: frozenset[int] = frozenset(),
     ) -> list[DetalleEntregaPlanificado]:
         for documento in self.solicitantes:
             solicitante = datos.solicitantes.get(documento)
@@ -166,13 +166,13 @@ class SolicitudPrestamo:
         if horario is None:
             raise ValueError('Configura el horario de atención.')
         horario.obtener_cierre_si_hay_atencion(datos.ahora)
-        return [self._validar_bien_y_calcular_plazo(bien, datos, bien_reservado, horario) for bien in datos.bienes]
+        return [self._validar_bien_y_calcular_plazo(bien, datos, bienes_reservados, horario) for bien in datos.bienes]
 
     def _validar_bien_y_calcular_plazo(
         self, bien: BienParaEntrega, datos: DatosParaValidarPrestamo,
-        bien_reservado: int | None, horario: HorarioAtencion,
+        bienes_reservados: frozenset[int], horario: HorarioAtencion,
     ) -> DetalleEntregaPlanificado:
-        esperado = EstadoBien.RESERVADO if bien.id_bien == bien_reservado else EstadoBien.DISPONIBLE
+        esperado = EstadoBien.RESERVADO if bien.id_bien in bienes_reservados else EstadoBien.DISPONIBLE
         if bien.estado is not esperado:
             raise Conflicto('Uno de los bienes dejó de estar disponible.')
         politica = datos.politicas.get(bien.id_categoria)

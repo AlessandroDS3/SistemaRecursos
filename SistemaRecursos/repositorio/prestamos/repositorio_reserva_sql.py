@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 from typing import Mapping
 
 from dominio.gestion_prestamos.reserva import (
@@ -19,10 +20,17 @@ RESERVAS_PENDIENTES_SQL = f'''re.estado IN ({MARCAS_PENDIENTES})
     AND (re.fecha_limite_vencimiento IS NULL OR re.fecha_limite_vencimiento>UTC_TIMESTAMP())'''
 ORDEN_DE_PREPARACION = '''(fecha_requerida>{ahora}),
     CASE WHEN fecha_requerida>{ahora} THEN fecha_requerida ELSE fecha_solicitud END,
-    fecha_solicitud, id_reserva'''
+    fecha_solicitud, COALESCE(id_reserva_principal,id_reserva)'''
+DETALLE_DE_RESERVA = '''SELECT re.*,r.nombre AS recurso,b.codigo_inventario,
+    b.estado AS estado_bien,b.id_recurso AS recurso_bien,
+    CONCAT(p.nombres,' ',p.apellidos) AS solicitante FROM reserva re
+    JOIN recurso r ON r.id_recurso=re.id_recurso JOIN persona p ON p.dni=re.dni_persona
+    LEFT JOIN bien_material b ON b.id_bien=re.id_bien'''
 
 
 class RepositorioReservaSQL(RepositorioSQL):
+    aislamiento = 'READ COMMITTED'
+
     def consultar_recursos_para_reserva(self, documento):
         persona = self.consultar_sql(CONSULTA_PARA_PRESTAMO + ' WHERE p.dni=%s', (documento,), una=True)
         return self.consultar_sql(
@@ -39,11 +47,12 @@ class RepositorioReservaSQL(RepositorioSQL):
         return RepositorioPrestamoSQL(self.conexion, self._cursor)
 
     def contar_reservas_pendientes(self, documento: str | None = None) -> int:
-        sql = 'SELECT COUNT(*) AS total FROM reserva re WHERE ' + RESERVAS_PENDIENTES_SQL
+        sql = ('SELECT COUNT(*) AS total FROM reserva re WHERE re.id_reserva_principal IS NULL AND '
+               + RESERVAS_PENDIENTES_SQL)
         parametros = ESTADOS_PENDIENTES
         if documento is not None:
-            sql += ' AND re.dni_persona=%s'
-            parametros += (documento,)
+            sql += ' AND (re.dni_persona=%s OR JSON_CONTAINS(re.participantes,JSON_QUOTE(%s)))'
+            parametros += (documento, documento)
         return self.consultar_sql(sql, parametros, una=True)['total']
 
     def consultar_reservas(
@@ -52,20 +61,27 @@ class RepositorioReservaSQL(RepositorioSQL):
         filtros = filtros or {}
         orden = ORDEN_DE_PREPARACION.format(ahora='UTC_TIMESTAMP()')
         sql = f'''WITH cola_preparacion AS (
-            SELECT id_reserva, ROW_NUMBER() OVER (PARTITION BY id_recurso ORDER BY {orden}) AS posicion
+            SELECT id_reserva, DENSE_RANK() OVER (PARTITION BY id_recurso ORDER BY {orden}) AS posicion
             FROM reserva WHERE estado=%s
             AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>UTC_TIMESTAMP())
+            ), contenido AS (
+            SELECT COALESCE(linea.id_reserva_principal,linea.id_reserva) AS id_principal,
+                COUNT(*) AS cantidad_bienes, GROUP_CONCAT(DISTINCT recurso.nombre ORDER BY recurso.nombre SEPARATOR ', ') AS recursos
+            FROM reserva linea JOIN recurso ON recurso.id_recurso=linea.id_recurso
+            GROUP BY id_principal
             )
             SELECT re.*,r.nombre AS recurso,
             CONCAT(p.nombres,' ',p.apellidos) AS solicitante,
-            cola.posicion
+            cola.posicion, contenido.cantidad_bienes, contenido.recursos
             FROM reserva re JOIN recurso r ON r.id_recurso=re.id_recurso
             JOIN persona p ON p.dni=re.dni_persona
-            LEFT JOIN cola_preparacion cola ON cola.id_reserva=re.id_reserva WHERE 1=1'''
+            JOIN contenido ON contenido.id_principal=re.id_reserva
+            LEFT JOIN cola_preparacion cola ON cola.id_reserva=re.id_reserva
+            WHERE re.id_reserva_principal IS NULL'''
         parametros = [EN_ESPERA]
         if documento:
-            sql += ' AND re.dni_persona=%s'
-            parametros.append(documento)
+            sql += ' AND (re.dni_persona=%s OR JSON_CONTAINS(re.participantes,JSON_QUOTE(%s)))'
+            parametros.extend((documento, documento))
         estado = filtros.get('estado')
         if estado == FILTRO_PENDIENTES:
             sql += ' AND ' + RESERVAS_PENDIENTES_SQL
@@ -77,7 +93,7 @@ class RepositorioReservaSQL(RepositorioSQL):
             sql += ' AND re.tipo_gestion=%s'
             parametros.append(filtros['tipo_gestion'])
         if filtros.get('q'):
-            sql += " AND (re.dni_persona LIKE %s OR r.nombre LIKE %s OR CONCAT(p.nombres,' ',p.apellidos) LIKE %s)"
+            sql += " AND (re.dni_persona LIKE %s OR contenido.recursos LIKE %s OR CONCAT(p.nombres,' ',p.apellidos) LIKE %s)"
             parametros += [f"%{filtros['q']}%"] * 3
         return self.consultar_sql(
             sql + ' ORDER BY re.fecha_solicitud DESC,re.id_reserva DESC', parametros
@@ -87,14 +103,17 @@ class RepositorioReservaSQL(RepositorioSQL):
         self, identificador: int, bloquear: bool = False
     ) -> DetalleReserva | None:
         return self.consultar_sql(
-            '''SELECT re.*,r.nombre AS recurso,b.codigo_inventario,
-            b.estado AS estado_bien,b.id_recurso AS recurso_bien,
-            CONCAT(p.nombres,' ',p.apellidos) AS solicitante FROM reserva re
-            JOIN recurso r ON r.id_recurso=re.id_recurso JOIN persona p ON p.dni=re.dni_persona
-            LEFT JOIN bien_material b ON b.id_bien=re.id_bien WHERE re.id_reserva=%s'''
+            DETALLE_DE_RESERVA + ' WHERE re.id_reserva=%s AND re.id_reserva_principal IS NULL'
             + (' FOR UPDATE OF re' if bloquear else ''),
             (identificador,),
             una=True,
+        )
+
+    def consultar_lineas_de_reserva(self, identificador: int, bloquear: bool = False) -> list[DetalleReserva]:
+        return self.consultar_sql(
+            DETALLE_DE_RESERVA + ' WHERE re.id_reserva_principal=%s ORDER BY re.id_reserva'
+            + (' FOR UPDATE OF re' if bloquear else ''),
+            (identificador,),
         )
 
     def consultar_datos_para_validar_reserva(self, documento: str, recurso: int) -> DatosParaValidarReserva:
@@ -106,7 +125,7 @@ class RepositorioReservaSQL(RepositorioSQL):
         )
         politica = self.consultar_sql(
             '''SELECT permite_salida FROM politica_prestamo
-            WHERE tipo_persona=%s AND id_categoria=%s AND vigente=TRUE FOR UPDATE''',
+            WHERE tipo_persona=%s AND id_categoria=%s AND vigente=TRUE FOR SHARE''',
             (persona['tipo'] if persona else None, fila['id_categoria'] if fila else None),
             una=True,
         )
@@ -135,7 +154,7 @@ class RepositorioReservaSQL(RepositorioSQL):
 
     def consultar_horario_y_plazos_de_reserva(self):
         return self.consultar_sql(
-            'SELECT * FROM configuracion_general WHERE id_configuracion=1 FOR UPDATE', una=True
+            'SELECT * FROM configuracion_general WHERE id_configuracion=1 FOR SHARE', una=True
         )
 
     def guardar_nueva_reserva(self, reserva: Reserva) -> int:
@@ -144,6 +163,8 @@ class RepositorioReservaSQL(RepositorioSQL):
             fecha_solicitud=reserva.fecha_solicitud, fecha_requerida=reserva.fecha_requerida,
             tipo_gestion=reserva.tipo_gestion, observaciones=reserva.observaciones,
             salida_solicitada=reserva.salida_solicitada, fecha_limite_vencimiento=reserva.fecha_limite_vencimiento,
+            id_reserva_principal=reserva.id_reserva_principal,
+            participantes=json.dumps(reserva.participantes) if reserva.participantes else None,
             estado=reserva.estado,
         ))
 
@@ -166,9 +187,10 @@ class RepositorioReservaSQL(RepositorioSQL):
         self.consultar_sql('SELECT dni FROM persona WHERE dni=%s FOR UPDATE', (documento,), una=True)
 
     def consultar_primera_reserva_en_espera(self, recurso: int, ahora: datetime) -> int | None:
+        # Las líneas de una reserva tienen la misma prioridad y quedan juntas en cada cola.
         orden = ORDEN_DE_PREPARACION.format(ahora='%s')
         fila = self.consultar_sql(
-            f'''SELECT id_reserva FROM reserva WHERE id_recurso=%s
+            f'''SELECT COALESCE(id_reserva_principal,id_reserva) AS id_reserva FROM reserva WHERE id_recurso=%s
             AND estado=%s
             AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>%s)
             ORDER BY {orden} LIMIT 1 FOR UPDATE''',
@@ -204,7 +226,8 @@ class RepositorioReservaSQL(RepositorioSQL):
     def consultar_reservas_vencidas(self) -> list[int]:
         filas = self.consultar_sql(
             f'''SELECT id_reserva FROM reserva WHERE estado IN ({MARCAS_PENDIENTES})
-            AND fecha_limite_vencimiento<=UTC_TIMESTAMP() ORDER BY id_reserva LIMIT 100''',
+            AND id_reserva_principal IS NULL AND fecha_limite_vencimiento<=UTC_TIMESTAMP()
+            ORDER BY id_reserva LIMIT 100''',
             ESTADOS_PENDIENTES,
         )
         return [fila['id_reserva'] for fila in filas]

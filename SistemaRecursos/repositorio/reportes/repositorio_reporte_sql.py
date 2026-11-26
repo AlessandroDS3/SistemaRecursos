@@ -279,7 +279,7 @@ class RepositorioReporteSQL(RepositorioSQL):
 
         sql_reporte = f"""
             SELECT
-                p.id_reserva, p.tipo_gestion, p.dni_persona,
+                COALESCE(p.id_reserva_principal,p.id_reserva) AS id_reserva, p.tipo_gestion, p.dni_persona,
                 CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
                 r.nombre AS recurso, c.nombre AS categoria,
                 p.fecha_solicitud, p.fecha_requerida,

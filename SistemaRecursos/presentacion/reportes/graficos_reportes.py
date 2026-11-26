@@ -10,7 +10,7 @@ CONFIGURACION = {
     'devoluciones': ('cumplimiento', 'Cumplimiento de devoluciones', 'devoluciones'),
     'atrasados': ('retraso_minutos', 'Tiempo de atraso', 'bienes atrasados'),
     'inventario': ('estado', 'Estado del inventario', 'bienes'),
-    'reservas': ('estado', 'Estado de las solicitudes', 'solicitudes'),
+    'reservas': ('estado', 'Bienes por estado de la reserva', 'bienes'),
     'sanciones': ('estado', 'Estado de las sanciones', 'sanciones'),
     'danos_perdidas': ('tipo_evento', 'Daños y pérdidas', 'eventos'),
     'personas': ('estado', 'Estado de las personas', 'personas'),

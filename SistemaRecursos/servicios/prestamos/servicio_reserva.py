@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime
 from typing import Mapping
 
@@ -5,10 +6,11 @@ from dominio.compartido.validacion import Conflicto, NoEncontrado, validar_dni, 
 from dominio.gestion_control.politica_prestamo import ConfiguracionReservas, HorarioAtencion
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 from dominio.gestion_prestamos.contratos_prestamos import IRepositorioReserva
-from dominio.gestion_prestamos.prestamo import SolicitudPrestamo, validar_cupo_articulos
+from dominio.gestion_prestamos.prestamo import SolicitudPrestamo, TipoPrestamo, validar_cupo_articulos
 from dominio.gestion_prestamos.reserva import (
     AccionReserva, DetalleReserva, ESTADOS_RESERVA, FILTRO_PENDIENTES,
-    LISTA_PARA_RETIRO, Reserva, ReservaEnCola, validar_solicitante_y_recurso_para_reserva, ventana_atencion_reserva,
+    LISTA_PARA_RETIRO, Reserva, ReservaEnCola, validar_integrante_de_reserva,
+    validar_recursos_de_reserva, validar_solicitante_y_recurso_para_reserva,
 )
 from servicios.prestamos.servicio_prestamo import ServicioAplicacionPrestamo
 
@@ -41,28 +43,79 @@ class ServicioAplicacionReserva:
         fila = self.repositorio.consultar_reserva(validar_entero(identificador))
         if fila is None:
             raise NoEncontrado(MENSAJE_RESERVA_INEXISTENTE)
-        if not gestionar and fila['dni_persona'] != documento:
+        reserva = Reserva.desde_detalle(fila)
+        if not gestionar and documento not in (reserva.dni_persona, *reserva.participantes):
             raise PermissionError('Solo puedes consultar tus reservas.')
-        fila['historial'] = self.repositorio.consultar_historial_estado('RESERVA', fila['id_reserva'])
-        fila['ventana_atencion'] = ventana_atencion_reserva(
-            fila['fecha_requerida'], fila['fecha_limite_vencimiento'], self.repositorio.consultar_fecha_actual(),
+        return dict(
+            fila,
+            participantes=list(reserva.participantes),
+            bienes=[fila, *self.repositorio.consultar_lineas_de_reserva(reserva.identificador)],
+            historial=self.repositorio.consultar_historial_estado('RESERVA', reserva.identificador),
+            ventana_atencion=reserva.ventana_atencion(self.repositorio.consultar_fecha_actual()),
         )
-        return fila
 
-    def registrar_reserva(self, datos: Mapping[str, str], actor: int) -> int:
+    def registrar_reserva(self, datos: Mapping, actor: int) -> int:
+        recursos = validar_recursos_de_reserva(datos)
         with self.repositorio.transaccion() as op:
             cuenta = exigir_permiso(op.consultar_cuenta_actor(validar_entero(actor)), 'RESERVAS_PROPIAS_GESTIONAR')
-            reserva = Reserva.desde_formulario(datos, cuenta['dni_persona'], op.consultar_fecha_actual())
-            contexto = op.consultar_datos_para_validar_reserva(reserva.dni_persona, reserva.id_recurso)
-            persona = validar_solicitante_y_recurso_para_reserva(reserva, contexto, comprobar_duplicada=True)
-            validar_cupo_articulos(persona, op.prestamos.consultar_cupo_persona(persona))
+            principal = Reserva.desde_formulario(
+                dict(datos, id_recurso=recursos[0]), cuenta['dni_persona'], op.consultar_fecha_actual(),
+            )
+            lineas = [principal, *(replace(principal, id_recurso=r, participantes=()) for r in recursos[1:])]
+            self._bloquear_recursos_y_personas(op, lineas)
+            self._validar_cupo_y_recursos_de_reserva(op, lineas, nueva=True)
             configuracion = self._obtener_horario_y_plazos_de_reserva(op)
-            HorarioAtencion.desde_datos(configuracion).obtener_cierre_si_hay_atencion(reserva.fecha_requerida)
-            limite = self._leer_plazos_de_reserva(configuracion).calcular_vencimiento_de_reserva(reserva.fecha_requerida, 'espera')
-            identificador = op.guardar_nueva_reserva(reserva.con_plazo_de_espera(limite))
-            op.registrar_historial_estado('RESERVA', identificador, None, reserva.estado,
-                                         cuenta['dni_persona'], 'Solicitud registrada.')
+            HorarioAtencion.desde_datos(configuracion).obtener_cierre_si_hay_atencion(principal.fecha_requerida)
+            limite = self._leer_plazos_de_reserva(configuracion).calcular_vencimiento_de_reserva(
+                principal.fecha_requerida, 'espera',
+            )
+            identificador = op.guardar_nueva_reserva(principal.con_plazo_de_espera(limite))
+            for linea in lineas[1:]:
+                op.guardar_nueva_reserva(replace(linea.con_plazo_de_espera(limite), id_reserva_principal=identificador))
+            op.registrar_historial_estado('RESERVA', identificador, None, principal.estado,
+                                         principal.dni_persona, 'Solicitud registrada.')
             return identificador
+
+    @staticmethod
+    def _bloquear_recursos_y_personas(op: IRepositorioReserva, lineas: list[Reserva], operador: str | None = None):
+        principal = lineas[0]
+        personas = {principal.dni_persona, *principal.participantes}
+        if operador:
+            personas.add(operador)
+        for recurso in sorted({linea.id_recurso for linea in lineas}):
+            op.bloquear_recurso(recurso)
+        for documento in sorted(personas):
+            op.bloquear_persona(documento)
+
+    @staticmethod
+    def _validar_cupo_y_recursos_de_reserva(op: IRepositorioReserva, lineas: list[Reserva], nueva=False):
+        principal = lineas[0]
+        por_recurso = {linea.id_recurso: linea for linea in lineas if linea.id_recurso != principal.id_recurso}
+        contexto = op.consultar_datos_para_validar_reserva(principal.dni_persona, principal.id_recurso)
+        personas = [validar_solicitante_y_recurso_para_reserva(principal, contexto, comprobar_duplicada=nueva)]
+        for linea in por_recurso.values():
+            contexto = op.consultar_datos_para_validar_reserva(principal.dni_persona, linea.id_recurso)
+            validar_solicitante_y_recurso_para_reserva(linea, contexto, comprobar_duplicada=nueva)
+        for documento in principal.participantes:
+            contexto = op.consultar_datos_para_validar_reserva(documento, principal.id_recurso)
+            personas.append(validar_integrante_de_reserva(contexto))
+        for persona in personas:
+            validar_cupo_articulos(
+                persona, op.prestamos.consultar_cupo_persona(persona, principal.id_reserva), len(lineas),
+            )
+
+    @classmethod
+    def _consultar_reserva_para_actualizar(cls, op: IRepositorioReserva, identificador: int,
+                                         operador: str | None = None) -> list[DetalleReserva]:
+        principal = op.consultar_reserva(identificador)
+        if principal is None:
+            raise NoEncontrado(MENSAJE_RESERVA_INEXISTENTE)
+        lineas = [principal, *op.consultar_lineas_de_reserva(identificador)]
+        cls._bloquear_recursos_y_personas(op, [Reserva.desde_detalle(fila) for fila in lineas], operador)
+        principal = op.consultar_reserva(identificador, bloquear=True)
+        if principal is None:
+            raise NoEncontrado(MENSAJE_RESERVA_INEXISTENTE)
+        return [principal, *op.consultar_lineas_de_reserva(identificador, bloquear=True)]
 
     @staticmethod
     def _obtener_horario_y_plazos_de_reserva(op: IRepositorioReserva) -> dict:
@@ -90,42 +143,49 @@ class ServicioAplicacionReserva:
     def expirar_reserva(self, identificador: int, datos: Mapping[str, str], actor: int) -> int | None:
         return self._procesar_accion_reserva(identificador, 'expirar', datos, actor)
 
-    def _asignar_bien_para_retiro(
-        self, op: IRepositorioReserva, reserva: Reserva, actor: str, ahora: datetime
-    ) -> Reserva:
-        contexto = op.consultar_datos_para_validar_reserva(reserva.dni_persona, reserva.id_recurso)
-        persona = validar_solicitante_y_recurso_para_reserva(reserva, contexto)
-        validar_cupo_articulos(persona, op.prestamos.consultar_cupo_persona(persona, reserva.identificador))
-        if op.consultar_primera_reserva_en_espera(reserva.id_recurso, ahora) != reserva.identificador:
-            raise Conflicto('Atiende primero la reserva anterior de este recurso.')
-        bien = op.consultar_bien_disponible(reserva.id_recurso)
-        if bien is None:
-            raise Conflicto('No hay un bien disponible para preparar la reserva.')
+    def _asignar_bienes_para_retiro(
+        self, op: IRepositorioReserva, lineas: list[Reserva], actor: str, ahora: datetime
+    ) -> list[Reserva]:
+        principal = lineas[0]
+        self._validar_cupo_y_recursos_de_reserva(op, lineas)
+        for recurso in sorted({linea.id_recurso for linea in lineas}):
+            if op.consultar_primera_reserva_en_espera(recurso, ahora) != principal.identificador:
+                raise Conflicto('Atiende primero la reserva anterior de este recurso.')
         plazos = self._leer_plazos_de_reserva(self._obtener_horario_y_plazos_de_reserva(op))
-        inicio_retiro = max(ahora, reserva.fecha_requerida)
+        inicio_retiro = max(ahora, principal.fecha_requerida)
         limite = plazos.calcular_vencimiento_de_reserva(inicio_retiro, 'retiro')
-        preparada = reserva.asignar_bien_para_retiro(bien, ahora, limite)
-        op.cambiar_estado_bien_reservado(bien, 'RESERVADO', 'DISPONIBLE', actor, reserva.identificador)
-        return preparada
+        preparadas = []
+        for linea in lineas:
+            bien = op.consultar_bien_disponible(linea.id_recurso)
+            if bien is None:
+                raise Conflicto('Faltan bienes disponibles para preparar la reserva completa.')
+            preparadas.append(linea.asignar_bien_para_retiro(bien, ahora, limite))
+            op.cambiar_estado_bien_reservado(bien, 'RESERVADO', 'DISPONIBLE', actor, principal.identificador)
+        return preparadas
 
     @staticmethod
     def _registrar_prestamo_de_reserva(
-        op: IRepositorioReserva, reserva: Reserva, recurso_bien: int | None,
+        op: IRepositorioReserva, lineas: list[Reserva], filas: list[DetalleReserva],
         actor: str, datos: Mapping[str, str], ahora: datetime,
-    ) -> Reserva:
+    ) -> list[Reserva]:
         if datos.get('acepta_condiciones') != '1':
             raise ValueError('Confirma que comunicaste el plazo y las condiciones de entrega.')
-        bien = reserva.id_bien
-        if bien is None or recurso_bien != reserva.id_recurso:
-            raise Conflicto('El bien asignado no corresponde al recurso reservado.')
+        principal = lineas[0]
+        bienes = []
+        for linea, fila in zip(lineas, filas):
+            if linea.id_bien is None or fila.get('recurso_bien') != linea.id_recurso:
+                raise Conflicto('Uno de los bienes asignados no corresponde al recurso reservado.')
+            bienes.append(linea.id_bien)
         solicitud = SolicitudPrestamo(
-            dni_persona=reserva.dni_persona, dni_encargado=actor, bienes=[bien],
-            observaciones=reserva.observaciones, salida_solicitada=reserva.salida_solicitada,
+            dni_persona=principal.dni_persona, dni_encargado=actor, bienes=bienes,
+            tipo_prestamo=TipoPrestamo.GRUPAL if principal.participantes else TipoPrestamo.INDIVIDUAL,
+            participantes=list(principal.participantes),
+            observaciones=principal.observaciones, salida_solicitada=principal.salida_solicitada,
         )
         prestamo = ServicioAplicacionPrestamo.registrar_entrega_prestamo_en_transaccion(
-            op.prestamos, solicitud, bien, reserva.identificador, codigo=datos.get('autorizacion'),
+            op.prestamos, solicitud, frozenset(bienes), principal.identificador, codigo=datos.get('autorizacion'),
         )
-        return reserva.marcar_atendida_con_prestamo(prestamo, ahora)
+        return [linea.marcar_atendida_con_prestamo(prestamo, ahora) for linea in lineas]
 
     def _procesar_accion_reserva(
         self, identificador: int, accion: AccionReserva, datos: Mapping[str, str], actor: int
@@ -136,67 +196,65 @@ class ServicioAplicacionReserva:
             gestionar = bool(cuenta and 'PRESTAMOS_GESTIONAR' in cuenta['permisos'])
             cuenta = exigir_permiso(cuenta, 'PRESTAMOS_GESTIONAR' if gestionar else 'RESERVAS_PROPIAS_GESTIONAR')
             documento = cuenta['dni_persona']
-            fila = op.consultar_reserva(identificador)
-            if fila is None:
-                raise NoEncontrado(MENSAJE_RESERVA_INEXISTENTE)
-            # El recurso serializa la cola y la selección de ejemplar.
-            op.bloquear_recurso(fila['id_recurso'])
-            op.bloquear_persona(fila['dni_persona'])
-            fila = op.consultar_reserva(identificador, bloquear=True)
-            if fila is None:
-                raise NoEncontrado(MENSAJE_RESERVA_INEXISTENTE)
-            reserva = Reserva.desde_detalle(fila)
+            filas = self._consultar_reserva_para_actualizar(op, identificador, documento)
+            lineas = [Reserva.desde_detalle(fila) for fila in filas]
+            reserva = lineas[0]
             if not gestionar:
                 if accion != 'cancelar':
                     raise PermissionError('La acción requiere gestionar préstamos.')
                 if reserva.dni_persona != documento:
                     raise PermissionError('Solo puedes cancelar tus reservas.')
             ahora = op.consultar_fecha_actual()
-            reserva.validar_accion_reserva(accion, ahora)
+            for linea in lineas:
+                linea.validar_accion_reserva(accion, ahora)
             if accion == 'preparar':
-                actualizada = self._asignar_bien_para_retiro(op, reserva, documento, ahora)
-                nota = 'Bien preparado para retiro.'
+                actualizadas = self._asignar_bienes_para_retiro(op, lineas, documento, ahora)
+                nota = 'Reserva preparada para retiro.'
             elif accion == 'entregar':
-                actualizada = self._registrar_prestamo_de_reserva(op, reserva, fila.get('recurso_bien'), documento, datos, ahora)
-                nota = f'Préstamo #{actualizada.id_prestamo_ref} entregado.'
+                actualizadas = self._registrar_prestamo_de_reserva(op, lineas, filas, documento, datos, ahora)
+                nota = f'Préstamo #{actualizadas[0].id_prestamo_ref} entregado.'
             else:
-                actualizada = reserva.cerrar_sin_entrega(accion, ahora)
+                actualizadas = [linea.cerrar_sin_entrega(accion, ahora) for linea in lineas]
                 no_retirado = accion == 'expirar' and reserva.estado == LISTA_PARA_RETIRO
                 nota = validar_texto(datos.get('motivo'), 'Motivo', 220 if no_retirado else 255, accion != 'cancelar')
                 if no_retirado:
                     nota = f'{MENSAJE_NO_RETIRADO} {nota}'
-                self._liberar_bien_reservado(op, reserva, documento)
-            self._guardar_estado_e_historial_reserva(op, reserva, actualizada, documento, nota)
-            return actualizada.id_prestamo_ref if accion == 'entregar' else None
+                self._liberar_bienes_reservados(op, lineas, documento)
+            self._guardar_estado_e_historial_reserva(op, reserva, actualizadas, documento, nota)
+            return actualizadas[0].id_prestamo_ref if accion == 'entregar' else None
 
     @staticmethod
     def _guardar_estado_e_historial_reserva(
-        op: IRepositorioReserva, anterior: Reserva, actual: Reserva, actor: str | None, nota: str
+        op: IRepositorioReserva, anterior: Reserva, actuales: list[Reserva], actor: str | None, nota: str
     ) -> None:
-        op.actualizar_reserva(actual)
-        op.registrar_historial_estado('RESERVA', actual.identificador, anterior.estado, actual.estado, actor, nota)
+        for linea in actuales:
+            op.actualizar_reserva(linea)
+        op.registrar_historial_estado('RESERVA', anterior.identificador, anterior.estado, actuales[0].estado, actor, nota)
 
     @staticmethod
-    def _liberar_bien_reservado(op: IRepositorioReserva, reserva: Reserva, actor: str | None) -> None:
-        if reserva.id_bien is not None:
-            op.cambiar_estado_bien_reservado(
-                reserva.id_bien, 'DISPONIBLE', 'RESERVADO', actor, reserva.identificador,
-            )
+    def _liberar_bienes_reservados(op: IRepositorioReserva, lineas: list[Reserva], actor: str | None) -> None:
+        for linea in lineas:
+            if linea.id_bien is not None:
+                op.cambiar_estado_bien_reservado(
+                    linea.id_bien, 'DISPONIBLE', 'RESERVADO', actor, lineas[0].identificador,
+                )
 
     def expirar_reservas_vencidas(self) -> int:
         cantidad = 0
         for identificador in self.repositorio.consultar_reservas_vencidas():
             with self.repositorio.transaccion() as op:
-                fila = op.consultar_reserva(identificador, bloquear=True)
-                if fila is None:
+                try:
+                    filas = self._consultar_reserva_para_actualizar(op, identificador)
+                except NoEncontrado:
                     continue
-                reserva = Reserva.desde_detalle(fila)
+                lineas = [Reserva.desde_detalle(fila) for fila in filas]
+                reserva = lineas[0]
                 ahora = op.consultar_fecha_actual()
                 if not reserva.puede_expirar(ahora):
                     continue
-                expirada = reserva.cerrar_sin_entrega('expirar', ahora)
-                self._liberar_bien_reservado(op, reserva, None)
+                expiradas = [linea.cerrar_sin_entrega('expirar', ahora) for linea in lineas]
+                self._liberar_bienes_reservados(op, lineas, None)
                 nota = MENSAJE_NO_RETIRADO if reserva.estado == LISTA_PARA_RETIRO else 'Plazo vencido.'
-                self._guardar_estado_e_historial_reserva(op, reserva, expirada, None, nota)
+                self._guardar_estado_e_historial_reserva(op, reserva, expiradas, None, nota)
                 cantidad += 1
         return cantidad

@@ -265,13 +265,48 @@ document.querySelectorAll('form[data-confirmar]').forEach(formulario => {
   });
 });
 
-const recursoReserva = document.querySelector('[data-condiciones-reserva]');
-function mostrarCondicionesReserva() {
-  const texto = document.querySelector('[data-texto-condiciones-reserva]');
-  if (texto) texto.textContent = recursoReserva.selectedOptions[0]?.dataset.condiciones || 'Selecciona un recurso con política vigente.';
+const formularioReserva = document.querySelector('[data-formulario-reserva]');
+if (formularioReserva) {
+  const lineas = formularioReserva.querySelector('[data-lineas-reserva]');
+  const plantilla = formularioReserva.querySelector('[data-plantilla-recurso]');
+  const integrantes = formularioReserva.querySelector('[data-integrantes-reserva]');
+  const dniIntegrantes = formularioReserva.elements.participantes;
+
+  function mostrarCondicionesDeLosRecursos() {
+    const filas = lineas.querySelectorAll('[data-linea-reserva]');
+    for (const fila of filas) {
+      const recurso = fila.querySelector('[data-condiciones-reserva]');
+      const texto = fila.querySelector('[data-texto-condiciones-reserva]');
+      texto.textContent = recurso.selectedOptions[0]?.dataset.condiciones || '';
+      texto.hidden = !texto.textContent;
+      fila.querySelector('[data-quitar-recurso]').hidden = filas.length === 1;
+    }
+  }
+
+  function mostrarIntegrantesDeReserva() {
+    const grupal = formularioReserva.elements.tipo_prestamo.value === 'GRUPAL';
+    integrantes.hidden = !grupal;
+    dniIntegrantes.disabled = !grupal;
+    dniIntegrantes.required = grupal;
+  }
+
+  formularioReserva.querySelector('[data-agregar-recurso]').addEventListener('click', () => {
+    const nuevaFila = plantilla.content.firstElementChild.cloneNode(true);
+    lineas.append(nuevaFila);
+    mostrarCondicionesDeLosRecursos();
+    nuevaFila.querySelector('[data-condiciones-reserva]').focus();
+  });
+  lineas.addEventListener('click', evento => {
+    const boton = evento.target.closest('[data-quitar-recurso]');
+    if (!boton || lineas.children.length <= 1) return;
+    boton.closest('[data-linea-reserva]').remove();
+    mostrarCondicionesDeLosRecursos();
+  });
+  lineas.addEventListener('change', mostrarCondicionesDeLosRecursos);
+  formularioReserva.elements.tipo_prestamo.addEventListener('change', mostrarIntegrantesDeReserva);
+  mostrarCondicionesDeLosRecursos();
+  mostrarIntegrantesDeReserva();
 }
-recursoReserva?.addEventListener('change', mostrarCondicionesReserva);
-mostrarCondicionesReserva();
 
 document.querySelector('[data-cambiar-tema]')?.addEventListener('click', () => {
   const raiz = document.documentElement;

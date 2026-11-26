@@ -38,8 +38,8 @@ botones no salen en el papel.
 | Quiero… | Dónde | Cómo |
 |---|---|---|
 | Buscar un recurso | **Catálogo** | Filtra por nombre, categoría o disponibilidad y abre **Ver detalle** para ver las condiciones del préstamo. |
-| Reservar | Ficha del recurso | Elige la fecha en que lo necesitas y confirma. La reserva queda **en espera** hasta que el encargado prepare un ejemplar. |
-| Ver o cancelar mis reservas | **Mis reservas** | Puedes cancelar mientras no se haya entregado. |
+| Reservar | **Mis reservas → Nueva reserva** o ficha del recurso | Agrega los recursos y sus cantidades, elige el tipo de reserva y fija una fecha común. Para una grupal, ingresa los DNI de los demás integrantes. |
+| Ver o cancelar mis reservas | **Mis reservas** | Tanto el titular como los integrantes pueden consultar la reserva. El titular puede cancelarla mientras esté pendiente. |
 | Recibir el préstamo | En el mostrador | El encargado registra la entrega. Los estudiantes necesitan matrícula vigente. |
 | Ver mis préstamos | **Mis préstamos** | Cada bien tiene su propia fecha límite. |
 | **Solicitar ampliación** | **Mis préstamos** → abrir el préstamo → **Solicitar ampliación** | Indica el tiempo adicional y el motivo. El plazo actual sigue vigente hasta la aprobación. Solo la persona responsable puede enviar la solicitud antes del vencimiento. |
@@ -48,8 +48,8 @@ botones no salen en el papel.
 **Bloqueos:** si tienes una sanción activa o un bien vencido sin devolver, no podrás reservar
 ni recibir nuevos préstamos. Sí puedes devolver lo que tienes.
 
-Cada reserva activa ocupa un cupo del mismo máximo de artículos que los préstamos pendientes.
-Al retirar el bien, el préstamo ocupa el cupo de la reserva. Puedes reservar con hasta siete
+Cada bien solicitado ocupa un cupo de todas las personas de la reserva, incluido el titular.
+Al retirar los bienes, el préstamo ocupa los mismos cupos de la reserva. Puedes reservar con hasta siete
 días de anticipación y cancelar antes de retirar el bien sin penalización.
 
 ---
@@ -79,13 +79,13 @@ debe evaluar, levantar o anular el caso.
 
 ### Reservas
 
-En **Reservas → Atender reserva**, puedes preparar el bien antes de la hora solicitada si hay
-uno disponible y la reserva tiene prioridad. Se atienden primero las reservas que ya llegaron
+En **Reservas → Atender reserva**, puedes preparar antes de la hora solicitada cuando todos los bienes
+están disponibles y la reserva tiene prioridad en la cola de cada recurso. Se atienden primero las reservas que ya llegaron
 a su hora, por orden de solicitud. Entre las futuras, tiene prioridad la hora de retiro más próxima.
-Cuando el bien está preparado, puedes entregarlo dentro del horario de atención, incluso antes de
-la hora reservada. El plazo de devolución empieza con la entrega real. El plazo para recogerlo
-empieza a la hora solicitada si el bien ya está listo, o al prepararlo si se hace más tarde.
-Si vence sin entrega, el sistema libera el bien.
+Cuando la reserva está preparada, entrega todos los bienes juntos dentro del horario de atención,
+incluso antes de la hora reservada. Se registra un solo préstamo del mismo tipo que la reserva.
+El plazo de devolución empieza con la entrega real. El plazo de retiro empieza a la hora solicitada
+si la reserva ya está lista, o al prepararla si se hace más tarde. Si vence, se liberan todos los bienes.
 Puedes rechazar la reserva con un motivo. Si la persona pierde su habilitación, la reserva
 queda pendiente hasta que se cierre o venza.
 

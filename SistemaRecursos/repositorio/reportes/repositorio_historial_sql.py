@@ -160,29 +160,34 @@ class RepositorioHistorialSQL(RepositorioSQL):
                 parametros,
             )
         if not solo_prestamos:
-            campo = 're.id_bien' if por_bien else 're.dni_persona'
-            seleccion = sujeto['id_bien'] if por_bien else valor
-            tablas_reserva = '''FROM reserva re JOIN persona per ON per.dni=re.dni_persona
+            condicion = ('re.id_bien=%s' if por_bien else
+                         '(principal.dni_persona=%s OR JSON_CONTAINS(principal.participantes,JSON_QUOTE(%s)))')
+            seleccion = (sujeto['id_bien'],) if por_bien else (valor, valor)
+            tablas_reserva = '''FROM reserva re
+                JOIN reserva principal ON principal.id_reserva=COALESCE(re.id_reserva_principal,re.id_reserva)
+                JOIN persona per ON per.dni=re.dni_persona
                 JOIN recurso r ON r.id_recurso=re.id_recurso
                 LEFT JOIN bien_material b ON b.id_bien=re.id_bien'''
             resultado['reservas'] = self.consultar_sql(
-                f'''SELECT re.*,
+                f'''SELECT principal.id_reserva,re.dni_persona,re.tipo_gestion,
+                re.fecha_solicitud,re.fecha_requerida,re.estado,re.observaciones,
                 CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
                 r.nombre AS recurso,b.codigo_inventario
-                {tablas_reserva} WHERE {campo}=%s
+                {tablas_reserva} WHERE {condicion}
                 ORDER BY re.fecha_solicitud,re.id_reserva''',
-                (seleccion,),
+                seleccion,
             )
+            condicion_historial = condicion if por_bien else condicion + ' AND re.id_reserva_principal IS NULL'
             resultado['historial_reservas'] = self.consultar_sql(
                 f'''SELECT h.*,
-                re.id_reserva,re.dni_persona,
+                principal.id_reserva,re.dni_persona,
                 CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
                 r.nombre AS recurso,b.codigo_inventario,
                 CONCAT(reg.nombres,' ',reg.apellidos) AS registrador
                 {tablas_reserva}
-                JOIN historial_estado h ON h.entidad='RESERVA' AND h.id_entidad=re.id_reserva
+                JOIN historial_estado h ON h.entidad='RESERVA' AND h.id_entidad=principal.id_reserva
                 LEFT JOIN persona reg ON reg.dni=h.dni_responsable
-                WHERE {campo}=%s ORDER BY h.fecha,h.id_historial_estado''',
-                (seleccion,),
+                WHERE {condicion_historial} ORDER BY h.fecha,h.id_historial_estado''',
+                seleccion,
             )
         return resultado

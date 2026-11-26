@@ -122,7 +122,7 @@ REPORTES = {
     ),
     'reservas': DefinicionReporte(
         titulo='Solicitudes y reservas',
-        descripcion='Solicitudes registradas en el período y su estado actual.',
+        descripcion='Cada bien solicitado ocupa una fila. Los bienes de una reserva comparten el mismo número.',
         fecha='solicitud',
         filtros=('desde', 'hasta', 'estado', 'tipo_gestion', 'tipo_persona', 'id_categoria', 'q'),
         estados=ESTADOS_RESERVA,

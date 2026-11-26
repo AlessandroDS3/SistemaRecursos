@@ -310,7 +310,10 @@ def _tabla_reservas_pdf(reservas, ancho):
         dict(
             reserva,
             solicitud=f"#{reserva['id_reserva']}\n{etiqueta_reporte(reserva['tipo_gestion'])}",
-            recurso_asignado=f"{reserva['recurso']}\n{reserva['codigo_inventario'] or 'Sin bien asignado'}",
+            recurso_asignado='\n'.join(
+                f"{bien['recurso']} · {bien['codigo_inventario'] or 'Sin bien asignado'}"
+                for bien in reserva['bienes']
+            ),
         )
         for reserva in reservas
     ]

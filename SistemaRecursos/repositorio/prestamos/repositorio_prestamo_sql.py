@@ -2,6 +2,7 @@
 
 from collections import Counter
 from datetime import datetime
+import json
 
 from dominio.compartido.validacion import Conflicto
 from dominio.gestion_control.politica_prestamo import HorarioAtencion, PoliticaPrestamo
@@ -34,6 +35,8 @@ SITUACION_BIEN_SQL = """CASE
 
 
 class RepositorioPrestamoSQL(RepositorioSQL):
+    aislamiento = 'READ COMMITTED'
+
     def consultar_condiciones_prestamo(self, documento):
         persona = self.consultar_sql(CONSULTA_PARA_PRESTAMO + ' WHERE p.dni=%s', (documento,), una=True)
         tipo = persona['tipo'] if persona else None
@@ -49,7 +52,7 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             una=True,
         )
         pendientes = self._consultar_bienes_pendientes((documento,))[documento]
-        reservas = self._contar_reservas_activas((documento,), bloquear=False)[documento]
+        reservas = self._contar_reservas_activas((documento,))[documento]
         horario = self.consultar_sql(
             '''SELECT TIME_FORMAT(hora_apertura,'%H:%i') AS apertura,
             TIME_FORMAT(hora_cierre,'%H:%i') AS cierre FROM configuracion_general WHERE id_configuracion=1''',
@@ -220,18 +223,25 @@ class RepositorioPrestamoSQL(RepositorioSQL):
                 pendientes[fila['dni_persona']][fila['id_detalle']] = fila['vencido']
         return pendientes
 
-    def _contar_reservas_activas(self, documentos, reserva_origen=None, bloquear=True):
+    def _contar_reservas_activas(self, documentos, reserva_origen=None):
+        # Al validar el cupo, la persona ya está bloqueada. READ COMMITTED permite
+        # contar los cambios confirmados sin bloquear las reservas de otras personas.
         marcas = ','.join(['%s'] * len(documentos))
-        sql = f'''SELECT dni_persona FROM reserva WHERE dni_persona IN ({marcas})
-            AND estado IN (%s,%s)
-            AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>UTC_TIMESTAMP())'''
-        parametros = (*documentos, *ESTADOS_PENDIENTES)
+        integrantes = ' OR '.join('JSON_CONTAINS(principal.participantes,JSON_QUOTE(%s))' for _ in documentos)
+        sql = f'''SELECT re.dni_persona, principal.participantes FROM reserva re
+            JOIN reserva principal ON principal.id_reserva=COALESCE(re.id_reserva_principal,re.id_reserva)
+            WHERE (re.dni_persona IN ({marcas}) OR {integrantes})
+            AND re.estado IN (%s,%s)
+            AND (re.fecha_limite_vencimiento IS NULL OR re.fecha_limite_vencimiento>UTC_TIMESTAMP())'''
+        parametros = (*documentos, *documentos, *ESTADOS_PENDIENTES)
         if reserva_origen is not None:
-            sql += ' AND id_reserva<>%s'
+            sql += ' AND principal.id_reserva<>%s'
             parametros += (reserva_origen,)
         conteo = dict.fromkeys(documentos, 0)
-        for fila in self.consultar_sql(sql + (' FOR SHARE' if bloquear else ''), parametros):
-            conteo[fila['dni_persona']] += 1
+        for fila in self.consultar_sql(sql, parametros):
+            participantes = json.loads(fila['participantes'] or '[]')
+            for documento in conteo.keys() & {fila['dni_persona'], *participantes}:
+                conteo[documento] += 1
         return conteo
 
     def consultar_cupo_persona(self, persona: PersonaParaPrestamo, reserva_origen: int | None = None) -> CupoArticulos:
@@ -303,12 +313,12 @@ class RepositorioPrestamoSQL(RepositorioSQL):
             ids,
         )
         politicas = self.consultar_sql(
-            'SELECT * FROM politica_prestamo WHERE tipo_persona=%s AND vigente=TRUE ORDER BY id_politica FOR UPDATE',
+            'SELECT * FROM politica_prestamo WHERE tipo_persona=%s AND vigente=TRUE ORDER BY id_politica FOR SHARE',
             (tipo,),
         )
         configuracion = self.consultar_sql(
             'SELECT hora_apertura,hora_cierre,dias_atencion FROM configuracion_general '
-            'WHERE id_configuracion=1 FOR UPDATE',
+            'WHERE id_configuracion=1 FOR SHARE',
             una=True,
         )
         return DatosParaValidarPrestamo(

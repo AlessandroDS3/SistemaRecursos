@@ -7,7 +7,7 @@
       <form method="post" action="{{ url_for('politicas.guardar_limites_articulos') }}" class="bloque-maximos">
         {{ campo_oculto_csrf() }}
         <h2>Límite de bienes por tipo de persona</h2>
-        <p class="suave">Cada bien pendiente de devolución y cada reserva activa ocupan un cupo. En préstamos grupales, los bienes cuentan para cada integrante.</p>
+        <p class="suave">Cada bien prestado pendiente o incluido en una reserva activa ocupa un cupo. En reservas y préstamos grupales, cuenta para cada integrante.</p>
         <div class="campos-configuracion-compacta">
           {% for tipo in tipos %}
             {% set actual = limites|selectattr('tipo_persona','equalto',tipo)|first|default({}) %}

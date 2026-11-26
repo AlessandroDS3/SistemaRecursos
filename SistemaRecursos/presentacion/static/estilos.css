@@ -27,6 +27,8 @@
 
 :root {
     color-scheme: light;
+    --cursor-flecha: url("imagenes/cursor-flecha.png") 4 2, auto;
+    --cursor-texto: url("imagenes/cursor-texto.png") 12 12, text;
 
     /* Acción: negro. Sobre la acción: blanco. */
     --lima: #7a0d2e;
@@ -134,6 +136,8 @@
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
         color-scheme: dark;
+        --cursor-flecha: auto;
+        --cursor-texto: text;
         --lima: #b3214d;
         --sobre-lima: #ffffff;
         --guinda: #b3214d;
@@ -190,6 +194,8 @@
 
 :root[data-theme="dark"] {
     color-scheme: dark;
+    --cursor-flecha: auto;
+    --cursor-texto: text;
     --lima: #b3214d;
     --sobre-lima: #ffffff;
     --guinda: #b3214d;
@@ -253,6 +259,21 @@
 
 html {
     background: var(--lienzo);
+}
+
+@media (pointer: fine) and (forced-colors: none) {
+    html {
+        cursor: var(--cursor-flecha);
+    }
+
+    :where(a[href], summary, select:not(:disabled), input:is([type=checkbox], [type=radio]):not(:disabled)) {
+        cursor: pointer;
+    }
+
+    :where(input:not([type]), input:is([type=text], [type=search], [type=password], [type=email], [type=tel], [type=url], [type=number]),
+           textarea, [contenteditable="true"]) {
+        cursor: var(--cursor-texto);
+    }
 }
 
 body {
@@ -445,6 +466,10 @@ label {
 
 input, select, textarea, button {
     font: inherit;
+}
+
+:where(input, textarea, [contenteditable="true"]) {
+    caret-color: currentColor;
 }
 
 input:not([type=checkbox]):not([type=radio]), select, textarea {

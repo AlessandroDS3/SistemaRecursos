@@ -576,6 +576,128 @@ class CierreMySQLTest(BaseMySQLTest):
         self.assertEqual(self.consultar_detalle_por_prestamo_y_bien(prestamo, 1)['fecha_limite_devolucion'],
                          entrega + timedelta(days=3))
 
+    def test_reserva_grupal_de_varios_bienes_se_entrega_completa_desde_el_formulario(self):
+        self.ejecutar_sql_de_prueba(
+            "INSERT INTO recurso(id_recurso,id_categoria,nombre) VALUES(2,1,'Proyector'),(3,1,'Tablet')"
+        )
+        app = self.crear_aplicacion_de_prueba()
+        lucia, _ = self.enviar_formulario_de_inicio_de_sesion(app, 'lucia')
+        diego, _ = self.enviar_formulario_de_inicio_de_sesion(app, 'diego')
+        encargado, _ = self.enviar_formulario_de_inicio_de_sesion(app, 'encargado')
+
+        def enviar(cliente, ruta, **datos):
+            with cliente.session_transaction() as sesion:
+                csrf = sesion['csrf']
+            return cliente.post(ruta, data=dict(datos, csrf_token=csrf))
+
+        self.assertIn(b'Agregar recurso', lucia.get('/reservas/nueva?id_recurso=1').data)
+        manana = (datetime.now(LIMA).date() + timedelta(days=1)).isoformat()
+        solicitud = dict(fecha_requerida=f'{manana}T10:00', acepta_condiciones='1')
+        registro = enviar(lucia, '/reservas/nueva', id_recurso=['1', '2'], cantidad=['2', '1'],
+                          tipo_prestamo='GRUPAL', participantes='20000002', **solicitud)
+        self.assertEqual(registro.status_code, 302)
+        ruta = registro.location
+        identificador = int(ruta.rsplit('/', 1)[1])
+        reservas = self.servicios['reservas']
+        prestamos = self.servicios['prestamos']
+        for documento in ('20000001', '20000002'):
+            self.assertEqual(prestamos.consultar_condiciones_prestamo(documento)['reservas'], 3)
+            self.assertEqual([r['id_reserva'] for r in reservas.consultar_reservas(documento)], [identificador])
+        self.assertIn(b'Reserva de 3 bienes', diego.get(ruta).data)
+        self.assertEqual(enviar(diego, ruta + '/cancelar').status_code, 403)
+        with self.assertRaisesRegex(Conflicto, 'Diego Prueba'):
+            reservas.registrar_reserva(dict(solicitud, id_recurso=3), 4)
+
+        self.assertEqual(enviar(encargado, ruta + '/preparar').status_code, 409)
+        sin_preparar = reservas.consultar_reserva(identificador, '20000001')
+        self.assertTrue(all(b['id_bien'] is None for b in sin_preparar['bienes']))
+        self.assertEqual(self.ejecutar_sql_de_prueba("SELECT id_bien FROM bien_material WHERE estado='RESERVADO'"), [])
+        self.ejecutar_sql_de_prueba(
+            "INSERT INTO bien_material(id_bien,id_recurso,codigo_inventario) VALUES(4,2,'PROY-1')"
+        )
+        self.assertEqual(enviar(encargado, ruta + '/preparar').status_code, 302)
+        self.assertIn(b'PROY-1', encargado.get(ruta).data)
+        entrega = enviar(encargado, ruta + '/entregar', acepta_condiciones='1')
+        self.assertEqual(entrega.status_code, 302)
+        prestamo = self.ejecutar_sql_de_prueba('SELECT id_prestamo,tipo_prestamo FROM prestamo')
+        self.assertEqual(len(prestamo), 1)
+        self.assertEqual(prestamo[0]['tipo_prestamo'], 'GRUPAL')
+        self.assertEqual(len(self.ejecutar_sql_de_prueba('SELECT id_detalle FROM detalle_prestamo')), 3)
+        for documento in ('20000001', '20000002'):
+            cupo = prestamos.consultar_condiciones_prestamo(documento)
+            self.assertEqual((cupo['pendientes'], cupo['reservas']), (3, 0))
+        self.assertEqual(reservas.consultar_reserva(identificador, '20000002')['estado'], 'ATENDIDA')
+        historial = self.servicios['reportes'].consultar_reporte_filtrado(
+            dict(tipo='historial_bien', codigo_inventario='PROY-1'),
+        )
+        self.assertEqual([r['id_reserva'] for r in historial['reservas']], [identificador])
+        self.assertTrue(any(h['estado_nuevo'] == 'ATENDIDA' for h in historial['historial_reservas']))
+
+    def test_reservas_grupales_simultaneas_comparten_el_cupo_del_integrante(self):
+        self.ejecutar_sql_de_prueba("INSERT INTO recurso(id_recurso,id_categoria,nombre) VALUES(2,1,'Tablet')")
+        self.ejecutar_sql_de_prueba("INSERT INTO persona(dni,nombres,apellidos) VALUES('20000003','Ana','Prueba')")
+        self.ejecutar_sql_de_prueba("INSERT INTO estudiante(dni,cui) VALUES('20000003','20000003')")
+        self.ejecutar_sql_de_prueba("""INSERT INTO usuario_sistema(id_usuario,dni_persona,nombre_usuario,contrasena_hash,rol)
+            VALUES(5,'20000003','ana','prueba','USUARIO')""")
+        reservas = self.servicios['reservas']
+        manana = (datetime.now(LIMA).date() + timedelta(days=1)).isoformat()
+        barrera = Barrier(2)
+
+        def reservar(recurso, actor):
+            barrera.wait()
+            return capturar_resultado_o_excepcion(reservas.registrar_reserva, dict(
+                recursos=[(recurso, 2)], tipo_prestamo='GRUPAL', participantes=['20000002'],
+                fecha_requerida=f'{manana}T10:00', acepta_condiciones='1',
+            ), actor)
+
+        with ThreadPoolExecutor(max_workers=2) as ejecutor:
+            resultados = list(ejecutor.map(reservar, (1, 2), (3, 5)))
+        aceptadas = [valor for estado, valor in resultados if estado == 'ok']
+        rechazadas = [valor for estado, valor in resultados if estado == 'error']
+        self.assertEqual(len(aceptadas), 1, resultados)
+        self.assertEqual(len(rechazadas), 1, resultados)
+        self.assertIsInstance(rechazadas[0], Conflicto)
+        self.assertIn('Diego Prueba', str(rechazadas[0]))
+        self.assertEqual(self.servicios['prestamos'].consultar_condiciones_prestamo('20000002')['reservas'], 2)
+
+    def test_reservas_independientes_de_distintas_categorias_se_registran_en_paralelo(self):
+        self.ejecutar_sql_de_prueba("INSERT INTO categoria_recurso(id_categoria,nombre) VALUES(2,'Libros')")
+        self.ejecutar_sql_de_prueba("INSERT INTO recurso(id_recurso,id_categoria,nombre) VALUES(2,2,'Libro')")
+        self.ejecutar_sql_de_prueba("""INSERT INTO politica_prestamo(tipo_persona,id_categoria,plazo_maximo,unidad_plazo)
+            VALUES('ESTUDIANTE',2,1,'DIAS')""")
+        manana = (datetime.now(LIMA).date() + timedelta(days=1)).isoformat()
+        barrera = Barrier(2)
+
+        def reservar(recurso, actor):
+            barrera.wait()
+            return self.servicios['reservas'].registrar_reserva(dict(
+                recursos=[(recurso, 2)], fecha_requerida=f'{manana}T10:00', acepta_condiciones='1',
+            ), actor)
+
+        with ThreadPoolExecutor(max_workers=2) as ejecutor:
+            identificadores = list(ejecutor.map(reservar, (1, 2), (3, 4)))
+        self.assertEqual(len(set(identificadores)), 2)
+
+    def test_reserva_individual_de_varios_bienes_libera_todo_al_expirar(self):
+        reservas = self.servicios['reservas']
+        manana = (datetime.now(LIMA).date() + timedelta(days=1)).isoformat()
+        identificador = reservas.registrar_reserva(dict(
+            recursos=[(1, 2)], fecha_requerida=f'{manana}T10:00', acepta_condiciones='1',
+        ), 3)
+        siguiente = reservas.registrar_reserva(dict(
+            id_recurso=1, fecha_requerida=f'{manana}T10:00', acepta_condiciones='1',
+        ), 4)
+        self.assertEqual({r['id_reserva']: r['posicion'] for r in reservas.consultar_reservas()},
+                         {identificador: 1, siguiente: 2})
+        reservas.preparar_reserva(identificador, {}, 2)
+        self.ejecutar_sql_de_prueba('''UPDATE reserva SET fecha_limite_vencimiento=UTC_TIMESTAMP()-INTERVAL 1 SECOND
+            WHERE id_reserva=%s OR id_reserva_principal=%s''', (identificador, identificador))
+        self.assertEqual(reservas.expirar_reservas_vencidas(), 1)
+        detalle = reservas.consultar_reserva(identificador, '20000001')
+        self.assertEqual([(b['estado'], b['estado_bien']) for b in detalle['bienes']],
+                         [('EXPIRADA', 'DISPONIBLE'), ('EXPIRADA', 'DISPONIBLE')])
+        self.assertEqual(self.servicios['prestamos'].consultar_condiciones_prestamo('20000001')['reservas'], 0)
+
     def test_ampliacion_unica_y_reserva_sin_ejemplar(self):
         ampliaciones = self.servicios['ampliaciones']
         prestamo = self.registrar_prestamo_de_prueba([1, 2, 3])

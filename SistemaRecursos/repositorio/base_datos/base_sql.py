@@ -29,6 +29,8 @@ MENSAJES_DUPLICADOS = {
 
 
 class RepositorioSQL:
+    aislamiento = None
+
     def __init__(self, conexion=None, cursor=None):
         self.conexion = conexion or MySQLConnection()
         self._cursor = cursor
@@ -38,7 +40,7 @@ class RepositorioSQL:
         if self._cursor is not None:
             yield self
         else:
-            with self.conexion.sesion(escritura=True) as cursor:
+            with self.conexion.sesion(escritura=True, aislamiento=self.aislamiento) as cursor:
                 yield type(self)(self.conexion, cursor)
 
     def consultar_sql(self, sql, parametros=(), una=False):
