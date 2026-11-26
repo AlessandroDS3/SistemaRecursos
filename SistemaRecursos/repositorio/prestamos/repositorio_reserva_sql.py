@@ -2,17 +2,16 @@ from datetime import datetime
 from typing import Mapping
 
 from dominio.gestion_prestamos.reserva import (
-    CambiosReserva,
-    ContextoReserva,
+    DatosParaValidarReserva,
     DetalleReserva,
     EN_ESPERA,
     ESTADOS_PENDIENTES,
     FILTRO_PENDIENTES,
-    NuevaReserva,
     Reserva,
+    ReservaEnCola,
 )
 from repositorio.base_datos.base_sql import RepositorioSQL
-from repositorio.personas_usuarios.repositorio_persona_sql import CONSULTA as PERSONAS
+from repositorio.personas_usuarios.repositorio_persona_sql import CONSULTA_PARA_PRESTAMO
 from repositorio.prestamos.repositorio_prestamo_sql import RepositorioPrestamoSQL
 
 MARCAS_PENDIENTES = ','.join(['%s'] * len(ESTADOS_PENDIENTES))
@@ -22,7 +21,7 @@ RESERVAS_PENDIENTES_SQL = f'''re.estado IN ({MARCAS_PENDIENTES})
 
 class RepositorioReservaSQL(RepositorioSQL):
     def consultar_recursos_para_reserva(self, documento):
-        persona = self.consultar_sql(PERSONAS + ' WHERE p.dni=%s', (documento,), una=True)
+        persona = self.consultar_sql(CONSULTA_PARA_PRESTAMO + ' WHERE p.dni=%s', (documento,), una=True)
         return self.consultar_sql(
             '''SELECT r.id_recurso,r.nombre,p.plazo_maximo,p.unidad_plazo,p.permite_salida,
             c.hora_apertura,c.hora_cierre,c.dias_atencion
@@ -46,7 +45,7 @@ class RepositorioReservaSQL(RepositorioSQL):
 
     def consultar_reservas(
         self, documento: str | None = None, filtros: Mapping[str, str] | None = None
-    ) -> list[Reserva]:
+    ) -> list[ReservaEnCola]:
         filtros = filtros or {}
         sql = '''SELECT re.*,r.nombre AS recurso,
             CONCAT(p.nombres,' ',p.apellidos) AS solicitante,
@@ -95,15 +94,15 @@ class RepositorioReservaSQL(RepositorioSQL):
             una=True,
         )
 
-    def consultar_contexto_reserva(self, documento: str, recurso: int) -> ContextoReserva:
+    def consultar_datos_para_validar_reserva(self, documento: str, recurso: int) -> DatosParaValidarReserva:
         fila = self.consultar_sql(
-            'SELECT * FROM recurso WHERE id_recurso=%s FOR UPDATE', (recurso,), una=True
+            'SELECT id_categoria FROM recurso WHERE id_recurso=%s FOR UPDATE', (recurso,), una=True
         )
         persona = self.consultar_sql(
-            PERSONAS + ' WHERE p.dni=%s FOR UPDATE', (documento,), una=True
+            CONSULTA_PARA_PRESTAMO + ' WHERE p.dni=%s FOR UPDATE', (documento,), una=True
         )
         politica = self.consultar_sql(
-            '''SELECT * FROM politica_prestamo
+            '''SELECT permite_salida FROM politica_prestamo
             WHERE tipo_persona=%s AND id_categoria=%s AND vigente=TRUE FOR UPDATE''',
             (persona['tipo'] if persona else None, fila['id_categoria'] if fila else None),
             una=True,
@@ -122,36 +121,35 @@ class RepositorioReservaSQL(RepositorioSQL):
             AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>%s) FOR UPDATE''',
             (documento, recurso, *ESTADOS_PENDIENTES, self.consultar_fecha_actual()),
         )
-        return dict(
+        sancion = self.prestamos.sanciones.existen_sanciones_activas([documento])
+        return DatosParaValidarReserva(
             persona=persona,
-            recurso=fila,
-            politica=politica,
-            vencido=bool(vencido),
-            sancion=self.prestamos.sanciones.existen_sanciones_activas([documento]),
+            existe_recurso=fila is not None,
+            permite_salida=bool(politica['permite_salida']) if politica else None,
+            bloqueado=bool(vencido) or sancion,
             duplicada=bool(duplicada),
         )
 
-    def consultar_configuracion_general(self):
+    def consultar_horario_y_plazos_de_reserva(self):
         return self.consultar_sql(
             'SELECT * FROM configuracion_general WHERE id_configuracion=1 FOR UPDATE', una=True
         )
 
-    def registrar_reserva(self, datos: NuevaReserva) -> int:
-        return self.insertar('reserva', datos)
+    def guardar_nueva_reserva(self, reserva: Reserva) -> int:
+        return self.insertar_fila_sql('reserva', dict(
+            dni_persona=reserva.dni_persona, id_recurso=reserva.id_recurso,
+            fecha_solicitud=reserva.fecha_solicitud, fecha_requerida=reserva.fecha_requerida,
+            tipo_gestion=reserva.tipo_gestion, observaciones=reserva.observaciones,
+            salida_solicitada=reserva.salida_solicitada, fecha_limite_vencimiento=reserva.fecha_limite_vencimiento,
+            estado=reserva.estado,
+        ))
 
-    def actualizar_reserva(self, identificador: int, datos: CambiosReserva) -> None:
-        permitidos = {
-            'estado',
-            'id_bien',
-            'fecha_preparacion',
-            'fecha_limite_vencimiento',
-            'id_prestamo_ref',
-        }
-        if not datos or not set(datos) <= permitidos:
-            raise ValueError('Campos de reserva inválidos.')
-        self.ejecutar(
-            'UPDATE reserva SET ' + ','.join(c + '=%s' for c in datos) + ' WHERE id_reserva=%s',
-            (*datos.values(), identificador),
+    def actualizar_reserva(self, reserva: Reserva) -> None:
+        self.ejecutar_escritura_sql(
+            '''UPDATE reserva SET estado=%s,id_bien=%s,fecha_preparacion=%s,
+            fecha_limite_vencimiento=%s,id_prestamo_ref=%s WHERE id_reserva=%s''',
+            (reserva.estado, reserva.id_bien, reserva.fecha_preparacion,
+             reserva.fecha_limite_vencimiento, reserva.id_prestamo_ref, reserva.identificador),
         )
 
     def bloquear_recurso(self, identificador):
@@ -164,8 +162,8 @@ class RepositorioReservaSQL(RepositorioSQL):
     def bloquear_persona(self, documento: str) -> None:
         self.consultar_sql('SELECT dni FROM persona WHERE dni=%s FOR UPDATE', (documento,), una=True)
 
-    def consultar_primera_reserva_en_espera(self, recurso: int, ahora: datetime) -> dict | None:
-        return self.consultar_sql(
+    def consultar_primera_reserva_en_espera(self, recurso: int, ahora: datetime) -> int | None:
+        fila = self.consultar_sql(
             '''SELECT id_reserva FROM reserva WHERE id_recurso=%s
             AND estado=%s AND fecha_requerida<=%s
             AND (fecha_limite_vencimiento IS NULL OR fecha_limite_vencimiento>%s)
@@ -173,21 +171,23 @@ class RepositorioReservaSQL(RepositorioSQL):
             (recurso, EN_ESPERA, ahora, ahora),
             una=True,
         )
+        return fila['id_reserva'] if fila else None
 
-    def consultar_bien_disponible(self, recurso):
-        return self.consultar_sql(
-            '''SELECT b.* FROM bien_material b WHERE b.id_recurso=%s
+    def consultar_bien_disponible(self, recurso: int) -> int | None:
+        fila = self.consultar_sql(
+            '''SELECT b.id_bien FROM bien_material b WHERE b.id_recurso=%s
             AND b.estado='DISPONIBLE' AND NOT EXISTS(SELECT 1 FROM detalle_prestamo d
                 WHERE d.id_bien=b.id_bien AND d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL)
             ORDER BY b.id_bien LIMIT 1 FOR UPDATE''',
             (recurso,),
             una=True,
         )
+        return fila['id_bien'] if fila else None
 
     def cambiar_estado_bien_reservado(self, bien, estado, esperado, actor, reserva):
         from dominio.compartido.validacion import Conflicto
 
-        self.ejecutar(
+        self.ejecutar_escritura_sql(
             'UPDATE bien_material SET estado=%s WHERE id_bien=%s AND estado=%s',
             (estado, bien, esperado),
         )
@@ -197,9 +197,10 @@ class RepositorioReservaSQL(RepositorioSQL):
             'BIEN_MATERIAL', bien, esperado, estado, actor, f'Reserva #{reserva}.'
         )
 
-    def consultar_reservas_vencidas(self):
-        return self.consultar_sql(
+    def consultar_reservas_vencidas(self) -> list[int]:
+        filas = self.consultar_sql(
             f'''SELECT id_reserva FROM reserva WHERE estado IN ({MARCAS_PENDIENTES})
             AND fecha_limite_vencimiento<=UTC_TIMESTAMP() ORDER BY id_reserva LIMIT 100''',
             ESTADOS_PENDIENTES,
         )
+        return [fila['id_reserva'] for fila in filas]

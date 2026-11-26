@@ -30,7 +30,7 @@ class ControladorAcceso:
                 cuenta_acceso, error, codigo = None, str(bloqueo), 429
             if cuenta_acceso:
                 establecer_sesion(
-                    cuenta_acceso, self.servicio.iniciar_sesion(cuenta_acceso.id_usuario)
+                    cuenta_acceso, self.servicio.crear_sesion_de_cuenta(cuenta_acceso.id_usuario)
                 )
                 destino = (
                     'cuentas.cambiar_clave_propia' if cuenta_acceso.debe_cambiar_clave else 'inicio'

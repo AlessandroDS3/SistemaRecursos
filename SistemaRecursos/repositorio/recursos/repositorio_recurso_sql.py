@@ -40,7 +40,7 @@ class RepositorioRecursoSQL(RepositorioSQL):
             parametros.extend(parametros_bien)
         return self.consultar_sql(sql + ' ORDER BY r.nombre,r.id_recurso', parametros)
 
-    def consultar_disponibilidad(self) -> int:
+    def contar_bienes_disponibles(self) -> int:
         return self.consultar_sql(
             "SELECT COUNT(*) AS total FROM bien_material WHERE estado='DISPONIBLE'", una=True
         )['total']
@@ -56,10 +56,10 @@ class RepositorioRecursoSQL(RepositorioSQL):
         datos = asdict(recurso)
         identificador = datos.pop('id_recurso')
         if identificador is None:
-            recurso.id_recurso = self.insertar('recurso', datos)
+            recurso.id_recurso = self.insertar_fila_sql('recurso', datos)
         else:
             actual = self.consultar_recurso(identificador, bloquear=True)
-            self.ejecutar(
+            self.ejecutar_escritura_sql(
                 'UPDATE recurso SET ' + ','.join(c + '=%s' for c in datos) + ' WHERE id_recurso=%s',
                 (*datos.values(), identificador),
             )
@@ -97,7 +97,7 @@ class RepositorioRecursoSQL(RepositorioSQL):
         ) is not None
 
     def eliminar_recurso(self, identificador: int) -> None:
-        self.ejecutar('DELETE FROM recurso WHERE id_recurso=%s', (identificador,))
+        self.ejecutar_escritura_sql('DELETE FROM recurso WHERE id_recurso=%s', (identificador,))
 
     def consultar_categorias(self) -> list[dict]:
         return self.consultar_sql('SELECT * FROM categoria_recurso ORDER BY nombre')
@@ -124,14 +124,14 @@ class RepositorioRecursoSQL(RepositorioSQL):
         self, nombre: str, descripcion: str, identificador: int | None = None
     ) -> int:
         if identificador is None:
-            return self.insertar(
+            return self.insertar_fila_sql(
                 'categoria_recurso', dict(nombre=nombre, descripcion=descripcion or None)
             )
-        self.ejecutar(
+        self.ejecutar_escritura_sql(
             'UPDATE categoria_recurso SET nombre=%s,descripcion=%s WHERE id_categoria=%s',
             (nombre, descripcion or None, identificador),
         )
         return identificador
 
     def eliminar_categoria(self, identificador: int) -> None:
-        self.ejecutar('DELETE FROM categoria_recurso WHERE id_categoria=%s', (identificador,))
+        self.ejecutar_escritura_sql('DELETE FROM categoria_recurso WHERE id_categoria=%s', (identificador,))

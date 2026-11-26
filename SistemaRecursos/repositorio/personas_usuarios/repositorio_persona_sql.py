@@ -1,14 +1,21 @@
 from dominio.gestion_personas_usuarios.persona import CAMPOS_TIPO
 from repositorio.base_datos.base_sql import RepositorioSQL
-from repositorio.personas_usuarios.repositorio_cuenta_sql import cargar_cuentas_para_actualizar, cerrar_sesiones_de_cuenta
+from repositorio.personas_usuarios.repositorio_cuenta_sql import (
+    consultar_y_bloquear_cuentas_para_edicion,
+    cerrar_sesiones_de_cuenta,
+)
 
 TABLAS_TIPO = {'ESTUDIANTE': 'estudiante', 'DOCENTE': 'docente', 'ADMINISTRATIVO': 'administrativo'}
-CONSULTA = '''SELECT p.*,e.cui,e.ciclo,e.estado_matricula,d.codigo_docente,d.departamento_academico,
-    d.facultad,d.escuela_profesional,a.codigo_empleado,a.area,
-    CASE WHEN e.dni IS NOT NULL THEN 'ESTUDIANTE' WHEN d.dni IS NOT NULL THEN 'DOCENTE'
-         WHEN a.dni IS NOT NULL THEN 'ADMINISTRATIVO' END AS tipo
-    FROM persona p LEFT JOIN estudiante e ON e.dni=p.dni LEFT JOIN docente d ON d.dni=p.dni
+TIPO_INSTITUCIONAL = '''CASE WHEN e.dni IS NOT NULL THEN 'ESTUDIANTE' WHEN d.dni IS NOT NULL THEN 'DOCENTE'
+    WHEN a.dni IS NOT NULL THEN 'ADMINISTRATIVO' END AS tipo'''
+PERSONAS_INSTITUCIONALES = '''FROM persona p LEFT JOIN estudiante e ON e.dni=p.dni
+    LEFT JOIN docente d ON d.dni=p.dni
     LEFT JOIN administrativo a ON a.dni=p.dni'''
+CONSULTA = f'''SELECT p.*,e.cui,e.ciclo,e.estado_matricula,d.codigo_docente,d.departamento_academico,
+    d.facultad,d.escuela_profesional,a.codigo_empleado,a.area,{TIPO_INSTITUCIONAL}
+    {PERSONAS_INSTITUCIONALES}'''
+CONSULTA_PARA_PRESTAMO = f'''SELECT p.dni,p.nombres,p.apellidos,p.estado,e.estado_matricula,{TIPO_INSTITUCIONAL}
+    {PERSONAS_INSTITUCIONALES}'''
 
 
 class RepositorioPersonaSQL(RepositorioSQL):
@@ -64,7 +71,7 @@ class RepositorioPersonaSQL(RepositorioSQL):
         }
 
     def guardar_persona(self, persona, documento_anterior: str | None = None) -> None:
-        datos = persona.datos()
+        datos = persona.como_diccionario()
         comunes = {
             k: datos[k] for k in ('dni', 'nombres', 'apellidos', 'telefono', 'correo', 'estado')
         }
@@ -72,14 +79,14 @@ class RepositorioPersonaSQL(RepositorioSQL):
         especificos = {k: datos[k] for k in CAMPOS_TIPO[persona.tipo]}
         tabla = TABLAS_TIPO[persona.tipo]
         if documento_anterior is None:
-            self.insertar('persona', comunes)
-            self.insertar(tabla, {'dni': persona.dni, **especificos})
+            self.insertar_fila_sql('persona', comunes)
+            self.insertar_fila_sql(tabla, {'dni': persona.dni, **especificos})
         else:
-            self.ejecutar(
+            self.ejecutar_escritura_sql(
                 'UPDATE persona SET ' + ','.join(k + '=%s' for k in comunes) + ' WHERE dni=%s',
                 (*comunes.values(), documento_anterior),
             )
-            self.ejecutar(
+            self.ejecutar_escritura_sql(
                 'UPDATE '
                 + tabla
                 + ' SET '
@@ -89,7 +96,7 @@ class RepositorioPersonaSQL(RepositorioSQL):
             )
 
     def consultar_cuentas_para_actualizar(self) -> list[dict]:
-        return cargar_cuentas_para_actualizar(self)
+        return consultar_y_bloquear_cuentas_para_edicion(self)
 
     def cerrar_sesiones_de_cuenta(self, identificador):
         cerrar_sesiones_de_cuenta(self, identificador)
@@ -97,8 +104,8 @@ class RepositorioPersonaSQL(RepositorioSQL):
     def cambiar_tipo_persona(self, anterior, persona, motivo, responsable):
         tipo_anterior = anterior['tipo']
         if tipo_anterior in TABLAS_TIPO:
-            self.ejecutar(f'DELETE FROM {TABLAS_TIPO[tipo_anterior]} WHERE dni=%s', (persona.dni,))
-        self.insertar(TABLAS_TIPO[persona.tipo], dict(
+            self.ejecutar_escritura_sql(f'DELETE FROM {TABLAS_TIPO[tipo_anterior]} WHERE dni=%s', (persona.dni,))
+        self.insertar_fila_sql(TABLAS_TIPO[persona.tipo], dict(
             dni=persona.dni, **{campo: getattr(persona, campo) for campo in CAMPOS_TIPO[persona.tipo]}
         ))
         self.registrar_historial_estado(

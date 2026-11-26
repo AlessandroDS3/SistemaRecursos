@@ -7,7 +7,7 @@ from io import StringIO
 from dominio.compartido.validacion import LIMA
 
 
-def _celda_csv(valor):
+def _sanear_valor_para_csv(valor):
     texto_celda = '' if valor is None else str(valor)
     peligroso = texto_celda.startswith(('\t', '\r', '\n')) or texto_celda.lstrip().startswith(
         ('=', '+', '-', '@')
@@ -33,5 +33,5 @@ def generar_csv_reporte(filtro, filas):
             )
             for v in valores
         ]
-        escritor.writerow([_celda_csv(v) for v in valores])
+        escritor.writerow([_sanear_valor_para_csv(v) for v in valores])
     return salida.getvalue()

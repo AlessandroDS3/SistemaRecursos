@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block titulo %}Inicio · UNSA{% endblock %}
-{% from 'parciales/componentes.html' import indicador %}
+{% from 'parciales/componentes.html' import tarjeta_indicadora %}
 {% block contenido %}
-  {% set encargado = g.usuario.permite('PRESTAMOS_GESTIONAR') %}
+  {% set encargado = g.usuario.tiene_permiso('PRESTAMOS_GESTIONAR') %}
   <div class="cabecera">
     <h1>Inicio</h1>
   </div>
@@ -19,7 +19,7 @@
   {% if solicitudes_pendientes %}
     <p class="aviso" role="status">
       Hay {{ solicitudes_pendientes }} solicitud{{ 'es' if solicitudes_pendientes != 1 }} de ampliación por revisar.
-      <a href="{{ url_for('ampliaciones.consultar_solicitudes') }}">Revisar solicitudes</a>
+      <a href="{{ url_for('ampliaciones.consultar_solicitudes_ampliacion') }}">Revisar solicitudes</a>
     </p>
   {% endif %}
   <section class="panel acciones-inicio" aria-label="Acciones frecuentes">
@@ -40,29 +40,29 @@
   {% if resumen %}
     <section class="resumen-estadisticas" aria-label="Resumen del sistema">
       {% if resumen.prestamos_pendientes is defined %}
-        {{ indicador('Préstamos por devolver',resumen.prestamos_pendientes,url_for('prestamos.consultar_prestamos',estado='PENDIENTES'),'Ver préstamos') }}
-        {{ indicador('Préstamos vencidos',resumen.prestamos_vencidos,url_for('prestamos.consultar_prestamos',estado='VENCIDO'),'Revisar vencidos','alerta' if resumen.prestamos_vencidos else '') }}
+        {{ tarjeta_indicadora('Préstamos por devolver',resumen.prestamos_pendientes,url_for('prestamos.consultar_prestamos',estado='PENDIENTES'),'Ver préstamos') }}
+        {{ tarjeta_indicadora('Préstamos vencidos',resumen.prestamos_vencidos,url_for('prestamos.consultar_prestamos',estado='VENCIDO'),'Revisar vencidos','alerta' if resumen.prestamos_vencidos else '') }}
       {% endif %}
       {% if resumen.reservas_pendientes is defined %}
-        {{ indicador('Reservas pendientes' if encargado else 'Mis reservas pendientes',resumen.reservas_pendientes,url_for('reservas.consultar_reservas',estado='PENDIENTES'),'Atender reservas' if encargado else 'Ver mis reservas') }}
+        {{ tarjeta_indicadora('Reservas pendientes' if encargado else 'Mis reservas pendientes',resumen.reservas_pendientes,url_for('reservas.consultar_reservas',estado='PENDIENTES'),'Atender reservas' if encargado else 'Ver mis reservas') }}
       {% endif %}
       {% if resumen.bienes_disponibles is defined %}
-        {{ indicador('Bienes disponibles',resumen.bienes_disponibles,url_for('recursos.consultar_recursos',solo_disponibles='1'),'Consultar catálogo','disponibilidad') }}
+        {{ tarjeta_indicadora('Bienes disponibles',resumen.bienes_disponibles,url_for('recursos.consultar_recursos',solo_disponibles='1'),'Consultar catálogo','disponibilidad') }}
       {% endif %}
     </section>
   {% endif %}
 
-  {% if g.usuario.permite('PERSONAS_GESTIONAR') or g.usuario.permite('RECURSOS_GESTIONAR') %}
+  {% if g.usuario.tiene_permiso('PERSONAS_GESTIONAR') or g.usuario.tiene_permiso('RECURSOS_GESTIONAR') %}
     <section class="panel">
       <h2>Administración</h2>
       <div class="acciones">
-        {% if g.usuario.permite('RECURSOS_GESTIONAR') %}
+        {% if g.usuario.tiene_permiso('RECURSOS_GESTIONAR') %}
           <a href="{{ url_for('recursos.consultar_administracion_recursos') }}">Administrar inventario</a>
         {% endif %}
-        {% if g.usuario.permite('PERSONAS_GESTIONAR') %}
+        {% if g.usuario.tiene_permiso('PERSONAS_GESTIONAR') %}
           <a href="{{ url_for('personas.registrar_persona') }}">Registrar persona</a>
         {% endif %}
-        {% if g.usuario.permite('POLITICAS_GESTIONAR') %}
+        {% if g.usuario.tiene_permiso('POLITICAS_GESTIONAR') %}
           <a href="{{ url_for('politicas.consultar_politicas_prestamo') }}">Configurar políticas</a>
         {% endif %}
       </div>

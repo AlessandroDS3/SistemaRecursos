@@ -2,7 +2,7 @@ from flask import Blueprint, Response, g, render_template, request
 from reportlab.graphics import renderSVG
 
 from presentacion.reportes.csv_reportes import generar_csv_reporte
-from presentacion.reportes.dibujos_reportes import dibujos_graficos
+from presentacion.reportes.dibujos_reportes import dibujar_graficos_de_reporte
 from presentacion.reportes.formatos_reportes import (
     etiqueta_reporte,
     presentar_reporte,
@@ -45,12 +45,12 @@ class ControladorReporte:
 
     @requiere_permiso('REPORTES_CONSULTAR')
     def consultar_reportes(self):
-        resultado = self.servicio.consultar_reportes(request.args)
+        resultado = self.servicio.consultar_reporte_filtrado(request.args)
         resultado['reporte'] = presentar_reporte(resultado['filtro'].tipo)
         if not resultado['filtro'].tipo.startswith('historial_'):
             resultado['graficos'] = preparar_graficos(resultado['filtro'].tipo, resultado['filas'])
             if resultado['graficos']:
-                resultado['graficos']['svg'] = [renderSVG.drawToString(d) for d in dibujos_graficos(resultado['graficos'])]
+                resultado['graficos']['svg'] = [renderSVG.drawToString(d) for d in dibujar_graficos_de_reporte(resultado['graficos'])]
         return render_template(
             (
                 'reportes/vista_historial.html'
@@ -95,7 +95,7 @@ class ControladorReporte:
 
     @requiere_permiso('REPORTES_CONSULTAR')
     def exportar_reportes_csv(self):
-        resultado = self.servicio.consultar_reportes(request.args)
+        resultado = self.servicio.consultar_reporte_filtrado(request.args)
         filtro = resultado['filtro']
         contenido = generar_csv_reporte(filtro, resultado['filas'])
         return Response(
@@ -106,7 +106,7 @@ class ControladorReporte:
 
     @requiere_permiso('REPORTES_CONSULTAR')
     def exportar_reportes_pdf(self):
-        resultado = self.servicio.consultar_reportes(request.args)
+        resultado = self.servicio.consultar_reporte_filtrado(request.args)
         filtro = resultado['filtro']
         if filtro.tipo.startswith('historial_'):
             contenido = generar_pdf_historial(resultado)

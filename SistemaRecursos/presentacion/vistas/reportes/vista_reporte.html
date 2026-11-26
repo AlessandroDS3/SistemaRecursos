@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import campo %}
-{% from 'parciales/componentes.html' import estado, selector_reporte %}
+{% from 'parciales/formularios.html' import campo_de_formulario %}
+{% from 'parciales/componentes.html' import insignia_de_estado, selector_reporte %}
 
-{% macro filtro_opciones(nombre, etiqueta, valores, actual) %}
+{% macro selector_de_filtro(nombre, etiqueta, valores, actual) %}
   <label>
     {{ etiqueta }}
     <select name="{{ nombre }}">
@@ -32,14 +32,14 @@
     <input type="hidden" name="tipo" value="{{ filtro.tipo }}">
     <div class="rejilla filtros-reportes">
       {% if reporte.fecha %}
-        {{ campo('desde',reporte.fecha|capitalize ~ ' desde',filtro.desde,tipo='date') }}
-        {{ campo('hasta',reporte.fecha|capitalize ~ ' hasta',filtro.hasta,tipo='date') }}
+        {{ campo_de_formulario('desde',reporte.fecha|capitalize ~ ' desde',filtro.desde,tipo='date') }}
+        {{ campo_de_formulario('hasta',reporte.fecha|capitalize ~ ' hasta',filtro.hasta,tipo='date') }}
       {% endif %}
       {% if "estado" in reporte.filtros %}
-        {{ filtro_opciones('estado',reporte.etiqueta_estado,reporte.estados,filtro.estado) }}
+        {{ selector_de_filtro('estado',reporte.etiqueta_estado,reporte.estados,filtro.estado) }}
       {% endif %}
       {% for nombre, etiqueta in (('modalidad','Modalidad'),('tipo_persona','Tipo de persona' if filtro.tipo == 'personas' else 'Tipo de solicitante'),('cumplimiento','Cumplimiento'),('tipo_gestion','Tipo de gestión')) if nombre in reporte.filtros %}
-        {{ filtro_opciones(nombre,etiqueta,opciones_filtros[nombre],filtro[nombre]) }}
+        {{ selector_de_filtro(nombre,etiqueta,opciones_filtros[nombre],filtro[nombre]) }}
       {% endfor %}
       {% if 'id_categoria' in reporte.filtros %}
       <label>
@@ -54,7 +54,7 @@
       </label>
       {% endif %}
       {% if "ubicacion" in reporte.filtros %}
-        {{ campo('ubicacion','Ubicación',filtro.ubicacion,maximo=120) }}
+        {{ campo_de_formulario('ubicacion','Ubicación',filtro.ubicacion,maximo=120) }}
       {% endif %}
       {% if 'q' in reporte.filtros %}
       <label class="busqueda-reporte">
@@ -110,22 +110,22 @@
                   {% elif columna.formato == "dia" %}
                     {{ valor.strftime("%d/%m/%Y") if valor else '—' }}
                   {% elif columna.formato == "estado" %}
-                    {{ estado(valor,valor|etiqueta_reporte) if valor else '—' }}
+                    {{ insignia_de_estado(valor,valor|etiqueta_reporte) if valor else '—' }}
                   {% elif columna.formato == "prestamo" %}
-                    {% if g.usuario.permite("PRESTAMOS_GESTIONAR") %}
+                    {% if g.usuario.tiene_permiso("PRESTAMOS_GESTIONAR") %}
                       <a href="{{ url_for('prestamos.consultar_prestamo',identificador=valor) }}">#{{ valor }}</a>
                     {% else %}
                       #{{ valor }}
                     {% endif %}
                     {% if fila.get("tipo_prestamo") %}<small>{{ fila.tipo_prestamo|etiqueta_reporte }}</small>{% endif %}
                   {% elif columna.formato == "reserva" %}
-                    {% if g.usuario.permite("PRESTAMOS_GESTIONAR") %}
+                    {% if g.usuario.tiene_permiso("PRESTAMOS_GESTIONAR") %}
                       <a href="{{ url_for('reservas.consultar_reserva',identificador=valor) }}">#{{ valor }}</a>
                     {% else %}
                       #{{ valor }}
                     {% endif %}
                   {% elif columna.formato == "inventario" %}
-                    {% if g.usuario.permite("RECURSOS_GESTIONAR") %}
+                    {% if g.usuario.tiene_permiso("RECURSOS_GESTIONAR") %}
                       <a href="{{ url_for('bienes.consultar_bien_material',identificador=fila.id_bien) }}">{{ valor }}</a>
                     {% else %}
                       {{ valor }}

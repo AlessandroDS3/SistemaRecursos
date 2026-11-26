@@ -4,7 +4,7 @@ from dominio.compartido.validacion import Conflicto
 from repositorio.base_datos.base_sql import RepositorioSQL
 
 
-def cargar_cuentas_para_actualizar(repo) -> list[dict]:
+def consultar_y_bloquear_cuentas_para_edicion(repo) -> list[dict]:
     """Bloquea cuentas y personas en orden de cuenta hasta terminar la transacción."""
     return repo.consultar_sql('''SELECT u.id_usuario,u.dni_persona,u.nombre_usuario,
         u.contrasena_hash,u.debe_cambiar_clave,u.rol,u.estado_cuenta,
@@ -57,7 +57,7 @@ class RepositorioCuentaSQL(RepositorioSQL):
         )
 
     def consultar_cuentas_para_actualizar(self) -> list[dict]:
-        return cargar_cuentas_para_actualizar(self)
+        return consultar_y_bloquear_cuentas_para_edicion(self)
 
     def cerrar_sesiones_de_cuenta(self, identificador):
         cerrar_sesiones_de_cuenta(self, identificador)
@@ -81,7 +81,7 @@ class RepositorioCuentaSQL(RepositorioSQL):
         return self._insertar_cuenta(persona.dni, nombre, hash_clave, 'ADMINISTRADOR')
 
     def _insertar_cuenta(self, documento: str, nombre: str, hash_clave: str, rol: str) -> int:
-        return self.insertar(
+        return self.insertar_fila_sql(
             'usuario_sistema',
             dict(
                 dni_persona=documento,
@@ -105,12 +105,12 @@ class RepositorioCuentaSQL(RepositorioSQL):
             raise ValueError('Campo de cuenta desconocido.')
         if datos:
             columnas = ','.join(campo + '=%s' for campo in datos)
-            self.ejecutar(
+            self.ejecutar_escritura_sql(
                 'UPDATE usuario_sistema SET ' + columnas + ' WHERE id_usuario=%s',
                 (*datos.values(), identificador),
             )
 
 
 def cerrar_sesiones_de_cuenta(repo, identificador):
-    repo.ejecutar('''UPDATE sesion_usuario SET fecha_cierre=UTC_TIMESTAMP()
+    repo.ejecutar_escritura_sql('''UPDATE sesion_usuario SET fecha_cierre=UTC_TIMESTAMP()
         WHERE id_usuario=%s AND fecha_cierre IS NULL''', (identificador,))

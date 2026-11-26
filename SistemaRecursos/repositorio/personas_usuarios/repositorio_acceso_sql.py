@@ -1,5 +1,5 @@
 from dominio.gestion_personas_usuarios.acceso import CuentaAcceso
-from dominio.gestion_personas_usuarios.rol import permisos_del_rol
+from dominio.gestion_personas_usuarios.rol import Rol, permisos_del_rol
 from repositorio.base_datos.base_sql import RepositorioSQL
 
 
@@ -16,6 +16,7 @@ class RepositorioAccesoSQL(RepositorioSQL):
         )
         if fila_cuenta is None:
             return None
+        fila_cuenta['rol'] = Rol(fila_cuenta['rol'])
         return CuentaAcceso(**fila_cuenta, permisos=permisos_del_rol(fila_cuenta['rol']))
 
     def consultar_cuenta_por_usuario(self, nombre):
@@ -24,16 +25,16 @@ class RepositorioAccesoSQL(RepositorioSQL):
     def consultar_cuenta_por_id(self, identificador):
         return self._consultar_cuenta('u.id_usuario', identificador)
 
-    def registrar_acceso(self, identificador):
+    def registrar_ultimo_inicio_de_sesion(self, identificador):
         with self.transaccion() as operacion:
-            operacion.ejecutar(
+            operacion.ejecutar_escritura_sql(
                 'UPDATE usuario_sistema SET ultimo_acceso=UTC_TIMESTAMP() WHERE id_usuario=%s',
                 (identificador,),
             )
 
     def crear_sesion(self, huella, id_usuario):
         with self.transaccion() as operacion:
-            operacion.ejecutar(
+            operacion.ejecutar_escritura_sql(
                 '''INSERT INTO sesion_usuario(id_sesion,id_usuario,fecha_inicio,ultima_actividad)
                 VALUES(%s,%s,UTC_TIMESTAMP(),UTC_TIMESTAMP())''',
                 (huella, id_usuario),
@@ -49,7 +50,7 @@ class RepositorioAccesoSQL(RepositorioSQL):
 
     def registrar_actividad_sesion(self, huella):
         with self.transaccion() as operacion:
-            operacion.ejecutar(
+            operacion.ejecutar_escritura_sql(
                 '''UPDATE sesion_usuario SET ultima_actividad=UTC_TIMESTAMP()
                 WHERE id_sesion=%s AND fecha_cierre IS NULL''',
                 (huella,),
@@ -57,7 +58,7 @@ class RepositorioAccesoSQL(RepositorioSQL):
 
     def cerrar_sesion(self, huella):
         with self.transaccion() as operacion:
-            operacion.ejecutar(
+            operacion.ejecutar_escritura_sql(
                 '''UPDATE sesion_usuario SET fecha_cierre=UTC_TIMESTAMP()
                 WHERE id_sesion=%s AND fecha_cierre IS NULL''',
                 (huella,),

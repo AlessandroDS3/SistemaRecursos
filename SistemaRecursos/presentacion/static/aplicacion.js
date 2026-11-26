@@ -79,7 +79,7 @@ document.querySelectorAll('[data-fila-devolucion]').forEach(fila => {
   if (avisoDanio) {
     condicion.setAttribute('aria-describedby', [condicion.getAttribute('aria-describedby'), avisoDanio.id].filter(Boolean).join(' '));
   }
-  function actualizar() {
+  function actualizarCamposDeDevolucion() {
     if (codigo) codigo.required = seleccionar.checked;
     observacion.required = seleccionar.checked && condicion.value === 'DANADO';
     observacion.setAttribute('aria-required', String(observacion.required));
@@ -93,9 +93,9 @@ document.querySelectorAll('[data-fila-devolucion]').forEach(fila => {
     }
     if (!observacion.required && !observacion.value) mostrarErrorCampo(observacion, '');
   }
-  seleccionar.addEventListener('change', actualizar);
-  condicion.addEventListener('change', actualizar);
-  actualizar();
+  seleccionar.addEventListener('change', actualizarCamposDeDevolucion);
+  condicion.addEventListener('change', actualizarCamposDeDevolucion);
+  actualizarCamposDeDevolucion();
 });
 
 document.querySelectorAll('[data-ampliacion-previa]').forEach(formulario => {
@@ -103,7 +103,7 @@ document.querySelectorAll('[data-ampliacion-previa]').forEach(formulario => {
   const boton = formulario.querySelector('button[type="submit"], button:not([type])');
   const formato = new Intl.DateTimeFormat('es-PE', {timeZone:'America/Lima', dateStyle:'short', timeStyle:'short'});
   let temporizador, solicitud;
-  async function consultar() {
+  async function consultarFechaPreviaDeAmpliacion() {
     solicitud?.abort();
     const cantidad = formulario.elements.cantidad.value;
     if (!cantidad) { resultado.textContent = 'Indica el tiempo adicional para ver la nueva fecha de devolución.'; boton.disabled = false; return; }
@@ -129,10 +129,10 @@ document.querySelectorAll('[data-ampliacion-previa]').forEach(formulario => {
       }
     }
   }
-  function programar() { clearTimeout(temporizador); solicitud?.abort(); boton.disabled = true; temporizador = setTimeout(consultar, 250); }
-  formulario.elements.cantidad.addEventListener('input', programar);
-  formulario.elements.unidad.addEventListener('change', programar);
-  if (formulario.elements.cantidad.value) consultar();
+  function programarConsultaDeAmpliacion() { clearTimeout(temporizador); solicitud?.abort(); boton.disabled = true; temporizador = setTimeout(consultarFechaPreviaDeAmpliacion, 250); }
+  formulario.elements.cantidad.addEventListener('input', programarConsultaDeAmpliacion);
+  formulario.elements.unidad.addEventListener('change', programarConsultaDeAmpliacion);
+  if (formulario.elements.cantidad.value) consultarFechaPreviaDeAmpliacion();
 });
 
 const mostrarClave = document.querySelector('[data-mostrar-clave]');
@@ -140,12 +140,12 @@ document.querySelectorAll('[data-guardar-modificada]').forEach(formulario => {
   const guardar = formulario.querySelector('[data-guardar-cambios]');
   if (!guardar) return;
   const inicial = new URLSearchParams(new FormData(formulario)).toString();
-  function actualizarGuardado() {
+  function habilitarGuardadoSiHayCambios() {
     guardar.hidden = new URLSearchParams(new FormData(formulario)).toString() === inicial;
   }
-  formulario.addEventListener('input', actualizarGuardado);
-  formulario.addEventListener('change', actualizarGuardado);
-  actualizarGuardado();
+  formulario.addEventListener('input', habilitarGuardadoSiHayCambios);
+  formulario.addEventListener('change', habilitarGuardadoSiHayCambios);
+  habilitarGuardadoSiHayCambios();
 });
 document.querySelectorAll('[data-abrir-dialogo]').forEach(boton => {
   boton.addEventListener('click', () => {
@@ -168,7 +168,7 @@ document.querySelectorAll('[data-desplegar-bienes]').forEach(boton => {
 });
 const selectorReporte = document.querySelector('[data-seleccionar-reporte]');
 selectorReporte?.addEventListener('change', () => selectorReporte.form.requestSubmit());
-document.querySelectorAll('[data-filtrar-al-cambiar]').forEach(selector => {
+document.querySelectorAll('[data-filtrarFilasPorBusqueda-al-cambiar]').forEach(selector => {
   selector.addEventListener('change', () => selector.form.requestSubmit());
 });
 mostrarClave?.addEventListener('change', () => {
@@ -180,7 +180,7 @@ const botonMenu = document.getElementById('menu-toggle');
 const sombraMenu = document.getElementById('menu-sombra');
 const menuPrincipal = document.getElementById('menu-principal');
 const vistaMenuMovil = window.matchMedia('(max-width: 1000px)');
-function cambiarMenu(abierto) {
+function ajustarVisibilidadDelMenu(abierto) {
   if (!menuPrincipal || !botonMenu || !sombraMenu) return;
   const estabaAbierto = document.body.classList.contains('menu-abierto');
   if (estabaAbierto && !abierto && vistaMenuMovil.matches) botonMenu.focus();
@@ -191,15 +191,15 @@ function cambiarMenu(abierto) {
   menuPrincipal.inert = vistaMenuMovil.matches && !abierto;
   if (abierto) menuPrincipal.querySelector('nav a')?.focus();
 }
-botonMenu?.addEventListener('click', () => cambiarMenu(!document.body.classList.contains('menu-abierto')));
-sombraMenu?.addEventListener('click', () => cambiarMenu(false));
-vistaMenuMovil.addEventListener('change', () => cambiarMenu(false));
-cambiarMenu(false);
+botonMenu?.addEventListener('click', () => ajustarVisibilidadDelMenu(!document.body.classList.contains('menu-abierto')));
+sombraMenu?.addEventListener('click', () => ajustarVisibilidadDelMenu(false));
+vistaMenuMovil.addEventListener('change', () => ajustarVisibilidadDelMenu(false));
+ajustarVisibilidadDelMenu(false);
 document.addEventListener('keydown', evento => {
   if (!document.body.classList.contains('menu-abierto')) return;
   if (evento.key === 'Escape') {
     evento.preventDefault();
-    cambiarMenu(false);
+    ajustarVisibilidadDelMenu(false);
   } else if (evento.key === 'Tab') {
     const enlaces = menuPrincipal.querySelectorAll('a[href], button:not([disabled])');
     const primero = enlaces[0];
@@ -244,16 +244,16 @@ document.querySelectorAll('[data-abrir-detalle]').forEach(enlace => {
 function normalizarBusqueda(texto) {
   return texto.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
-document.querySelectorAll('[data-filtrar-filas]').forEach(campo => {
-  function filtrar() {
+document.querySelectorAll('[data-filtrarFilasPorBusqueda-filas]').forEach(campo => {
+  function filtrarFilasPorBusqueda() {
     const consulta = normalizarBusqueda(campo.value);
     document.querySelectorAll(`#${campo.dataset.filtrarFilas} [data-busqueda]`).forEach(fila => {
       fila.hidden = !normalizarBusqueda(fila.dataset.busqueda).includes(consulta);
     });
   }
-  campo.addEventListener('input', filtrar);
+  campo.addEventListener('input', filtrarFilasPorBusqueda);
   const limpiar = document.querySelector(`[data-limpiar-busqueda="${campo.dataset.filtrarFilas}"]`);
-  limpiar?.addEventListener('click', () => { campo.value = ''; filtrar(); campo.focus(); });
+  limpiar?.addEventListener('click', () => { campo.value = ''; filtrarFilasPorBusqueda(); campo.focus(); });
 });
 document.querySelectorAll('[data-volver]').forEach(boton => {
   boton.addEventListener('click', () => window.history.back());

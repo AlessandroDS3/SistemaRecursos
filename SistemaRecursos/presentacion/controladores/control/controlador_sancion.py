@@ -1,7 +1,7 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from presentacion.seguridad import requiere_permiso
-from presentacion.navegacion import detalle_prestamo, regreso_prestamos
-from presentacion.formularios import recuperar_formulario
+from presentacion.navegacion import obtener_url_del_detalle_de_prestamo, obtener_url_de_regreso_a_prestamos
+from presentacion.formularios import recuperar_formulario_tras_error
 
 
 class ControladorSancion:
@@ -23,12 +23,12 @@ class ControladorSancion:
             ('/<int:identificador>/evaluar', 'evaluar_sancion', self.evaluar_sancion),
             ('/<int:identificador>/regularizar', 'regularizar_sancion', self.regularizar_sancion),
             ('/<int:identificador>/anular', 'anular_sancion', self.anular_sancion),
-            ('/<int:identificador>/recuperar-original', 'registrar_original_recuperado', self.registrar_original_recuperado),
+            ('/<int:identificador>/recuperar-original', 'registrar_recuperacion_del_bien_original', self.registrar_recuperacion_del_bien_original),
         ):
             self.blueprint.add_url_rule(ruta, nombre, funcion, methods=['POST'])
         self.blueprint.add_url_rule(
             '/prestamos/<int:prestamo_id>/detalles/<int:detalle_id>',
-            'registrar_sancion_por_detalle_prestamo', self.registrar_sancion_por_detalle_prestamo, methods=['POST'],
+            'aplicar_sancion_a_bien_prestado', self.aplicar_sancion_a_bien_prestado, methods=['POST'],
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
@@ -55,12 +55,12 @@ class ControladorSancion:
             'control/vista_sancion.html',
             modo='detalle',
             sancion=sancion,
-            volver=regreso_prestamos(),
-            prestamo_url=detalle_prestamo(sancion['id_prestamo']) + '#devolucion',
+            volver=obtener_url_de_regreso_a_prestamos(),
+            prestamo_url=obtener_url_del_detalle_de_prestamo(sancion['id_prestamo']) + '#devolucion',
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    @recuperar_formulario(
+    @recuperar_formulario_tras_error(
         lambda self, identificador: (
             self.consultar_sancion(identificador)
             if request.form.get('origen') == 'prestamo'
@@ -78,11 +78,11 @@ class ControladorSancion:
         )
         flash('Sanción levantada. Las demás sanciones y pendientes se conservan.')
         if sancion is not None:
-            return redirect(detalle_prestamo(sancion['id_prestamo']) + '#devolucion')
+            return redirect(obtener_url_del_detalle_de_prestamo(sancion['id_prestamo']) + '#devolucion')
         return redirect(url_for('sanciones.consultar_sanciones', q=request.form.get('q', '')))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    @recuperar_formulario(lambda self: self.consultar_sanciones())
+    @recuperar_formulario_tras_error(lambda self: self.consultar_sanciones())
     def guardar_configuracion_sanciones(self):
         self.servicio.guardar_configuracion_sanciones(
             request.form, request.form.get('version'), g.usuario.id_usuario
@@ -91,37 +91,37 @@ class ControladorSancion:
         return redirect(url_for('sanciones.consultar_sanciones'))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    @recuperar_formulario(lambda self, identificador: self.consultar_sancion(identificador))
+    @recuperar_formulario_tras_error(lambda self, identificador: self.consultar_sancion(identificador))
     def evaluar_sancion(self, identificador):
         self.servicio.evaluar_sancion(identificador, request.form, g.usuario.id_usuario)
         flash('Evaluación registrada en el historial de la sanción.')
         return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    @recuperar_formulario(lambda self, identificador: self.consultar_sancion(identificador))
+    @recuperar_formulario_tras_error(lambda self, identificador: self.consultar_sancion(identificador))
     def regularizar_sancion(self, identificador):
         self.servicio.regularizar_sancion(identificador, request.form, g.usuario.id_usuario)
         flash('Regularización aceptada.')
         return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    def registrar_sancion_por_detalle_prestamo(self, prestamo_id, detalle_id):
-        identificador = self.servicio.registrar_sancion_por_detalle_prestamo(
+    def aplicar_sancion_a_bien_prestado(self, prestamo_id, detalle_id):
+        identificador = self.servicio.aplicar_sancion_a_bien_prestado(
             prestamo_id, detalle_id, request.form, g.usuario.id_usuario,
         )
         flash('Falta evaluada y sanción registrada.')
         return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))
 
     @requiere_permiso('USUARIOS_GESTIONAR')
-    @recuperar_formulario(lambda self, identificador: self.consultar_sancion(identificador))
+    @recuperar_formulario_tras_error(lambda self, identificador: self.consultar_sancion(identificador))
     def anular_sancion(self, identificador):
         self.servicio.anular_sancion(identificador, request.form.get('motivo'), g.usuario.id_usuario)
         flash('Sanción anulada. El préstamo conserva sus pendientes de devolución o regularización.')
         return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))
 
     @requiere_permiso('USUARIOS_GESTIONAR')
-    @recuperar_formulario(lambda self, identificador: self.consultar_sancion(identificador))
-    def registrar_original_recuperado(self, identificador):
-        self.servicio.registrar_original_recuperado(identificador, request.form.get('motivo'), g.usuario.id_usuario)
+    @recuperar_formulario_tras_error(lambda self, identificador: self.consultar_sancion(identificador))
+    def registrar_recuperacion_del_bien_original(self, identificador):
+        self.servicio.registrar_recuperacion_del_bien_original(identificador, request.form.get('motivo'), g.usuario.id_usuario)
         flash('Original recuperado y enviado a revisión. El bien de reposición se conserva.')
         return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))

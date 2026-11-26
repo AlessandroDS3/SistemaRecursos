@@ -1,58 +1,60 @@
 """Registro y cierre de sanciones en una transacción iniciada por el caso de uso."""
 
 from dominio.gestion_control.contratos_control import IOperacionesSancion
-from dominio.gestion_control.incidencia import hay_retraso
+from dominio.gestion_control.incidencia import TipoIncidencia
 from dominio.gestion_control.sancion import (
-    ConfiguracionSanciones,
-    cambios_por_evaluacion,
-    puede_cumplirse,
-    validar_contexto_evaluacion,
-    validar_evaluacion,
+    ConfiguracionSanciones, EstadoSancion, FaltaAutomatica,
+    calcular_cambios_de_sancion,
+    evaluar_danio_nuevo,
+    determinar_falta_por_retraso,
+    puede_marcarse_sancion_cumplida,
+    determinar_regularizacion_por_devolucion,
+    validar_falta_en_bien_prestado,
+    validar_gravedad_y_motivo_de_sancion,
 )
 
 
-def _crear_sancion(op: IOperacionesSancion, detalle, tipo, gravedad, motivo, inicio, documento=None):
-    config = ConfiguracionSanciones.desde_datos(op.consultar_configuracion() or {})
+def _crear_sancion_vinculada_a_incidencia(op: IOperacionesSancion, detalle, tipo, gravedad, motivo, inicio, documento=None):
+    config = ConfiguracionSanciones.desde_datos(op.consultar_configuracion_sanciones() or {})
     anterior = op.consultar_incidencia_sin_sancion(detalle['id_detalle'], tipo)
     incidencia = anterior['id_incidencia'] if anterior else op.registrar_incidencia(
         detalle['id_detalle'], tipo, motivo, inicio,
     )
     datos = dict(
         id_incidencia_ref=incidencia, motivo=motivo, descripcion=motivo, fecha=inicio,
-        estado='ACTIVA', fecha_revision=config.fecha_revision_perdida(inicio),
-        **config.datos(), **config.medida(gravedad, inicio),
+        estado=EstadoSancion.ACTIVA, fecha_revision=config.calcular_fecha_revision_por_perdida(inicio),
+        **config.como_diccionario(), **config.calcular_periodo_por_gravedad(gravedad, inicio),
     )
     identificador = op.registrar_sancion(datos)
     op.registrar_historial_estado(
-        'SANCION', identificador, None, 'ACTIVA', documento,
+        'SANCION', identificador, None, EstadoSancion.ACTIVA, documento,
         f'Aplicación de sanción {gravedad}: {motivo}'[:255],
     )
     return op.consultar_sancion(identificador, bloquear=True)
 
 
 def registrar_sancion_por_retraso(op: IOperacionesSancion, detalle, ahora):
-    if detalle.get('fecha_regularizacion') or not hay_retraso(detalle, ahora):
+    falta = determinar_falta_por_retraso(detalle, ahora)
+    if falta is None or op.consultar_sancion_por_detalle_prestamo(detalle['id_detalle']):
         return False
-    if op.consultar_sancion_detalle(detalle['id_detalle']):
-        return False
-    _crear_sancion(
-        op, detalle, 'RETRASO', 'LEVE', 'Devolución fuera de plazo', detalle['fecha_limite_devolucion'],
+    _crear_sancion_vinculada_a_incidencia(
+        op, detalle, falta.causa, falta.gravedad, falta.motivo, falta.inicio,
     )
     return True
 
 
-def registrar_falta(op: IOperacionesSancion, detalle, causa, gravedad, motivo, cuenta, ahora, *, politica=None):
-    actual = op.consultar_sancion_detalle(detalle['id_detalle'])
-    if actual and actual['estado'] == 'ANULADA' and actual['tipo'] != causa:
+def aplicar_o_reevaluar_sancion(op: IOperacionesSancion, detalle, causa, gravedad, motivo, cuenta, ahora, *, politica=None):
+    actual = op.consultar_sancion_por_detalle_prestamo(detalle['id_detalle'])
+    if actual and actual['estado'] == EstadoSancion.ANULADA and actual['tipo'] != causa:
         actual = None
-    nota = validar_evaluacion(actual, gravedad, causa, motivo, cuenta)
-    validar_contexto_evaluacion(detalle, causa, actual, politica)
+    nota = validar_gravedad_y_motivo_de_sancion(actual, gravedad, causa, motivo, cuenta)
+    validar_falta_en_bien_prestado(detalle, causa, actual, politica)
     documento = cuenta['dni_persona']
     if actual is None:
-        actual = _crear_sancion(op, detalle, causa, gravedad, nota, ahora, documento)
+        actual = _crear_sancion_vinculada_a_incidencia(op, detalle, causa, gravedad, nota, ahora, documento)
         op.actualizar_incidencia(actual['id_incidencia_ref'], dict(dni_registrador=documento))
     else:
-        cambios = cambios_por_evaluacion(actual, gravedad, causa, nota, ahora)
+        cambios = calcular_cambios_de_sancion(actual, gravedad, causa, nota, ahora)
         op.actualizar_sancion(actual['id_sancion'], cambios)
         op.actualizar_incidencia(actual['id_incidencia_ref'], dict(
             tipo=causa, descripcion=nota, estado='EN_REVISION', dni_registrador=documento,
@@ -62,11 +64,11 @@ def registrar_falta(op: IOperacionesSancion, detalle, causa, gravedad, motivo, c
         )
         actual = op.consultar_sancion(actual['id_sancion'], bloquear=True)
     if causa in ('CUSTODIA', 'SALIDA_NO_AUTORIZADA') and detalle.get('condicion_devolucion') == 'BUENO':
-        aceptar_regularizacion(op, actual, 'VERIFICACION', nota, documento, ahora)
+        registrar_regularizacion_sancion(op, actual, 'VERIFICACION', nota, documento, ahora)
     return actual
 
 
-def cerrar_sancion(op: IOperacionesSancion, sancion, estado, nota, documento, ahora):
+def registrar_cierre_sancion(op: IOperacionesSancion, sancion, estado: EstadoSancion, nota, documento, ahora):
     op.actualizar_sancion(sancion['id_sancion'], dict(
         estado=estado, fecha_levantamiento=ahora, dni_levantamiento=documento,
         justificacion_levantamiento=nota,
@@ -75,12 +77,12 @@ def cerrar_sancion(op: IOperacionesSancion, sancion, estado, nota, documento, ah
     op.registrar_historial_estado('SANCION', sancion['id_sancion'], sancion['estado'], estado, documento, nota)
 
 
-def cumplir_sancion(op: IOperacionesSancion, sancion, ahora):
-    if puede_cumplirse(sancion, ahora):
-        cerrar_sancion(op, sancion, 'CUMPLIDA', 'Plazo cumplido y regularización aceptada.', None, ahora)
+def marcar_sancion_cumplida_si_corresponde(op: IOperacionesSancion, sancion, ahora):
+    if puede_marcarse_sancion_cumplida(sancion, ahora):
+        registrar_cierre_sancion(op, sancion, EstadoSancion.CUMPLIDA, 'Plazo cumplido y regularización aceptada.', None, ahora)
 
 
-def aceptar_regularizacion(op: IOperacionesSancion, sancion, tipo, nota, documento, ahora, reposicion=None):
+def registrar_regularizacion_sancion(op: IOperacionesSancion, sancion, tipo, nota, documento, ahora, reposicion=None):
     cambios = dict(
         fecha_regularizacion=ahora, tipo_regularizacion=tipo, observacion_regularizacion=nota,
         dni_regularizacion=documento, id_bien_reposicion=reposicion,
@@ -91,28 +93,30 @@ def aceptar_regularizacion(op: IOperacionesSancion, sancion, tipo, nota, documen
         documento, f'Regularización {tipo}: {nota}'[:255],
     )
     sancion.update(cambios)
-    cumplir_sancion(op, sancion, ahora)
+    marcar_sancion_cumplida_si_corresponde(op, sancion, ahora)
 
 
-def regularizar_devolucion(op: IOperacionesSancion, detalle, condicion, documento, ahora):
-    sancion = op.consultar_sancion_detalle(detalle['id_detalle'])
-    if (sancion and sancion['estado'] == 'ACTIVA' and not sancion['fecha_regularizacion']
-            and condicion == 'BUENO' and sancion['tipo'] in ('RETRASO', 'PERDIDA')):
-        tipo = 'RECUPERACION' if sancion['tipo'] == 'PERDIDA' else 'DEVOLUCION'
-        aceptar_regularizacion(op, sancion, tipo, 'Recepción física en buen estado.', documento, ahora)
-
-
-def registrar_danio_devolucion(op: IOperacionesSancion, detalle, observacion, cuenta, ahora):
-    actual = op.consultar_sancion_detalle(detalle['id_detalle'])
-    if actual and actual['estado'] == 'ANULADA' and actual['tipo'] == 'DANIO':
+def regularizar_sancion_tras_devolucion(op: IOperacionesSancion, detalle, condicion, documento, ahora):
+    sancion = op.consultar_sancion_por_detalle_prestamo(detalle['id_detalle'])
+    if sancion is None:
         return
-    if not actual or actual['gravedad'] == 'LEVE' or actual['estado'] == 'ANULADA':
-        registrar_falta(op, detalle, 'DANIO', 'GRAVE', observacion, cuenta, ahora)
+    tipo = determinar_regularizacion_por_devolucion(sancion, condicion)
+    if tipo is not None:
+        registrar_regularizacion_sancion(op, sancion, tipo, 'Recepción física en buen estado.', documento, ahora)
+
+
+def registrar_sancion_por_danio_en_devolucion(op: IOperacionesSancion, detalle, observacion, cuenta, ahora):
+    actual = op.consultar_sancion_por_detalle_prestamo(detalle['id_detalle'])
+    decision = evaluar_danio_nuevo(actual, observacion, ahora)
+    if isinstance(decision, FaltaAutomatica):
+        aplicar_o_reevaluar_sancion(op, detalle, decision.causa, decision.gravedad, decision.motivo, cuenta, decision.inicio)
+        return
+    if decision is None or actual is None:
         return
     # La recepción del bien conserva la gravedad y el plazo de la sanción.
     documento = cuenta['dni_persona']
     op.actualizar_incidencia(actual['id_incidencia_ref'], dict(
-        tipo='DANIO', estado='EN_REVISION', descripcion=observacion, dni_registrador=documento,
+        tipo=TipoIncidencia.DANIO, estado='EN_REVISION', descripcion=observacion, dni_registrador=documento,
     ))
     op.actualizar_sancion(actual['id_sancion'], dict(
         motivo=observacion, descripcion=observacion, fecha_regularizacion=None,

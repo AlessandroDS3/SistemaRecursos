@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf,campo,opciones %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf,campo_de_formulario,selector_de_opciones %}
 {% block contenido %}
   {% if modo == 'codigo' %}
     <h1>{{ 'Acceso restablecido' if restablecida else 'Cuenta creada' }}</h1>
@@ -24,16 +24,16 @@
       {{ documento }}
     </p>
     <form method="post" class="formulario panel estrecho">
-      {{ csrf() }}
+      {{ campo_oculto_csrf() }}
       {% if not nueva %}<input type="hidden" name="version" value="{{ valor_formulario('version', cuenta.version) }}">{% endif %}
-      {{ campo('nombre_usuario','Nombre de usuario',cuenta.nombre_usuario,requerido=true,maximo=50) }}
+      {{ campo_de_formulario('nombre_usuario','Nombre de usuario',cuenta.nombre_usuario,requerido=true,maximo=50) }}
       {% if nueva %}
         <p class="suave">{{ 'Escribe un nombre de usuario para esta persona.' if cuenta.requiere_nombre else 'Puedes editar el nombre sugerido por correo institucional o CUI.' }}</p>
       {% endif %}
       {% if not nueva %}
-        {{ opciones('estado_cuenta','Estado',estados,cuenta.estado_cuenta) }}
-        {% if g.usuario.permite('ROLES_GESTIONAR') %}
-          {{ opciones('rol', 'Rol de la cuenta', roles, cuenta.rol) }}
+        {{ selector_de_opciones('estado_cuenta','Estado',estados,cuenta.estado_cuenta) }}
+        {% if g.usuario.tiene_permiso('ROLES_GESTIONAR') %}
+          {{ selector_de_opciones('rol', 'Rol de la cuenta', roles, cuenta.rol) }}
         {% else %}
           <p>Rol: {{ cuenta.rol|replace('_', ' ')|capitalize }}</p>
         {% endif %}
@@ -47,9 +47,9 @@
       <details class="panel estrecho" {% if request.endpoint == 'cuentas.restablecer_clave' %}open{% endif %}>
         <summary>Restablecer acceso</summary>
         <form method="post" class="formulario" action="{{ url_for('cuentas.restablecer_clave', documento=documento) }}">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <input type="hidden" name="version" value="{{ cuenta.version }}">
-          {{ campo('motivo', 'Motivo del restablecimiento', requerido=true, maximo=255) }}
+          {{ campo_de_formulario('motivo', 'Motivo del restablecimiento', requerido=true, maximo=255) }}
           <p>Se cerrarán las sesiones de esta cuenta y se generará un código de activación.</p>
           <button class="secundario">Generar código de activación</button>
         </form>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% from 'control/parciales/formularios_sancion.html' import evaluacion_sancion with context %}
-{% from 'parciales/formularios.html' import csrf,campo,opciones,historial %}
-{% from 'parciales/componentes.html' import estado %}
+{% from 'control/parciales/formularios_sancion.html' import formulario_de_evaluacion_de_sancion with context %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf,campo_de_formulario,selector_de_opciones,tabla_de_historial %}
+{% from 'parciales/componentes.html' import insignia_de_estado %}
 {% block scripts %}
   {% if modo == 'formulario' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='prestamo.css') }}">
@@ -12,11 +12,11 @@
   {% if modo=="lista" %}
     <div class="cabecera">
       <h1>{{ 'Préstamos' if gestionar else 'Mis préstamos' }}</h1>
-      {% if g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR') %}
+      {% if g.usuario.tiene_permiso('PRESTAMOS_PROPIOS_CONSULTAR') %}
         <a class="boton secundario" href="{{ url_for('reportes.consultar_historial_propio') }}">Mi historial completo</a>
       {% endif %}
       {% if gestionar %}
-        <a class="boton secundario" href="{{ url_for('ampliaciones.consultar_solicitudes') }}">Solicitudes de ampliación</a>
+        <a class="boton secundario" href="{{ url_for('ampliaciones.consultar_solicitudes_ampliacion') }}">Solicitudes de ampliación</a>
         <a class="boton" href="{{ url_for('prestamos.registrar_prestamo',volver=volver) }}">+ Nuevo préstamo</a>
       {% endif %}
     </div>
@@ -24,11 +24,11 @@
       <details class="panel" {% if g.error_formulario and request.endpoint == 'prestamos.autorizar_operacion_propia' %}open{% endif %}>
         <summary>Autorizar entrega o devolución propia</summary>
         <form method="post" class="formulario" action="{{ url_for('prestamos.autorizar_operacion_propia') }}">
-          {{ csrf() }}
-          {{ campo('dni_operador','DNI del encargado o administrador',requerido=true,maximo=8) }}
+          {{ campo_oculto_csrf() }}
+          {{ campo_de_formulario('dni_operador','DNI del encargado o administrador',requerido=true,maximo=8) }}
           <label>Operación<select name="accion" required><option value="ENTREGA">Entrega</option><option value="DEVOLUCION">Devolución</option></select></label>
-          {{ campo('id_prestamo','Número de préstamo (para devolución)',tipo='number') }}
-          {{ campo('motivo','Motivo y bienes autorizados',requerido=true,maximo=255) }}
+          {{ campo_de_formulario('id_prestamo','Número de préstamo (para devolución)',tipo='number') }}
+          {{ campo_de_formulario('motivo','Motivo y bienes autorizados',requerido=true,maximo=255) }}
           <button>Emitir autorización</button>
         </form>
       </details>
@@ -87,7 +87,7 @@
                 </td>
                 <td>{{ p.fecha_entrega|fecha }}</td>
                 <td>{{ p.fecha_limite|fecha }}</td>
-                <td>{{ estado(p.estado_actual) }}</td>
+                <td>{{ insignia_de_estado(p.estado_actual) }}</td>
                 <td>{{ p.devueltos }} / {{ p.total_bienes }}</td>
                 <td>
                   <a class="boton secundario"
@@ -110,7 +110,7 @@
         <p>Deja constancia de los préstamos que ya vencieron.</p>
         <form method="post"
               action="{{ url_for('prestamos.actualizar_estados_prestamos_vencidos') }}">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <input type="hidden" name="volver" value="{{ volver }}">
           <button class="secundario">Registrar vencimientos</button>
         </form>
@@ -313,7 +313,7 @@
             <input type="checkbox" name="acepta_condiciones" value="1" required>
             He comunicado el plazo y el permiso de salida al solicitante.
           </label>
-          {{ campo('autorizacion','N.º de autorización (si participas en este préstamo)',tipo='number') }}
+          {{ campo_de_formulario('autorizacion','N.º de autorización (si participas en este préstamo)',tipo='number') }}
           <button class="boton-principal" id="confirmar-prestamo" disabled>
             Registrar préstamo
           </button>
@@ -333,7 +333,7 @@
         <a href="{{ cancelar_url }}">
           Volver a préstamos
         </a>
-        {% if g.usuario.permite("POLITICAS_GESTIONAR") %}
+        {% if g.usuario.tiene_permiso("POLITICAS_GESTIONAR") %}
           ·
           <a href="{{ url_for('politicas.consultar_politicas_prestamo') }}">
             Configurar políticas
@@ -346,7 +346,7 @@
     <p class="etiqueta">{{ prestamo.tipo_prestamo|capitalize }}</p>
     <div class="cabecera">
       <h1>Préstamo #{{ prestamo.id_prestamo }}</h1>
-      {{ estado(prestamo.estado_actual) }}
+      {{ insignia_de_estado(prestamo.estado_actual) }}
     </div>
     <section class="panel">
       <div class="ficha-resumen">
@@ -388,7 +388,7 @@
       {% if gestionar %}
         <form method="post"
               action="{{ url_for('prestamos.registrar_devolucion',identificador=prestamo.id_prestamo) }}">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <input type="hidden" name="volver" value="{{ volver }}">
       {% endif %}
         <div class="tabla tabla-teclado" tabindex="0" role="region" aria-labelledby="titulo-devolucion">
@@ -424,27 +424,27 @@
                     <small>{{ d.recurso }}</small>
                   </td>
                   <td>{{ d.fecha_limite_devolucion|fecha }}</td>
-                  <td>{{ estado('REGULARIZADO' if d.fecha_regularizacion else 'DEVUELTO' if d.fecha_devolucion else d.estado_bien) }}{% if d.fecha_regularizacion %}
+                  <td>{{ insignia_de_estado('REGULARIZADO' if d.fecha_regularizacion else 'DEVUELTO' if d.fecha_devolucion else d.estado_bien) }}{% if d.fecha_regularizacion %}
                     <small>Reposición aceptada: {{ d.fecha_regularizacion|fecha }}. El original no fue devuelto.</small>
                   {% elif d.fecha_devolucion %}
                     <small>{{ d.fecha_devolucion|fecha }}</small>
               {% endif %}
             </td>
             <td>
-              {% if d.estado_sancion %}{{ estado(d.gravedad) }} {{ estado(d.estado_sancion) }}{% if gestionar %}
+              {% if d.estado_sancion %}{{ insignia_de_estado(d.gravedad) }} {{ insignia_de_estado(d.estado_sancion) }}{% if gestionar %}
                 <a href="{{ url_for('sanciones.consultar_sancion', identificador=d.id_sancion, volver=volver) }}">Gestionar sanción</a>
               {% endif %}{% else %}Sin sanción{% endif %}
             </td>
             <td>
               {% if gestionar and not d.fecha_devolucion and not d.fecha_regularizacion %}
-                {{ opciones('condicion_'~d.id_detalle,'Condición',('BUENO','DANADO')) }}
-                {{ campo('codigo_recibido_'~d.id_detalle,'Código del bien recibido',maximo=40) }}
+                {{ selector_de_opciones('condicion_'~d.id_detalle,'Condición',('BUENO','DANADO')) }}
+                {{ campo_de_formulario('codigo_recibido_'~d.id_detalle,'Código del bien recibido',maximo=40) }}
                 <small id="aviso-danio-{{ d.id_detalle }}" class="aviso-condicion" data-aviso-danio role="status" hidden></small>
-              {% elif d.condicion_devolucion %}{{ estado(d.condicion_devolucion) }}
+              {% elif d.condicion_devolucion %}{{ insignia_de_estado(d.condicion_devolucion) }}
               {% else %}{{ 'Repuesto' if d.fecha_regularizacion else 'Pendiente' }}{% endif %}
             </td>
             <td>
-              {% if gestionar and not d.fecha_devolucion and not d.fecha_regularizacion %}{{ campo('observacion_'~d.id_detalle,'Observación') }}{% else %}{{ d.observaciones_devolucion or '—' }}{% endif %}
+              {% if gestionar and not d.fecha_devolucion and not d.fecha_regularizacion %}{{ campo_de_formulario('observacion_'~d.id_detalle,'Observación') }}{% else %}{{ d.observaciones_devolucion or '—' }}{% endif %}
             </td>
           </tr>
   {% endfor %}
@@ -454,7 +454,7 @@
   {% if gestionar %}
     {% if hay_devolucion_pendiente and prestamo.estado_actual not in ('DEVUELTO', 'REGULARIZADO') %}
       {% if g.usuario.dni == prestamo.dni_persona or prestamo.participantes|selectattr('dni_persona','equalto',g.usuario.dni)|list %}
-        {{ campo('autorizacion','Número de autorización de otro administrador',tipo='number',requerido=true) }}
+        {{ campo_de_formulario('autorizacion','Número de autorización de otro administrador',tipo='number',requerido=true) }}
       {% endif %}
       <div class="acciones al-final">
         <button>Registrar devolución</button>
@@ -466,9 +466,9 @@
         <summary>Registrar un bien distinto o una discrepancia</summary>
         {% for d in hay_devolucion_pendiente %}
           <form method="post" class="formulario operacion-bien" action="{{ url_for('prestamos.registrar_discrepancia_devolucion', identificador=prestamo.id_prestamo, detalle_id=d.id_detalle) }}">
-            {{ csrf() }}
+            {{ campo_oculto_csrf() }}
             <strong>{{ d.codigo_inventario }} · {{ d.recurso }}</strong>
-            {{ campo('motivo','Código, serie o diferencia observada',requerido=true,maximo=200) }}
+            {{ campo_de_formulario('motivo','Código, serie o diferencia observada',requerido=true,maximo=200) }}
             <button class="secundario">Registrar discrepancia</button>
           </form>
         {% endfor %}
@@ -480,9 +480,9 @@
           <p>Verifica qué ocurrió y que el bien no haya tenido movimientos posteriores.</p>
           {% for d in prestamo.detalles if d.fecha_devolucion %}
             <form method="post" class="formulario operacion-bien" action="{{ url_for('prestamos.rectificar_devolucion', identificador=prestamo.id_prestamo, detalle_id=d.id_detalle) }}">
-              {{ csrf() }}
+              {{ campo_oculto_csrf() }}
               <strong>{{ d.codigo_inventario }} · {{ d.fecha_devolucion|fecha }}</strong>
-              {{ campo('motivo','Motivo de rectificación',requerido=true,maximo=255) }}
+              {{ campo_de_formulario('motivo','Motivo de rectificación',requerido=true,maximo=255) }}
               <button class="secundario">Rectificar devolución</button>
             </form>
           {% endfor %}
@@ -502,15 +502,15 @@
               id="{{ formulario_solicitud }}"
               action="{{ url_for('ampliaciones.solicitar_ampliacion',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
               class="formulario operacion-bien">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <input type="hidden" name="_formulario" value="{{ formulario_solicitud }}">
           <input type="hidden" name="volver" value="{{ volver }}">
           <strong>{{ d.codigo_inventario }} · {{ d.recurso }}</strong>
           <small>Vence: {{ d.fecha_limite_devolucion|fecha }}</small>
           <div class="rejilla filtros-tres">
-            {{ campo('cantidad','Tiempo adicional',tipo='number',requerido=true,formulario=formulario_solicitud) }}
-            {{ opciones('unidad','Unidad',('HORAS','DIAS'),d.unidad_plazo,formulario=formulario_solicitud) }}
-            {{ campo('motivo','Motivo',requerido=true,formulario=formulario_solicitud) }}
+            {{ campo_de_formulario('cantidad','Tiempo adicional',tipo='number',requerido=true,formulario=formulario_solicitud) }}
+            {{ selector_de_opciones('unidad','Unidad',('HORAS','DIAS'),d.unidad_plazo,formulario=formulario_solicitud) }}
+            {{ campo_de_formulario('motivo','Motivo',requerido=true,formulario=formulario_solicitud) }}
           </div>
           <button class="secundario">Enviar solicitud</button>
         </form>
@@ -532,16 +532,16 @@
               <tr>
                 <td>{{ s.codigo_inventario }}<small>{{ s.fecha_solicitud|fecha }}</small></td>
                 <td>+{{ s.cantidad }} {{ 'horas' if s.unidad == 'HORAS' else 'días' }}<small>{{ s.motivo }}</small></td>
-                <td>{{ estado(s.estado) }}</td>
+                <td>{{ insignia_de_estado(s.estado) }}</td>
                 <td>
                   {% if s.estado == 'PENDIENTE' and gestionar %}
-                    <form method="post" class="formulario" action="{{ url_for('ampliaciones.aprobar_solicitud', identificador=s.id_solicitud) }}">
-                      {{ csrf() }}
+                    <form method="post" class="formulario" action="{{ url_for('ampliaciones.aprobar_solicitud_ampliacion', identificador=s.id_solicitud) }}">
+                      {{ campo_oculto_csrf() }}
                       <input type="hidden" name="volver" value="{{ request.path }}">
                       <button>Aprobar</button>
                     </form>
-                    <form method="post" class="formulario operacion-bien" action="{{ url_for('ampliaciones.rechazar_solicitud', identificador=s.id_solicitud) }}">
-                      {{ csrf() }}
+                    <form method="post" class="formulario operacion-bien" action="{{ url_for('ampliaciones.rechazar_solicitud_ampliacion', identificador=s.id_solicitud) }}">
+                      {{ campo_oculto_csrf() }}
                       <input type="hidden" name="volver" value="{{ request.path }}">
                       <label>Motivo del rechazo<input name="observacion" maxlength="255" required></label>
                       <button class="secundario">Rechazar</button>
@@ -569,9 +569,9 @@
         <form method="post"
               id="{{ formulario_ampliacion }}"
               action="{{ url_for('ampliaciones.ampliar_prestamo',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
-              data-ampliacion-previa="{{ url_for('ampliaciones.consultar_ampliacion_prestamo',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
+              data-ampliacion-previa="{{ url_for('ampliaciones.previsualizar_ampliacion_prestamo',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
               class="formulario operacion-bien">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <input type="hidden" name="_formulario" value="{{ formulario_ampliacion }}">
           <input type="hidden" name="volver" value="{{ volver }}">
           <strong>{{ d.codigo_inventario }} · {{ d.recurso }}</strong>
@@ -579,9 +579,9 @@
                  name="fecha_actual"
                  value="{{ d.fecha_limite_devolucion.isoformat() }}">
           <div class="rejilla filtros-tres">
-            {{ campo('cantidad','Tiempo adicional',tipo='number',requerido=true,formulario=formulario_ampliacion) }}
-            {{ opciones('unidad','Unidad',('HORAS','DIAS'),d.unidad_plazo,formulario=formulario_ampliacion) }}
-            {{ campo('motivo','Motivo de ampliación',maximo=120,formulario=formulario_ampliacion) }}
+            {{ campo_de_formulario('cantidad','Tiempo adicional',tipo='number',requerido=true,formulario=formulario_ampliacion) }}
+            {{ selector_de_opciones('unidad','Unidad',('HORAS','DIAS'),d.unidad_plazo,formulario=formulario_ampliacion) }}
+            {{ campo_de_formulario('motivo','Motivo de ampliación',maximo=120,formulario=formulario_ampliacion) }}
           </div>
           <p class="suave" data-resultado-ampliacion role="status" aria-live="polite">Indica el tiempo adicional para ver la nueva fecha de devolución.</p>
           <button class="secundario">Ampliar plazo</button>
@@ -598,13 +598,13 @@
               id="{{ formulario_perdida }}"
               action="{{ url_for('prestamos.registrar_perdida_bien_material',identificador=prestamo.id_prestamo,detalle_id=d.id_detalle) }}"
               class="formulario operacion-bien">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <input type="hidden" name="_formulario" value="{{ formulario_perdida }}">
           <input type="hidden" name="volver" value="{{ volver }}">
           <strong>{{ d.codigo_inventario }} · {{ d.recurso }}
-          </strong>{{ campo('motivo','Descripción de la pérdida',requerido=true,formulario=formulario_perdida) }}
+          </strong>{{ campo_de_formulario('motivo','Descripción de la pérdida',requerido=true,formulario=formulario_perdida) }}
           {% if g.usuario.rol == 'ADMINISTRADOR' %}
-            {{ opciones('gravedad', 'Gravedad de la sanción', ('GRAVE', 'MUY_GRAVE'), 'GRAVE', formulario_perdida) }}
+            {{ selector_de_opciones('gravedad', 'Gravedad de la sanción', ('GRAVE', 'MUY_GRAVE'), 'GRAVE', formulario_perdida) }}
             <p class="suave">El bien quedará pendiente de recuperación o reposición.</p>
           {% else %}
             <p class="suave">Se aplicará una sanción grave. El bien quedará pendiente de recuperación o reposición.</p>
@@ -620,14 +620,14 @@
       {% for d in prestamo.detalles if not d.fecha_regularizacion and not d.id_sancion %}
         <details class="operacion-bien">
           <summary>{{ d.codigo_inventario }} · {{ d.recurso }}</summary>
-          {{ evaluacion_sancion(url_for('sanciones.registrar_sancion_por_detalle_prestamo', prestamo_id=prestamo.id_prestamo, detalle_id=d.id_detalle)) }}
+          {{ formulario_de_evaluacion_de_sancion(url_for('sanciones.aplicar_sancion_a_bien_prestado', prestamo_id=prestamo.id_prestamo, detalle_id=d.id_detalle)) }}
         </details>
       {% else %}<p>Las faltas ya registradas se evalúan desde el enlace Gestionar sanción de cada bien.</p>{% endfor %}
     </details>
   {% endif %}
   <details class="panel">
     <summary>Historial del préstamo ({{ prestamo.historial|length }})</summary>
-    {{ historial(prestamo.historial) }}
+    {{ tabla_de_historial(prestamo.historial) }}
   </details>
   <a href="{{ volver }}">Volver al listado</a>
 {% endif %}

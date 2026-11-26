@@ -1,7 +1,7 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 from dominio.gestion_recursos.bien_material import ESTADOS_BIEN
 from presentacion.seguridad import requiere_permiso
-from presentacion.formularios import recuperar_formulario
+from presentacion.formularios import recuperar_formulario_tras_error
 
 
 class ControladorRecurso:
@@ -30,7 +30,8 @@ class ControladorRecurso:
                 ['GET', 'POST'],
             ),
             ('/<int:identificador>/eliminar', 'eliminar_recurso', self.eliminar_recurso, ['POST']),
-            ('/categorias', 'gestionar_categorias', self.gestionar_categorias, ['GET', 'POST']),
+            ('/categorias', 'consultar_categorias', self.consultar_categorias, ['GET']),
+            ('/categorias', 'guardar_categoria', self.guardar_categoria, ['POST']),
             (
                 '/categorias/<int:identificador>/eliminar',
                 'eliminar_categoria',
@@ -82,7 +83,7 @@ class ControladorRecurso:
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    @recuperar_formulario(lambda self: self._mostrar_formulario_recurso())
+    @recuperar_formulario_tras_error(lambda self: self._mostrar_formulario_recurso())
     def registrar_recurso(self):
         if request.method == 'POST':
             id_recurso_guardado = self.servicio.registrar_recurso(
@@ -93,7 +94,7 @@ class ControladorRecurso:
         return self._mostrar_formulario_recurso()
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    @recuperar_formulario(
+    @recuperar_formulario_tras_error(
         lambda self, identificador: self._mostrar_formulario_recurso(identificador)
     )
     def editar_recurso(self, identificador):
@@ -135,27 +136,31 @@ class ControladorRecurso:
         return redirect(url_for('recursos.consultar_recursos'))
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    @recuperar_formulario(lambda self: self._mostrar_categorias())
-    def gestionar_categorias(self):
-        if request.method == 'POST':
-            self.servicio.guardar_categoria(
-                request.form.to_dict(),
-                g.usuario.id_usuario,
-                request.form.get('id_categoria') or None,
-            )
-            flash('Categoría guardada.')
-            if request.form.get('volver') == 'administracion':
-                return redirect(
-                    url_for(
-                        'recursos.consultar_administracion_recursos',
-                        vista='categorias',
-                        _anchor='categorias',
-                    )
-                )
-            return redirect(url_for('recursos.gestionar_categorias'))
-        return self._mostrar_categorias()
+    def consultar_categorias(self):
+        return self._mostrar_listado_de_categorias()
 
-    def _mostrar_categorias(self):
+    @requiere_permiso('RECURSOS_GESTIONAR')
+    @recuperar_formulario_tras_error(lambda self: self._mostrar_listado_de_categorias())
+    def guardar_categoria(self):
+        datos = request.form.to_dict()
+        identificador = datos.get('id_categoria')
+        actor = g.usuario.id_usuario
+        if identificador:
+            self.servicio.actualizar_categoria(identificador, datos, actor)
+        else:
+            self.servicio.registrar_categoria(datos, actor)
+        flash('Categoría guardada.')
+        if request.form.get('volver') == 'administracion':
+            return redirect(
+                url_for(
+                    'recursos.consultar_administracion_recursos',
+                    vista='categorias',
+                    _anchor='categorias',
+                )
+            )
+        return redirect(url_for('recursos.consultar_categorias'))
+
+    def _mostrar_listado_de_categorias(self):
         if request.form.get('volver') == 'administracion':
             return render_template(
                 'recursos/vista_administracion_recursos.html',
@@ -178,4 +183,4 @@ class ControladorRecurso:
                     _anchor='categorias',
                 )
             )
-        return redirect(url_for('recursos.gestionar_categorias'))
+        return redirect(url_for('recursos.consultar_categorias'))

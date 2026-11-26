@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf %}
 {% block titulo %}Iniciar sesión · UNSA{% endblock %}
 {% block contenido %}
   <section class="presentacion-acceso" aria-label="Sistema de préstamos UNSA">
@@ -38,7 +38,7 @@
       <form method="post"
             action="{{ url_for('auth.iniciar_sesion') }}"
             class="formulario">
-        {{ csrf() }}
+        {{ campo_oculto_csrf() }}
         <label>
           Usuario
           <input id="usuario"

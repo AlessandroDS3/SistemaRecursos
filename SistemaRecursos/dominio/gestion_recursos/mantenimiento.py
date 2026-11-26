@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from dominio.compartido.validacion import LIMA, Conflicto, texto
+from dominio.compartido.validacion import LIMA, Conflicto, validar_texto
 
 TIPOS_MANTENIMIENTO = ('PREVENTIVO', 'CORRECTIVO')
 RESULTADOS_MANTENIMIENTO = ('DISPONIBLE', 'DANADO')
@@ -21,7 +21,7 @@ class AperturaMantenimiento:
     def __post_init__(self):
         if self.tipo not in TIPOS_MANTENIMIENTO:
             raise ValueError('Selecciona si el mantenimiento es preventivo o correctivo.')
-        self.motivo = texto(self.motivo, 'Motivo del mantenimiento', 255, True)
+        self.motivo = validar_texto(self.motivo, 'Motivo del mantenimiento', 255, True)
         if self.fecha_fin_estimada in ('', None):
             self.fecha_fin_estimada = None
             return
@@ -42,10 +42,10 @@ class CierreMantenimiento:
     def __post_init__(self):
         if self.resultado not in RESULTADOS_MANTENIMIENTO:
             raise ValueError('Indica si el bien queda disponible o sigue dañado.')
-        self.observacion = texto(self.observacion, 'Observación de cierre', 255, True)
+        self.observacion = validar_texto(self.observacion, 'Observación de cierre', 255, True)
 
 
-def validar_apertura(estado_bien: str, abierto, prestamo_pendiente) -> None:
+def validar_apertura_mantenimiento(estado_bien: str, abierto, prestamo_pendiente) -> None:
     if abierto:
         raise Conflicto('El bien ya tiene un mantenimiento abierto.')
     if prestamo_pendiente:

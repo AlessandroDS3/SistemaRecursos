@@ -16,7 +16,7 @@ class NoEncontrado(LookupError):
     """No existe el registro solicitado."""
 
 
-def texto(valor, nombre, maximo, obligatorio=False):
+def validar_texto(valor, nombre, maximo, obligatorio=False):
     valor = '' if valor is None else valor
     if not isinstance(valor, str):
         raise ValueError(f'{nombre}: debe ser texto.')
@@ -28,7 +28,7 @@ def texto(valor, nombre, maximo, obligatorio=False):
     return valor
 
 
-def entero(valor, nombre='Identificador', minimo=1, maximo=2147483647):
+def validar_entero(valor, nombre='Identificador', minimo=1, maximo=2147483647):
     try:
         numero = int(valor)
         if (
@@ -41,14 +41,14 @@ def entero(valor, nombre='Identificador', minimo=1, maximo=2147483647):
     except (ValueError, TypeError, OverflowError):
         raise ValueError(f'{nombre}: introduce un entero entre {minimo} y {maximo}.') from None
 
-def dni(valor):
+def validar_dni(valor):
     if not isinstance(valor, str) or not re.fullmatch(r'\d{8}', valor.strip(), flags=re.ASCII):
         raise ValueError('El DNI debe tener ocho dígitos.')
     return valor.strip()
 
 
 
-def instante(valor):
+def normalizar_fecha_hora_utc(valor):
     try:
         fecha = valor if isinstance(valor, datetime) else datetime.fromisoformat(valor)
         return fecha.astimezone(timezone.utc).replace(tzinfo=None) if fecha.tzinfo else fecha
@@ -56,7 +56,7 @@ def instante(valor):
         raise ValueError('Introduce una fecha y hora válida.') from None
 
 
-def fecha_local(valor):
+def convertir_fecha_local_de_lima_a_utc(valor):
     try:
         fecha = datetime.fromisoformat(valor)
         if fecha.tzinfo is not None:
@@ -68,21 +68,21 @@ def fecha_local(valor):
         raise ValueError('Indica una fecha y hora local de Lima, sin zona horaria.') from None
 
 
-def ids(valores):
+def validar_lista_de_ids_de_bienes(valores):
     if not isinstance(valores, (list, tuple)) or not 1 <= len(valores) <= 100:
         raise ValueError('Selecciona los bienes.')
-    numeros = [entero(v) for v in valores]
+    numeros = [validar_entero(v) for v in valores]
     if len(set(numeros)) != len(numeros):
         raise ValueError('No repitas el mismo bien.')
     return numeros
 
 
-def version(datos):
+def calcular_version_de_registro(datos):
     return sha256(
         json.dumps(datos, sort_keys=True, ensure_ascii=False, default=str).encode()
     ).hexdigest()
 
 
-def comprobar_version(recibida, actual):
+def exigir_version_vigente(recibida, actual):
     if recibida != actual:
         raise Conflicto('Los datos cambiaron. Recarga el formulario antes de guardar.')

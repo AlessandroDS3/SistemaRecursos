@@ -5,6 +5,8 @@ import json
 import re
 from mysql.connector import IntegrityError
 
+from dominio.compartido.codigos import Codigo
+from dominio.compartido.contratos import FilaHistorialEstado
 from dominio.compartido.validacion import Conflicto
 from dominio.gestion_personas_usuarios.rol import permisos_del_rol
 
@@ -40,20 +42,20 @@ class RepositorioSQL:
                 yield type(self)(self.conexion, cursor)
 
     def consultar_sql(self, sql, parametros=(), una=False):
-        def leer(cursor):
-            cursor.execute(sql, parametros)
+        def leer_resultados_con_cursor(cursor):
+            cursor.execute(sql, tuple(p.value if isinstance(p, Codigo) else p for p in parametros))
             return cursor.fetchone() if una else cursor.fetchall()
 
         if self._cursor is not None:
-            return leer(self._cursor)
+            return leer_resultados_con_cursor(self._cursor)
         with self.conexion.sesion() as cursor:
-            return leer(cursor)
+            return leer_resultados_con_cursor(cursor)
 
-    def ejecutar(self, sql, parametros=()):
+    def ejecutar_escritura_sql(self, sql, parametros=()):
         if self._cursor is None:
             raise RuntimeError('Una escritura requiere una transacción del servicio.')
         try:
-            self._cursor.execute(sql, parametros)
+            self._cursor.execute(sql, tuple(p.value if isinstance(p, Codigo) else p for p in parametros))
         except IntegrityError as error:
             # MySQL identifica el índice al final del error; no mostramos valores ni SQL.
             indice = (error.msg or '').rsplit('for key ', 1)[-1].strip("'`")
@@ -62,14 +64,14 @@ class RepositorioSQL:
             raise
         return self._cursor.lastrowid
 
-    def insertar(self, tabla, datos):
+    def insertar_fila_sql(self, tabla, datos):
         # Tabla y columnas solo se suministran desde métodos del repositorio.
         nombres = [tabla, *datos]
         if not all(re.fullmatch(r'[a-z_]+', n) for n in nombres):
             raise ValueError('Identificador SQL inválido.')
         columnas = ','.join(datos)
         marcas = ','.join(['%s'] * len(datos))
-        return self.ejecutar(
+        return self.ejecutar_escritura_sql(
             f'INSERT INTO {tabla} ({columnas}) VALUES ({marcas})', tuple(datos.values())
         )
 
@@ -100,10 +102,10 @@ class RepositorioSQL:
             columnas['datos'] = json.dumps(datos, ensure_ascii=False)
         campos = ','.join(columnas)
         marcas = ','.join(['%s'] * len(columnas))
-        return self.ejecutar(f'INSERT INTO historial_estado(fecha,{campos}) VALUES(UTC_TIMESTAMP(),{marcas})',
+        return self.ejecutar_escritura_sql(f'INSERT INTO historial_estado(fecha,{campos}) VALUES(UTC_TIMESTAMP(),{marcas})',
                              tuple(columnas.values()))
 
-    def consultar_historial_estado(self, entidad, identificador):
+    def consultar_historial_estado(self, entidad: str, identificador: int) -> list[FilaHistorialEstado]:
         return self.consultar_sql(
             '''SELECT h.*,CONCAT(p.nombres,' ',p.apellidos) AS responsable
             FROM historial_estado h LEFT JOIN persona p ON p.dni=h.dni_responsable

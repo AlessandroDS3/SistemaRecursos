@@ -12,7 +12,7 @@ def circular_3d(serie):
     angulo = pi / 2
     for indice, item in enumerate(serie['elementos']):
         amplitud = 2 * pi * item['cantidad'] / serie['total']
-        pasos = max(2, ceil_segmentos(amplitud))
+        pasos = max(2, calcular_segmentos_del_sector(amplitud))
         puntos = [175, 120]
         for i in range(pasos + 1):
             a = angulo - amplitud * i / pasos
@@ -36,7 +36,7 @@ def circular_3d(serie):
     return dibujo
 
 
-def ceil_segmentos(amplitud):
+def calcular_segmentos_del_sector(amplitud):
     return int(amplitud * 24) + 1
 
 
@@ -62,5 +62,5 @@ def columnas(serie, histograma=False):
     return dibujo
 
 
-def dibujos_graficos(graficos):
+def dibujar_graficos_de_reporte(graficos):
     return circular_3d(graficos['circular']), columnas(graficos['barras'], graficos.get('histograma', False))

@@ -2,12 +2,21 @@
 
 from dataclasses import asdict, dataclass, fields
 import re
+from typing import TypedDict
 
-from dominio.compartido.validacion import dni, entero, texto
+from dominio.compartido.codigos import Codigo
+from dominio.compartido.validacion import validar_dni, validar_entero, validar_texto
 
 TIPOS_PERSONA = ('ESTUDIANTE', 'DOCENTE', 'ADMINISTRATIVO')
 ESTADOS_PERSONA = ('ACTIVA', 'INACTIVA')
-ESTADOS_MATRICULA = ('VIGENTE', 'NO_VIGENTE')
+
+
+class EstadoMatricula(Codigo):
+    VIGENTE = 'VIGENTE'
+    NO_VIGENTE = 'NO_VIGENTE'
+
+
+ESTADOS_MATRICULA = tuple(EstadoMatricula)
 LONGITUD_CODIGO_INSTITUCIONAL = 20
 CAMPOS_TIPO = {
     'ESTUDIANTE': ('cui', 'ciclo', 'estado_matricula'),
@@ -27,7 +36,7 @@ class Persona:
     telefono: str = ''
     cui: str = ''
     ciclo: int | None = None
-    estado_matricula: str = 'VIGENTE'
+    estado_matricula: EstadoMatricula = EstadoMatricula.VIGENTE
     codigo_docente: str = ''
     departamento_academico: str = ''
     facultad: str = ''
@@ -36,26 +45,27 @@ class Persona:
     area: str = ''
 
     def __post_init__(self):
-        self.dni = dni(self.dni)
-        self.nombres = texto(self.nombres, 'Nombres', 100, True)
-        self.apellidos = texto(self.apellidos, 'Apellidos', 100, True)
-        self.correo = texto(self.correo, 'Correo', 120, self.tipo != 'ESTUDIANTE')
-        self.telefono = texto(self.telefono, 'Teléfono', 20)
+        self.dni = validar_dni(self.dni)
+        self.nombres = validar_texto(self.nombres, 'Nombres', 100, True)
+        self.apellidos = validar_texto(self.apellidos, 'Apellidos', 100, True)
+        self.correo = validar_texto(self.correo, 'Correo', 120, self.tipo != 'ESTUDIANTE')
+        self.telefono = validar_texto(self.telefono, 'Teléfono', 20)
         if self.correo and not re.fullmatch(r'[^\s@]+@[^.\s@]+(?:\.[^.\s@]+)+', self.correo):
             raise ValueError('Introduce un correo válido.')
         if self.tipo not in TIPOS_PERSONA or self.estado not in ESTADOS_PERSONA:
             raise ValueError('Tipo o estado de persona inválido.')
         if self.tipo == 'ESTUDIANTE':
-            self.cui = dni(self.cui)
-            self.ciclo = entero(self.ciclo, 'Ciclo') if self.ciclo not in (None, '') else None
+            self.cui = validar_dni(self.cui)
+            self.ciclo = validar_entero(self.ciclo, 'Ciclo') if self.ciclo not in (None, '') else None
             if self.estado_matricula not in ESTADOS_MATRICULA:
                 raise ValueError('Selecciona una matrícula válida.')
+            self.estado_matricula = EstadoMatricula(self.estado_matricula)
         else:
             for campo in CAMPOS_TIPO[self.tipo]:
                 setattr(
                     self,
                     campo,
-                    texto(
+                    validar_texto(
                         getattr(self, campo),
                         campo.replace('_', ' ').capitalize(),
                         LONGITUD_CODIGO_INSTITUCIONAL if campo.startswith('codigo_') else 100,
@@ -75,14 +85,24 @@ class Persona:
     def nombre_completo(self) -> str:
         return f'{self.nombres} {self.apellidos}'
 
-    def datos(self) -> dict:
+    def como_diccionario(self) -> dict:
         return asdict(self)
 
 
-def validar_elegibilidad(persona):
+class PersonaParaPrestamo(TypedDict):
+    dni: str
+    nombres: str
+    apellidos: str
+    estado: str
+    tipo: str | None
+    estado_matricula: str | None
+
+
+def validar_elegibilidad_del_solicitante(persona: PersonaParaPrestamo | None) -> PersonaParaPrestamo:
     if persona is None or persona['estado'] != 'ACTIVA':
         raise ValueError('La persona debe estar activa.')
     if persona.get('tipo') not in TIPOS_PERSONA:
         raise ValueError('La persona no tiene un tipo institucional válido.')
-    if persona['tipo'] == 'ESTUDIANTE' and persona.get('estado_matricula') != 'VIGENTE':
+    if persona['tipo'] == 'ESTUDIANTE' and persona.get('estado_matricula') != EstadoMatricula.VIGENTE:
         raise ValueError('El estudiante debe tener matrícula vigente.')
+    return persona

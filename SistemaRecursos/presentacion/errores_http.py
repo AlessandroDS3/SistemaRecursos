@@ -5,28 +5,28 @@ from werkzeug.exceptions import HTTPException
 from dominio.compartido.validacion import Conflicto, NoEncontrado
 
 
-def registrar_errores(app):
-    def mostrar_error(mensaje, codigo):
+def registrar_manejadores_de_errores_http(app):
+    def renderizar_pagina_de_error(mensaje, codigo):
         return render_template('error.html', mensaje=mensaje, codigo=codigo), codigo
 
     @app.errorhandler(Conflicto)
-    def conflicto(error):
-        return mostrar_error(str(error), 409)
+    def responder_conflicto(error):
+        return renderizar_pagina_de_error(str(error), 409)
 
     @app.errorhandler(ValueError)
-    def valor_invalido(error):
-        return mostrar_error(str(error), 400)
+    def responder_error_de_validacion(error):
+        return renderizar_pagina_de_error(str(error), 400)
 
     @app.errorhandler(NoEncontrado)
-    def no_encontrado(error):
-        return mostrar_error(str(error), 404)
+    def responder_registro_no_encontrado(error):
+        return renderizar_pagina_de_error(str(error), 404)
 
     @app.errorhandler(PermissionError)
-    def sin_permiso(error):
-        return mostrar_error(str(error), 403)
+    def responder_acceso_denegado(error):
+        return renderizar_pagina_de_error(str(error), 403)
 
     @app.errorhandler(HTTPException)
-    def error_http(error):
+    def responder_excepcion_http(error):
         mensajes = {
             400: 'Revisa los datos e inténtalo de nuevo.',
             403: 'Tu cuenta no tiene permiso para esta operación.',
@@ -38,11 +38,11 @@ def registrar_errores(app):
         mensaje = error.description
         if mensaje == type(error).description:
             mensaje = mensajes.get(error.code, 'No se pudo completar la operación.')
-        return mostrar_error(mensaje, error.code)
+        return renderizar_pagina_de_error(mensaje, error.code)
 
     @app.errorhandler(ErrorMySQL)
-    def error_base(error):
+    def responder_error_de_base_de_datos(error):
         app.logger.exception('Falló la base de datos.')
-        return mostrar_error(
+        return renderizar_pagina_de_error(
             'El sistema no está disponible. Inténtalo de nuevo en un momento.', 503
         )

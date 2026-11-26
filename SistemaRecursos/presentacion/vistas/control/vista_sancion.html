@@ -1,18 +1,18 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf, historial %}
-{% from 'parciales/componentes.html' import estado, texto_estado %}
-{% from 'control/parciales/formularios_sancion.html' import evaluacion_sancion with context %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf, tabla_de_historial %}
+{% from 'parciales/componentes.html' import insignia_de_estado, texto_estado %}
+{% from 'control/parciales/formularios_sancion.html' import formulario_de_evaluacion_de_sancion with context %}
 {% block titulo %}{{ 'Sanción #' ~ sancion.id_sancion if modo == 'detalle' else 'Sanciones' }} · UNSA{% endblock %}
 {% block contenido %}
   {% if modo == 'detalle' %}
     {% set caso_propio = g.usuario.dni == sancion.dni_persona or sancion.participantes|selectattr('dni_persona','equalto',g.usuario.dni)|list %}
     <div class="cabecera">
       <h1>Sanción #{{ sancion.id_sancion }}</h1>
-      <div>{{ estado(sancion.gravedad) }} {{ estado(sancion.estado) }}</div>
+      <div>{{ insignia_de_estado(sancion.gravedad) }} {{ insignia_de_estado(sancion.estado) }}</div>
     </div>
     <section class="panel ficha-resumen" aria-label="Estado del bien y la sanción">
-      <div><small>Estado actual del bien original</small>{{ estado(sancion.estado_bien) }}</div>
-      <div><small>Estado de la sanción</small>{{ estado(sancion.estado) }}</div>
+      <div><small>Estado actual del bien original</small>{{ insignia_de_estado(sancion.estado_bien) }}</div>
+      <div><small>Estado de la sanción</small>{{ insignia_de_estado(sancion.estado) }}</div>
       <div><small>Regularización</small><strong>{{ texto_estado(sancion.tipo_regularizacion) if sancion.tipo_regularizacion else 'Pendiente' }}</strong></div>
     </section>
     <section class="panel">
@@ -45,7 +45,7 @@
         <section class="panel">
           <h2>Aceptar regularización</h2>
           <form method="post" class="formulario" action="{{ url_for('sanciones.regularizar_sancion', identificador=sancion.id_sancion) }}">
-            {{ csrf() }}
+            {{ campo_oculto_csrf() }}
             <label>Forma de regularización
               <select name="tipo_regularizacion" required>
                 {% if sancion.tipo == 'PERDIDA' %}<option value="RECUPERACION">Recuperación del original en buen estado</option>{% endif %}
@@ -85,7 +85,7 @@
         {% else %}
           <p>El encargado puede retirar una leve con justificación. Una grave debe completar su periodo; una muy grave requiere autorización del administrador.</p>
           <form method="post" class="formulario" action="{{ url_for('sanciones.levantar_sancion', identificador=sancion.id_sancion) }}">
-            {{ csrf() }}
+            {{ campo_oculto_csrf() }}
             <input type="hidden" name="origen" value="prestamo">
             <input type="hidden" name="volver" value="{{ volver }}">
             <label>Justificación<input name="justificacion" required maxlength="255"></label>
@@ -98,7 +98,7 @@
         <details class="panel">
           <summary>Evaluar o elevar la gravedad</summary>
           <p>Una elevación inicia su nuevo periodo al confirmarse. No se duplica la sanción ni se reinicia el plazo por registrar otra causa del mismo nivel.</p>
-          {{ evaluacion_sancion(url_for('sanciones.evaluar_sancion', identificador=sancion.id_sancion)) }}
+          {{ formulario_de_evaluacion_de_sancion(url_for('sanciones.evaluar_sancion', identificador=sancion.id_sancion)) }}
         </details>
       {% endif %}
     {% else %}
@@ -112,7 +112,7 @@
       <details class="panel">
         <summary>Anular sanción por error</summary>
         <form method="post" class="formulario" action="{{ url_for('sanciones.anular_sancion', identificador=sancion.id_sancion) }}">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <label>Motivo de anulación<input name="motivo" required maxlength="255"></label>
           <button>Anular sanción</button>
         </form>
@@ -121,14 +121,14 @@
     {% if not caso_propio and g.usuario.rol == 'ADMINISTRADOR' and sancion.tipo == 'PERDIDA' and sancion.id_bien_reposicion and sancion.estado_bien == 'PERDIDO' and not sancion.fecha_recuperacion_original %}
       <details class="panel">
         <summary>Registrar recuperación del original</summary>
-        <form method="post" class="formulario" action="{{ url_for('sanciones.registrar_original_recuperado', identificador=sancion.id_sancion) }}">
-          {{ csrf() }}
+        <form method="post" class="formulario" action="{{ url_for('sanciones.registrar_recuperacion_del_bien_original', identificador=sancion.id_sancion) }}">
+          {{ campo_oculto_csrf() }}
           <label>Cómo se recuperó el bien<input name="motivo" required maxlength="255"></label>
           <button>Enviar original a revisión</button>
         </form>
       </details>
     {% endif %}
-    <details class="panel"><summary>Historial de la sanción</summary>{{ historial(sancion.historial) }}</details>
+    <details class="panel"><summary>Historial de la sanción</summary>{{ tabla_de_historial(sancion.historial) }}</details>
     <div class="acciones"><a href="{{ prestamo_url }}">Volver al préstamo</a><a href="{{ url_for('sanciones.consultar_sanciones') }}">Ver sanciones</a></div>
   {% else %}
     <div class="sanciones-administracion">
@@ -138,7 +138,7 @@
         <details class="panel" {% if g.error_formulario and request.endpoint == 'sanciones.guardar_configuracion_sanciones' %}open{% endif %}>
           <summary>Configurar plazos de sanciones</summary>
           <form method="post" class="formulario" action="{{ url_for('sanciones.guardar_configuracion_sanciones') }}">
-            {{ csrf() }}
+            {{ campo_oculto_csrf() }}
             <input type="hidden" name="version" value="{{ valor_formulario('version', version_configuracion) }}">
             <label>Duración leve, en días<input name="dias_leve" type="number" min="1" max="3650" required value="{{ valor_formulario('dias_leve', configuracion.dias_leve) }}"></label>
             <label>Duración grave, en días<input name="dias_grave" type="number" min="1" max="3650" required value="{{ valor_formulario('dias_grave', configuracion.dias_grave) }}"></label>
@@ -166,13 +166,13 @@
               <tr>
                 <th scope="row">#{{ s.id_sancion }}</th>
                 <td><a href="{{ url_for('prestamos.consultar_prestamo', identificador=s.id_prestamo) }}">#{{ s.id_prestamo }}</a><small>{{ s.responsable }}</small></td>
-                <td>{{ estado(s.gravedad) }}<small>{{ s.motivo }}</small></td>
+                <td>{{ insignia_de_estado(s.gravedad) }}<small>{{ s.motivo }}</small></td>
                 <td>{{ s.fecha_fin|fecha if s.fecha_fin else 'Indefinida' }}<small>{{ 'Regularizado' if s.fecha_regularizacion else 'Regularización pendiente' }}</small>
                   {% if s.posible_perdida %}<strong>Revisar posible pérdida</strong>{% endif %}
                   {% if s.revisar_custodia %}<small>Revisar custodia</small>{% endif %}
                   {% if s.revision_administrador %}<strong>Revisión del administrador</strong>{% endif %}
                 </td>
-                <td>{{ estado(s.estado) }}</td>
+                <td>{{ insignia_de_estado(s.estado) }}</td>
                 <td><a href="{{ url_for('sanciones.consultar_sancion', identificador=s.id_sancion) }}">{{ 'Gestionar' if s.estado == 'ACTIVA' else 'Ver historial' }}</a></td>
               </tr>
             {% else %}<tr><td colspan="6">No se encontraron sanciones para esta búsqueda.</td></tr>{% endfor %}

@@ -21,18 +21,18 @@
     <a class="enlace-saltar-contenido" href="#contenido">Ir al contenido</a>
     {% if g.usuario %}
       {% set administra_recursos = request.blueprint == 'bienes' or (request.blueprint == 'recursos' and request.endpoint not in ('recursos.consultar_recursos', 'recursos.consultar_recurso')) %}
-      {% set gestiona_prestamos = g.usuario.permite('PRESTAMOS_GESTIONAR') %}
+      {% set gestiona_prestamos = g.usuario.tiene_permiso('PRESTAMOS_GESTIONAR') %}
       {% set es_historial_propio = request.endpoint in ('reportes.consultar_historial_propio', 'reportes.exportar_historial_propio_csv', 'reportes.exportar_historial_propio_pdf') %}
       {% set navegacion = [
         ('inicio', 'Inicio', not g.usuario.debe_cambiar_clave, 'inicio'),
-        ('personas.consultar_personas', 'Personas', g.usuario.permite('PERSONAS_CONSULTAR'), 'personas'),
-        ('recursos.consultar_recursos', 'Catálogo', g.usuario.permite('CATALOGO_CONSULTAR'), 'recursos'),
-        ('recursos.consultar_administracion_recursos', 'Administrar recursos', g.usuario.permite('RECURSOS_GESTIONAR'), 'administracion_recursos'),
-        ('prestamos.consultar_prestamos', 'Préstamos' if gestiona_prestamos else 'Mis préstamos', gestiona_prestamos or g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'), 'prestamos'),
-        ('reservas.consultar_reservas', 'Reservas' if gestiona_prestamos else 'Mis reservas', gestiona_prestamos or g.usuario.permite('RESERVAS_PROPIAS_GESTIONAR'), 'reservas'),
-        ('politicas.consultar_politicas_prestamo', 'Políticas de préstamo', g.usuario.permite('POLITICAS_GESTIONAR'), 'politicas'),
-        ('reportes.consultar_reportes', 'Reportes', g.usuario.permite('REPORTES_CONSULTAR'), 'reportes'),
-        ('reportes.consultar_historial_propio', 'Mi historial', g.usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'), 'mi_historial'),
+        ('personas.consultar_personas', 'Personas', g.usuario.tiene_permiso('PERSONAS_CONSULTAR'), 'personas'),
+        ('recursos.consultar_recursos', 'Catálogo', g.usuario.tiene_permiso('CATALOGO_CONSULTAR'), 'recursos'),
+        ('recursos.consultar_administracion_recursos', 'Administrar recursos', g.usuario.tiene_permiso('RECURSOS_GESTIONAR'), 'administracion_recursos'),
+        ('prestamos.consultar_prestamos', 'Préstamos' if gestiona_prestamos else 'Mis préstamos', gestiona_prestamos or g.usuario.tiene_permiso('PRESTAMOS_PROPIOS_CONSULTAR'), 'prestamos'),
+        ('reservas.consultar_reservas', 'Reservas' if gestiona_prestamos else 'Mis reservas', gestiona_prestamos or g.usuario.tiene_permiso('RESERVAS_PROPIAS_GESTIONAR'), 'reservas'),
+        ('politicas.consultar_politicas_prestamo', 'Políticas de préstamo', g.usuario.tiene_permiso('POLITICAS_GESTIONAR'), 'politicas'),
+        ('reportes.consultar_reportes', 'Reportes', g.usuario.tiene_permiso('REPORTES_CONSULTAR'), 'reportes'),
+        ('reportes.consultar_historial_propio', 'Mi historial', g.usuario.tiene_permiso('PRESTAMOS_PROPIOS_CONSULTAR'), 'mi_historial'),
         ('sanciones.consultar_sanciones', 'Sanciones', gestiona_prestamos, 'sanciones')
       ] %}
       {% set iconos = {

@@ -26,22 +26,22 @@ class RepositorioProcesadorSQL(RepositorioSQL):
 
     def registrar_ejecucion_correcta(self):
         with self.transaccion() as operacion:
-            operacion.ejecutar('INSERT IGNORE INTO estado_procesador(id_procesador) VALUES (1)')
-            operacion.ejecutar(
+            operacion.ejecutar_escritura_sql('INSERT IGNORE INTO estado_procesador(id_procesador) VALUES (1)')
+            operacion.ejecutar_escritura_sql(
                 '''UPDATE estado_procesador SET ultima_ejecucion_correcta=UTC_TIMESTAMP(),
                 fallos_consecutivos=0 WHERE id_procesador=1'''
             )
 
-    def registrar_error(self, mensaje):
+    def registrar_error_del_procesador(self, mensaje):
         with self.transaccion() as operacion:
-            operacion.ejecutar('INSERT IGNORE INTO estado_procesador(id_procesador) VALUES (1)')
-            operacion.ejecutar(
+            operacion.ejecutar_escritura_sql('INSERT IGNORE INTO estado_procesador(id_procesador) VALUES (1)')
+            operacion.ejecutar_escritura_sql(
                 '''UPDATE estado_procesador SET ultimo_error_fecha=UTC_TIMESTAMP(),ultimo_error=%s,
                 fallos_consecutivos=fallos_consecutivos+1 WHERE id_procesador=1''',
                 (mensaje[:500],),
             )
 
-    def consultar_estado(self):
+    def consultar_estado_procesador(self):
         return self.consultar_sql(
             'SELECT * FROM estado_procesador WHERE id_procesador=1', una=True
         )

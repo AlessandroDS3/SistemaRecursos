@@ -12,7 +12,8 @@
 -- admin / AdminPrueba2026!
 -- encargado1 y encargado2 / EncargadoPrueba2026!
 -- usuario1 y estudiante01 a estudiante08 / UsuarioPrueba2026!
--- Incluye sanciones por gravedad y el cierre de pendientes; no requiere migraciones en una base nueva.
+-- Incluye el esquema vigente para instalar el sistema desde cero.
+-- Es una carga autónoma de estructura y datos. Importar este archivo de principio a fin.
 -- Estructura del sistema de prestamos de recursos para MySQL 8.
 -- Crea prestamos_escuela_pruebas para cargar los datos de demostracion.
 SET NAMES utf8mb4;
@@ -331,7 +332,6 @@ CREATE TABLE IF NOT EXISTS estado_procesador (
 ) ENGINE=InnoDB;
 
 -- DATOS FICTICIOS. EJECUTAR SOLO EN UNA BASE NUEVA/VACIA.
--- Fotografia de escenarios: 12 de noviembre de 2026.
 START TRANSACTION;
 
 -- Fechas UTC para que la primera revisión no venza los ejemplos recién cargados.
@@ -348,6 +348,10 @@ SET @solicitud_reserva = @ahora_prueba - INTERVAL 30 MINUTE;
 SET @dia_retiro = @ayer_lima + INTERVAL 2 DAY;
 SET @dia_retiro = @dia_retiro + INTERVAL (CASE WEEKDAY(@dia_retiro) WHEN 5 THEN 2 WHEN 6 THEN 1 ELSE 0 END) DAY;
 SET @fecha_reserva = TIMESTAMP(@dia_retiro, '14:00:00'); -- 09:00 en Lima
+SET @inicio_sancion_reposicion = TIMESTAMP('2026-05-05', '14:00:00');
+SET @fin_sancion_reposicion = @inicio_sancion_reposicion + INTERVAL 180 DAY;
+SET @fecha_reposicion = TIMESTAMP('2026-05-06', '15:00:00');
+SET @fecha_recuperacion_original = TIMESTAMP('2026-05-07', '14:00:00');
 
 INSERT INTO `persona` (`nombres`, `apellidos`, `dni`, `telefono`, `correo`, `estado`) VALUES
 ('Ana', 'Torres', '02167885', '', 'ana@ejemplo.gmail', 'ACTIVA'),
@@ -427,6 +431,12 @@ JOIN persona p ON p.dni = d.dni AND p.estado = 'ACTIVA'
 LEFT JOIN usuario_sistema por_dni ON por_dni.dni_persona = d.dni
 LEFT JOIN usuario_sistema por_nombre ON por_nombre.nombre_usuario = d.usuario
 WHERE por_dni.id_usuario IS NULL AND por_nombre.id_usuario IS NULL;
+
+-- Sesión de demostración cerrada. Cada ingreso crea su propia sesión.
+INSERT INTO sesion_usuario (id_sesion, id_usuario, fecha_inicio, ultima_actividad, fecha_cierre)
+SELECT SHA2('sesion-cerrada-de-demostracion', 256), id_usuario,
+       '2026-11-04 14:00:00', '2026-11-04 14:10:00', '2026-11-04 14:11:00'
+FROM usuario_sistema WHERE nombre_usuario='encargado2';
 
 -- CATALOGO: NUEVE CATEGORIAS Y EQUIPOS DE LABORATORIO MODERNOS.
 INSERT INTO `categoria_recurso` (`id_categoria`, `nombre`, `descripcion`) VALUES
@@ -604,20 +614,22 @@ INSERT INTO `bien_material` (`id_bien`, `id_recurso`, `codigo_inventario`, `nume
 (196, 41, 'PR-ROB-SENSOR-002', NULL, '2026-09-04', 'DISPONIBLE', 'Laboratorio de robótica', NULL),
 (197, 41, 'PR-ROB-SENSOR-003', NULL, '2026-09-04', 'DISPONIBLE', 'Laboratorio de robótica', NULL),
 (198, 42, 'PR-VR-CONTROL-001', NULL, '2026-09-04', 'DISPONIBLE', 'Laboratorio de simulación', NULL),
-(199, 42, 'PR-VR-CONTROL-002', NULL, '2026-09-04', 'DISPONIBLE', 'Laboratorio de simulación', NULL);
+(199, 42, 'PR-VR-CONTROL-002', NULL, '2026-09-04', 'DISPONIBLE', 'Laboratorio de simulación', NULL),
+(200, 9, 'PR-ACC-CARGADOR-REC-001', NULL, '2026-04-27', 'DISPONIBLE', 'Almacén', 'Original recuperado después de la reposición y revisado en mantenimiento.'),
+(201, 9, 'PR-ACC-CARGADOR-REP-001', NULL, '2026-05-06', 'DISPONIBLE', 'Almacén', 'Ejemplar recibido como reposición del préstamo #21.');
 
 -- Identificador del sistema y fecha de registro de los bienes de demostracion.
 UPDATE bien_material SET fecha_registro=COALESCE(TIMESTAMP(fecha_adquisicion,'12:00:00'),'2026-11-01 12:00:00'),
   identificador_sistema=CONCAT('SR-',DATE_FORMAT(COALESCE(fecha_adquisicion,'2026-11-01'),'%Y'),'-',
   LPAD(UPPER(CONV(id_bien*7919+104729,10,36)),6,'0'))
-WHERE id_bien BETWEEN 1 AND 199
-LIMIT 199;
+WHERE id_bien BETWEEN 1 AND 201
+LIMIT 201;
 
 INSERT IGNORE INTO estado_procesador(id_procesador) VALUES (1);
 
 -- REGLAS GENERALES Y LIMITES DEMOSTRATIVOS.
-INSERT INTO `configuracion_general` (`id_configuracion`, `hora_apertura`, `hora_cierre`, `plazo_espera`, `unidad_espera`, `plazo_retiro`, `unidad_retiro`, `dias_leve`, `dias_grave`, `dias_espera_perdida`) VALUES
-(1, '08:00:00', '16:00:00', 2, 'DIAS', 24, 'HORAS', 14, 180, 7);
+INSERT INTO `configuracion_general` (`id_configuracion`, `hora_apertura`, `hora_cierre`, `dias_atencion`, `plazo_espera`, `unidad_espera`, `plazo_retiro`, `unidad_retiro`, `dias_leve`, `dias_grave`, `dias_espera_perdida`) VALUES
+(1, '08:00:00', '16:00:00', 31, 2, 'DIAS', 24, 'HORAS', 14, 180, 7);
 
 INSERT INTO `limite_articulos_prestamo` (`tipo_persona`, `maximo_articulos`) VALUES
 ('ESTUDIANTE', 3),
@@ -678,7 +690,8 @@ INSERT INTO `prestamo` (`id_prestamo`, `tipo_prestamo`, `fecha_solicitud`, `fech
 (17, 'INDIVIDUAL', '2026-10-29 08:45:00', '2026-10-29 09:00:00', 'DEVUELTO', 'Camila: libro con ampliación aprobada', '98000002', '99000002'),
 (18, 'INDIVIDUAL', '2026-10-19 08:45:00', '2026-10-19 09:00:00', 'DEVUELTO', 'Docente: libro devuelto', '98000002', '99000014'),
 (19, 'INDIVIDUAL', '2026-11-07 08:45:00', '2026-11-07 09:00:00', 'VENCIDO', 'Bruno: cargador extraviado, sanción activa', '98000002', '99000007'),
-(20, 'INDIVIDUAL', '2026-11-05 08:45:00', '2026-11-05 09:00:00', 'DEVUELTO', 'Renato: devolución normal de ajedrez', '98000002', '99000009');
+(20, 'INDIVIDUAL', '2026-11-05 08:45:00', '2026-11-05 09:00:00', 'DEVUELTO', 'Renato: devolución de ajedrez registrada tras una rectificación', '98000002', '99000009'),
+(21, 'INDIVIDUAL', '2026-05-04 13:55:00', '2026-05-04 14:00:00', 'REGULARIZADO', 'Entrega propia autorizada. Cargador repuesto y original recuperado posteriormente.', '98000002', '98000002');
 
 INSERT INTO `detalle_prestamo` (`id_detalle`, `id_prestamo`, `id_bien`, `id_politica`, `fecha_limite_devolucion`, `condicion_entrega`, `observaciones_entrega`, `fecha_devolucion`, `dni_encargado_devolucion`, `condicion_devolucion`, `observaciones_devolucion`) VALUES
 (1, 1, 1, 24, '2026-10-30 16:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
@@ -703,6 +716,10 @@ INSERT INTO `detalle_prestamo` (`id_detalle`, `id_prestamo`, `id_bien`, `id_poli
 (20, 18, 86, 134, '2026-11-02 09:00:00', 'BUENO', 'Entrega con ficha de control', '2026-10-26 12:00:00', '98000002', 'BUENO', 'Ejemplar bien conservado'),
 (21, 19, 152, 145, '2026-11-07 13:00:00', 'BUENO', 'Entrega con ficha de control', NULL, NULL, NULL, NULL),
 (22, 20, 43, 142, '2026-11-05 12:00:00', 'BUENO', 'Entrega con ficha de control', '2026-11-05 11:00:00', '98000002', 'BUENO', 'Juego completo');
+
+INSERT INTO detalle_prestamo (id_detalle, id_prestamo, id_bien, id_politica, fecha_limite_devolucion,
+  fecha_regularizacion) VALUES
+(23, 21, 200, 147, '2026-05-04 21:00:00', @fecha_reposicion);
 
 -- PRESTAMO GRUPAL: UNA RESPONSABLE Y DOS PARTICIPANTES ADICIONALES.
 INSERT INTO `participante_prestamo` (`id_participante`, `id_prestamo`, `dni_persona`, `rol_participacion`, `responsable`) VALUES
@@ -729,12 +746,18 @@ INSERT INTO `reserva` (`id_reserva`, `id_recurso`, `fecha_solicitud`, `fecha_req
 INSERT INTO mantenimiento_bien (id_bien, tipo, motivo, estado_previo, fecha_inicio, dni_apertura)
 VALUES (5, 'CORRECTIVO', 'Reparación de encuadernación', 'DISPONIBLE', '2026-10-28 18:38:04', '98000001');
 
-INSERT INTO solicitud_ampliacion (id_prestamo, id_detalle, dni_solicitante, cantidad, unidad, motivo,
+INSERT INTO mantenimiento_bien (id_bien, tipo, motivo, estado_previo, fecha_inicio, dni_apertura,
+  fecha_fin_real, dni_cierre, resultado, observacion_cierre) VALUES
+(200, 'CORRECTIVO', 'Revisión del original recuperado después de la reposición', 'PERDIDO',
+ @fecha_recuperacion_original, '98000001', @fecha_recuperacion_original + INTERVAL 3 HOUR,
+ '98000001', 'DISPONIBLE', 'Prueba de carga satisfactoria.');
+
+INSERT INTO solicitud_ampliacion (id_solicitud, id_prestamo, id_detalle, dni_solicitante, cantidad, unidad, motivo,
   fecha_solicitud, fecha_limite_anterior, estado, fecha_resolucion, dni_resolucion,
   fecha_limite_nueva, observacion_resolucion) VALUES
-(6, 6, '99000002', 1, 'DIAS', 'Un día adicional para completar la práctica de robótica.',
+(1, 6, 6, '99000002', 1, 'DIAS', 'Un día adicional para completar la práctica de robótica.',
  @entrega_activa + INTERVAL 30 MINUTE, @entrega_activa + INTERVAL 3 DAY, 'PENDIENTE', NULL, NULL, NULL, NULL),
-(17, 19, '99000002', 2, 'DIAS', 'Dos días adicionales para terminar la lectura.',
+(2, 17, 19, '99000002', 2, 'DIAS', 'Dos días adicionales para terminar la lectura.',
  '2026-11-04 14:00:00', '2026-11-05 09:00:00', 'APROBADA', '2026-11-04 15:00:00',
  '98000002', '2026-11-07 09:00:00', 'Ampliación autorizada antes del vencimiento.');
 
@@ -749,7 +772,8 @@ INSERT INTO `incidencia` (`id_incidencia`, `id_detalle`, `tipo`, `dni_registrado
 (5, 11, 'RETRASO', NULL, 'Valeria no devolvió la cámara web a tiempo', '2026-11-08 14:00:00', 'REGISTRADA'),
 (6, 14, 'DANIO', '98000002', 'Daño del conector reportado al recibir el cargador', '2026-11-06 12:00:00', 'RESUELTA'),
 (7, 21, 'PERDIDA', '98000001', 'Pérdida del cargador confirmada por el administrador', '2026-11-10 10:00:00', 'REGISTRADA'),
-(8, 3, 'RETRASO', NULL, 'Libro devuelto fuera de plazo y recibido en buen estado', '2026-10-29 09:00:00', 'RESUELTA');
+(8, 3, 'RETRASO', NULL, 'Libro devuelto fuera de plazo y recibido en buen estado', '2026-10-29 09:00:00', 'RESUELTA'),
+(9, 23, 'PERDIDA', '98000001', 'Pérdida confirmada del cargador del préstamo #21', @inicio_sancion_reposicion, 'RESUELTA');
 
 INSERT INTO `sancion` (`id_sancion`, `id_incidencia_ref`, `motivo`, `fecha`, `descripcion`, `estado`, `fecha_levantamiento`, `dni_levantamiento`, `justificacion_levantamiento`, `gravedad`, `dias_leve`, `dias_grave`, `dias_espera_perdida`, `fecha_inicio_nivel`, `fecha_fin`, `fecha_revision`, `fecha_regularizacion`, `tipo_regularizacion`, `dni_regularizacion`) VALUES
 (1, 2, 'Retraso en la devolución de laptop', '2026-11-09 16:00:00', 'El plazo de sanción terminó y la laptop sigue pendiente de devolución.', 'ACTIVA', NULL, NULL, NULL, 'LEVE', 14, 180, 7, '2026-11-09 16:00:00', '2026-11-23 16:00:00', '2026-11-30 16:00:00', NULL, NULL, NULL),
@@ -760,6 +784,16 @@ INSERT INTO `sancion` (`id_sancion`, `id_incidencia_ref`, `motivo`, `fecha`, `de
 (6, 8, 'Retraso en la devolución de un libro', '2026-10-29 09:00:00', 'Se recibió el libro en buen estado y se cumplió el plazo de sanción.', 'CUMPLIDA', '2026-11-12 09:00:00', NULL, 'Plazo cumplido y devolución aceptada.', 'LEVE', 14, 180, 7, '2026-10-29 09:00:00', '2026-11-12 09:00:00', '2026-11-19 09:00:00', '2026-10-30 10:00:00', 'DEVOLUCION', '98000002'),
 (7, 1, 'Laptop vencida sin devolución', '2026-10-30 16:00:00', 'La laptop sigue pendiente de devolución.', 'ACTIVA', NULL, NULL, NULL, 'LEVE', 14, 180, 7, '2026-10-30 16:00:00', '2026-11-13 16:00:00', '2026-11-20 16:00:00', NULL, NULL, NULL),
 (8, 5, 'Cámara web vencida sin devolución', '2026-11-08 14:00:00', 'La cámara sigue pendiente de devolución.', 'ACTIVA', NULL, NULL, NULL, 'LEVE', 14, 180, 7, '2026-11-08 14:00:00', '2026-11-22 14:00:00', '2026-11-29 14:00:00', NULL, NULL, NULL);
+
+INSERT INTO sancion (id_sancion, id_incidencia_ref, motivo, fecha, descripcion, estado,
+  fecha_levantamiento, justificacion_levantamiento, gravedad, fecha_inicio_nivel, fecha_fin,
+  fecha_regularizacion, tipo_regularizacion, dni_regularizacion, observacion_regularizacion,
+  id_bien_reposicion, fecha_recuperacion_original) VALUES
+(9, 9, 'Pérdida de cargador', @inicio_sancion_reposicion,
+ 'El bien fue repuesto y el original se recuperó después.', 'CUMPLIDA',
+ @fin_sancion_reposicion, 'Plazo cumplido y regularización aceptada.', 'GRAVE',
+ @inicio_sancion_reposicion, @fin_sancion_reposicion, @fecha_reposicion, 'REPOSICION',
+ '98000001', 'Se verificó un cargador equivalente en buen estado.', 201, @fecha_recuperacion_original);
 
 -- AUDITORIA DE TRANSICIONES (ESTADOS ANTERIOR Y NUEVO).
 INSERT INTO `historial_estado` (`id_historial_estado`, `entidad`, `id_entidad`, `estado_anterior`, `estado_nuevo`, `fecha`, `observacion`, `dni_responsable`) VALUES
@@ -873,11 +907,55 @@ INSERT INTO `historial_estado` (`id_historial_estado`, `entidad`, `id_entidad`, 
 (108, 'PRESTAMO', 14, 'ACTIVO', 'DEVUELTO', '2026-11-12 19:30:00', 'Devolución completa.', '98000002'),
 (109, 'SANCION', 7, NULL, 'ACTIVA', '2026-10-30 16:00:00', 'Sanción leve por laptop vencida.', NULL),
 (110, 'SANCION', 8, NULL, 'ACTIVA', '2026-11-08 14:00:00', 'Sanción leve por cámara web vencida.', NULL),
-(111, 'PRESTAMO', 17, 'ACTIVO', 'ACTIVO', '2026-11-04 15:00:00', 'Ampliación de dos días aprobada para el libro.', '98000002'),
 (112, 'RESERVA', 7, 'EN_ESPERA', 'LISTA_PARA_RETIRO', '2026-11-05 09:00:00', 'Libro preparado para el retiro.', '98000002'),
 (113, 'RESERVA', 8, 'EN_ESPERA', 'LISTA_PARA_RETIRO', '2026-11-05 08:30:00', 'Balón preparado para el retiro.', '98000002'),
 (114, 'RESERVA', 10, 'EN_ESPERA', 'LISTA_PARA_RETIRO', '2026-11-06 07:55:00', 'Cargador preparado para el retiro.', '98000002'),
 (115, 'SANCION', 3, 'ACTIVA', 'ACTIVA', '2026-10-30 10:00:00', 'Regularización: ajedrez recibido en buen estado.', '98000002');
+
+-- Auditoría del formato vigente. Los ejemplos se vinculan a sus préstamos y personas.
+INSERT INTO historial_estado (id_historial_estado, entidad, id_entidad, estado_anterior,
+  estado_nuevo, fecha, observacion, dni_responsable, dni_objetivo, datos) VALUES
+(111, 'PRESTAMO', 17, 'ACTIVO', 'ACTIVO', '2026-11-04 15:00:00',
+ 'Solicitud #2 aprobada. Detalle #19: 2026-11-05 09:00:00 UTC → 2026-11-07 09:00:00 UTC',
+ '98000002', NULL, JSON_OBJECT('evento', 'AMPLIACION_PLAZO', 'id_detalle', 19, 'id_solicitud', 2,
+   'fecha_limite_anterior', '2026-11-05T09:00:00', 'fecha_limite_nueva', '2026-11-07T09:00:00')),
+(116, 'AUTORIZACION_PROPIA', NULL, 'EMITIDA', 'UTILIZADA', '2026-05-04 13:45:00',
+ 'Autorización del administrador para la entrega propia del cargador.', '98000001', '98000002',
+ JSON_OBJECT('accion', 'ENTREGA', 'fecha_uso', '2026-05-04 14:00:00', 'id_prestamo_uso', 21)),
+(117, 'TIPO_PERSONA', NULL, 'ESTUDIANTE', 'DOCENTE', '2026-10-01 14:00:00',
+ 'Se acreditó el ingreso a la plana docente.', '98000001', '99000013',
+ JSON_OBJECT('datos_institucionales', JSON_OBJECT('cui', '20260013', 'ciclo', 10, 'estado_matricula', 'NO_VIGENTE'))),
+(118, 'RECTIFICACION_DEVOLUCION', 22, 'DEVUELTO', 'PENDIENTE', '2026-11-05 10:25:00',
+ 'Se marcó el juego equivocado como recibido. Se corrigió la recepción.', '98000001', '98000002',
+ JSON_OBJECT('fecha_devolucion_original', '2026-11-05 10:20:00', 'condicion_original', 'BUENO',
+   'observacion_original', 'Recepción registrada para un ejemplar distinto.'));
+
+INSERT INTO historial_estado (entidad, id_entidad, estado_anterior, estado_nuevo,
+  fecha, observacion, dni_responsable) VALUES
+('BIEN_MATERIAL', 43, 'PRESTADO', 'DISPONIBLE', '2026-11-05 10:20:00', 'Recepción registrada para un ejemplar distinto.', '98000002'),
+('PRESTAMO', 20, 'ACTIVO', 'DEVUELTO', '2026-11-05 10:20:00', 'Devolución registrada por error.', '98000002'),
+('BIEN_MATERIAL', 43, 'DISPONIBLE', 'PRESTADO', '2026-11-05 10:25:00', 'Rectificación de la devolución del préstamo #20.', '98000001'),
+('PRESTAMO', 20, 'DEVUELTO', 'ACTIVO', '2026-11-05 10:25:00', 'Rectificación de devolución del detalle #22.', '98000001'),
+('BIEN_MATERIAL', 200, 'DISPONIBLE', 'PRESTADO', '2026-05-04 14:00:00', 'Entrega del préstamo #21.', '98000002'),
+('PRESTAMO', 21, NULL, 'ACTIVO', '2026-05-04 14:00:00', 'Entrega registrada.', '98000002'),
+('PRESTAMO', 21, 'ACTIVO', 'ACTIVO', '2026-05-04 14:00:00', 'Operación propia con autorización #116 del DNI 98000001.', '98000002'),
+('BIEN_MATERIAL', 200, 'PRESTADO', 'PERDIDO', @inicio_sancion_reposicion, 'Pérdida confirmada del cargador.', '98000001'),
+('PRESTAMO', 21, 'ACTIVO', 'VENCIDO', @inicio_sancion_reposicion, 'Pérdida registrada en el detalle #23.', '98000001'),
+('SANCION', 9, NULL, 'ACTIVA', @inicio_sancion_reposicion, 'Aplicación de sanción GRAVE por pérdida.', '98000001'),
+('BIEN_MATERIAL', 201, NULL, 'DISPONIBLE', @fecha_reposicion, 'Reposición por sanción #9.', '98000001'),
+('BIEN_MATERIAL', 200, 'PERDIDO', 'PERDIDO', @fecha_reposicion, 'Repuesto por bien #201.', '98000001'),
+('PRESTAMO', 21, 'VENCIDO', 'REGULARIZADO', @fecha_reposicion, 'Regularización por reposición del detalle #23.', '98000001'),
+('SANCION', 9, 'ACTIVA', 'ACTIVA', @fecha_reposicion, 'Regularización por reposición aceptada.', '98000001'),
+('BIEN_MATERIAL', 200, 'PERDIDO', 'MANTENIMIENTO', @fecha_recuperacion_original, 'Original recuperado y enviado a revisión.', '98000001'),
+('SANCION', 9, 'ACTIVA', 'ACTIVA', @fecha_recuperacion_original, 'Original recuperado después de la reposición.', '98000001'),
+('BIEN_MATERIAL', 200, 'MANTENIMIENTO', 'DISPONIBLE', @fecha_recuperacion_original + INTERVAL 3 HOUR, 'Mantenimiento cerrado con prueba de carga satisfactoria.', '98000001'),
+('SANCION', 9, 'ACTIVA', 'CUMPLIDA', @fin_sancion_reposicion, 'Plazo cumplido y regularización aceptada.', NULL);
+
+INSERT INTO historial_estado (entidad, id_entidad, estado_anterior, estado_nuevo,
+  fecha, observacion, dni_responsable)
+SELECT 'CUENTA', id_usuario, 'PENDIENTE', 'ACTIVADA', '2026-11-04 13:50:00',
+       'Contraseña establecida.', dni_persona
+FROM usuario_sistema WHERE nombre_usuario='encargado2';
 
 COMMIT;
 

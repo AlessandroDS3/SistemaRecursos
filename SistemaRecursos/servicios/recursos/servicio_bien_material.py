@@ -1,10 +1,10 @@
 from dominio.compartido.validacion import NoEncontrado
-from dominio.compartido.validacion import Conflicto, comprobar_version, entero, texto
+from dominio.compartido.validacion import Conflicto, exigir_version_vigente, validar_entero, validar_texto
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 from dominio.gestion_recursos.bien_material import (
     BienMaterial,
     ESTADOS_MANUALES,
-    validar_cambio_estado,
+    validar_cambio_estado_bien_material,
     validar_filtros_inventario,
     version_bien_material,
 )
@@ -12,7 +12,7 @@ from dominio.gestion_recursos.contratos_recursos import IRepositorioBienMaterial
 from dominio.gestion_recursos.mantenimiento import (
     AperturaMantenimiento,
     CierreMantenimiento,
-    validar_apertura,
+    validar_apertura_mantenimiento,
 )
 
 
@@ -21,7 +21,7 @@ class ServicioAplicacionBienMaterial:
         self.repositorio = repositorio
 
     def consultar_bien_material(self, identificador: int) -> dict:
-        fila = self.repositorio.consultar_bien_material(entero(identificador))
+        fila = self.repositorio.consultar_bien_material(validar_entero(identificador))
         if fila is None:
             raise NoEncontrado('Bien inexistente.')
         return dict(fila, version=version_bien_material(fila))
@@ -61,15 +61,15 @@ class ServicioAplicacionBienMaterial:
         return bien
 
     def registrar_bien_material(self, datos: dict, actor: int) -> int:
-        return self._guardar_bien_material(datos, actor)
+        return self._validar_y_guardar_bien_material(datos, actor)
 
     def actualizar_bien_material(self, identificador: int, datos: dict, actor: int) -> int:
-        return self._guardar_bien_material(datos, actor, entero(identificador))
+        return self._validar_y_guardar_bien_material(datos, actor, validar_entero(identificador))
 
-    def _guardar_bien_material(
+    def _validar_y_guardar_bien_material(
         self, datos: dict, actor: int, identificador: int | None = None
     ) -> int:
-        actor = entero(actor)
+        actor = validar_entero(actor)
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
             actual = (
@@ -80,11 +80,11 @@ class ServicioAplicacionBienMaterial:
             if identificador is not None and actual is None:
                 raise NoEncontrado('Bien inexistente.')
             if actual is not None:
-                comprobar_version(datos.get('version'), version_bien_material(actual))
+                exigir_version_vigente(datos.get('version'), version_bien_material(actual))
             valores = dict(actual or {})
             valores.update(datos)
             id_recurso = (
-                actual['id_recurso'] if actual else entero(datos.get('id_recurso'), 'Recurso')
+                actual['id_recurso'] if actual else validar_entero(datos.get('id_recurso'), 'Recurso')
             )
             bien = BienMaterial.desde_datos(
                 valores,
@@ -99,14 +99,14 @@ class ServicioAplicacionBienMaterial:
             return operacion.guardar_bien_material(bien)
 
     def cambiar_estado_bien_material(self, identificador: int, datos: dict, actor: int) -> None:
-        identificador, actor = entero(identificador), entero(actor)
-        motivo = texto(datos.get('motivo'), 'Motivo', 255, True)
+        identificador, actor = validar_entero(identificador), validar_entero(actor)
+        motivo = validar_texto(datos.get('motivo'), 'Motivo', 255, True)
         with self.repositorio.transaccion() as operacion:
             cuenta = exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
             bien = operacion.consultar_bien_material(identificador, bloquear=True)
             if bien is None:
                 raise NoEncontrado('Bien inexistente.')
-            validar_cambio_estado(bien['estado'], datos.get('estado'), datos.get('estado_esperado'))
+            validar_cambio_estado_bien_material(bien['estado'], datos.get('estado'), datos.get('estado_esperado'))
             if datos['estado'] == 'MANTENIMIENTO':
                 raise ValueError('Para enviar el bien a mantenimiento usa Abrir mantenimiento.')
             if operacion.consultar_mantenimiento_abierto(bien['id_bien'], bloquear=True):
@@ -122,7 +122,7 @@ class ServicioAplicacionBienMaterial:
             )
 
     def abrir_mantenimiento(self, identificador: int, datos: dict, actor: int) -> int:
-        identificador, actor = entero(identificador), entero(actor)
+        identificador, actor = validar_entero(identificador), validar_entero(actor)
         apertura = AperturaMantenimiento(
             tipo=datos.get('tipo'),
             motivo=datos.get('motivo'),
@@ -133,7 +133,7 @@ class ServicioAplicacionBienMaterial:
             bien = operacion.consultar_bien_material(identificador, bloquear=True)
             if bien is None:
                 raise NoEncontrado('Bien inexistente.')
-            validar_apertura(
+            validar_apertura_mantenimiento(
                 bien['estado'],
                 operacion.consultar_mantenimiento_abierto(identificador, bloquear=True),
                 operacion.consultar_prestamo_pendiente(identificador),
@@ -155,7 +155,7 @@ class ServicioAplicacionBienMaterial:
             return id_mantenimiento
 
     def cerrar_mantenimiento(self, identificador: int, datos: dict, actor: int) -> None:
-        identificador, actor = entero(identificador), entero(actor)
+        identificador, actor = validar_entero(identificador), validar_entero(actor)
         cierre = CierreMantenimiento(
             resultado=datos.get('resultado'), observacion=datos.get('observacion')
         )
@@ -183,10 +183,10 @@ class ServicioAplicacionBienMaterial:
             )
 
     def consultar_historial_bien_material(self, identificador: int) -> list[dict]:
-        return self.repositorio.consultar_historial_estado('BIEN_MATERIAL', entero(identificador))
+        return self.repositorio.consultar_historial_estado('BIEN_MATERIAL', validar_entero(identificador))
 
     def eliminar_bien_material(self, identificador: int, actor: int) -> None:
-        identificador, actor = entero(identificador), entero(actor)
+        identificador, actor = validar_entero(identificador), validar_entero(actor)
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
             if operacion.consultar_bien_material(identificador, bloquear=True) is None:

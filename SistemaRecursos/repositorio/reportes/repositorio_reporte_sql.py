@@ -45,7 +45,7 @@ class RepositorioReporteSQL(RepositorioSQL):
         self._consultar_integrantes_prestamos(resultado['prestamos'])
         return resultado
 
-    def _consulta_reporte(self, filtro):
+    def _preparar_consulta_sql_del_reporte(self, filtro):
         funciones = {
             'prestamos': self._consulta_prestamos,
             'devoluciones': self._consulta_devoluciones,
@@ -61,26 +61,26 @@ class RepositorioReporteSQL(RepositorioSQL):
         return funciones[filtro.tipo](filtro)
 
     def consultar_filas_reporte(self, filtro):
-        consulta = self._consulta_reporte(filtro)
+        consulta = self._preparar_consulta_sql_del_reporte(filtro)
         filas = self.consultar_sql(consulta.sql_reporte, consulta.parametros)
         if filtro.tipo in ('prestamos', 'devoluciones', 'sanciones'):
             self._consultar_integrantes_prestamos(filas)
         return filas
 
     @staticmethod
-    def _where(condiciones):
+    def _armar_clausula_where(condiciones):
         return 'WHERE ' + ' AND '.join(condiciones) if condiciones else ''
 
-    def _filtros_comunes(self, filtro, busqueda, campo_fecha=None, campo_estado=None):
+    def _construir_filtros_sql_comunes(self, filtro, busqueda, campo_fecha=None, campo_estado=None):
         condiciones = []
         parametros = []
 
-        if campo_fecha and filtro.inicio:
+        if campo_fecha and filtro.inicio_del_rango_utc:
             condiciones.append(f'{campo_fecha} >= %s')
-            parametros.append(filtro.inicio)
-        if campo_fecha and filtro.fin:
+            parametros.append(filtro.inicio_del_rango_utc)
+        if campo_fecha and filtro.fin_exclusivo_del_rango_utc:
             condiciones.append(f'{campo_fecha} < %s')
-            parametros.append(filtro.fin)
+            parametros.append(filtro.fin_exclusivo_del_rango_utc)
 
         if filtro.id_categoria:
             condiciones.append('r.id_categoria = %s')
@@ -97,7 +97,7 @@ class RepositorioReporteSQL(RepositorioSQL):
 
         return condiciones, parametros
 
-    def _filtros_personas(self, filtro, condiciones, parametros, incluir_modalidad=True):
+    def _agregar_filtros_sql_de_personas(self, filtro, condiciones, parametros, incluir_modalidad=True):
 
         if incluir_modalidad and filtro.modalidad:
             condiciones.append('p.tipo_prestamo = %s')
@@ -110,11 +110,11 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Préstamos
 
     def _consulta_prestamos(self, filtro):
-        condiciones, parametros = self._filtros_comunes(
+        condiciones, parametros = self._construir_filtros_sql_comunes(
             filtro, BUSQUEDA_PRESTAMO, 'p.fecha_entrega', ESTADO_SQL
         )
-        self._filtros_personas(filtro, condiciones, parametros)
-        where_sql = self._where(condiciones)
+        self._agregar_filtros_sql_de_personas(filtro, condiciones, parametros)
+        where_sql = self._armar_clausula_where(condiciones)
 
         tablas = JOINS_PRESTAMO
 
@@ -140,7 +140,7 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Devoluciones y cumplimiento
 
     def _consulta_devoluciones(self, filtro):
-        condiciones, parametros = self._filtros_comunes(
+        condiciones, parametros = self._construir_filtros_sql_comunes(
             filtro, BUSQUEDA_PRESTAMO, 'd.fecha_devolucion'
         )
         condiciones.append('d.fecha_devolucion IS NOT NULL')
@@ -150,7 +150,7 @@ class RepositorioReporteSQL(RepositorioSQL):
         elif filtro.cumplimiento:
             condiciones.append('d.fecha_devolucion > d.fecha_limite_devolucion')
 
-        where_sql = self._where(condiciones)
+        where_sql = self._armar_clausula_where(condiciones)
         retraso = (
             'GREATEST(TIMESTAMPDIFF(MINUTE, d.fecha_limite_devolucion, d.fecha_devolucion), 0)'
         )
@@ -183,12 +183,12 @@ class RepositorioReporteSQL(RepositorioSQL):
 
     def _consulta_atrasados(self, filtro):
 
-        condiciones, parametros = self._filtros_comunes(
+        condiciones, parametros = self._construir_filtros_sql_comunes(
             filtro, BUSQUEDA_PRESTAMO, 'd.fecha_limite_devolucion'
         )
         condiciones.append('d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL')
         condiciones.append('d.fecha_limite_devolucion < UTC_TIMESTAMP()')
-        where_sql = self._where(condiciones)
+        where_sql = self._armar_clausula_where(condiciones)
 
         tablas = """
             FROM detalle_prestamo d
@@ -225,11 +225,11 @@ class RepositorioReporteSQL(RepositorioSQL):
             OR r.marca LIKE %s OR r.modelo LIKE %s OR b.numero_serie LIKE %s
             OR b.identificador_sistema LIKE %s
         """
-        condiciones, parametros = self._filtros_comunes(filtro, busqueda, campo_estado='b.estado')
+        condiciones, parametros = self._construir_filtros_sql_comunes(filtro, busqueda, campo_estado='b.estado')
         if filtro.ubicacion:
             condiciones.append('b.ubicacion LIKE %s')
             parametros.append(f'%{filtro.ubicacion}%')
-        where_sql = self._where(condiciones)
+        where_sql = self._armar_clausula_where(condiciones)
 
         tablas = """
             FROM bien_material b
@@ -261,14 +261,14 @@ class RepositorioReporteSQL(RepositorioSQL):
             OR CONCAT(per.nombres, ' ', per.apellidos) LIKE %s
             OR r.nombre LIKE %s
         """
-        condiciones, parametros = self._filtros_comunes(
+        condiciones, parametros = self._construir_filtros_sql_comunes(
             filtro, busqueda, 'p.fecha_solicitud', 'p.estado'
         )
-        self._filtros_personas(filtro, condiciones, parametros, incluir_modalidad=False)
+        self._agregar_filtros_sql_de_personas(filtro, condiciones, parametros, incluir_modalidad=False)
         if filtro.tipo_gestion:
             condiciones.append('p.tipo_gestion = %s')
             parametros.append(filtro.tipo_gestion)
-        where_sql = self._where(condiciones)
+        where_sql = self._armar_clausula_where(condiciones)
 
         tablas = """
             FROM reserva p
@@ -297,10 +297,10 @@ class RepositorioReporteSQL(RepositorioSQL):
     # Sanciones
 
     def _consulta_sanciones(self, filtro):
-        condiciones, parametros = self._filtros_comunes(
+        condiciones, parametros = self._construir_filtros_sql_comunes(
             filtro, BUSQUEDA_PRESTAMO, 's.fecha', 's.estado'
         )
-        where_sql = self._where(condiciones)
+        where_sql = self._armar_clausula_where(condiciones)
 
         tablas = JOINS_PRESTAMO + """
             JOIN incidencia i ON i.id_detalle = d.id_detalle
@@ -335,12 +335,12 @@ class RepositorioReporteSQL(RepositorioSQL):
             OR CONCAT(reg.nombres, ' ', reg.apellidos) LIKE %s
             OR h.observacion LIKE %s
         """
-        condiciones, parametros = self._filtros_comunes(
+        condiciones, parametros = self._construir_filtros_sql_comunes(
             filtro, busqueda, 'h.fecha', 'h.estado_nuevo'
         )
         condiciones.append("h.entidad = 'BIEN_MATERIAL'")
         condiciones.append("h.estado_nuevo IN ('DANADO', 'PERDIDO')")
-        where_sql = self._where(condiciones)
+        where_sql = self._armar_clausula_where(condiciones)
 
         tablas = """
             FROM historial_estado h
@@ -388,7 +388,7 @@ class RepositorioReporteSQL(RepositorioSQL):
                 OR personas.correo LIKE %s
             )""")
             parametros.extend([f'%{filtro.q}%'] * 5)
-        where_sql = self._where(condiciones)
+        where_sql = self._armar_clausula_where(condiciones)
         sql_reporte = f"""
             SELECT personas.dni, personas.nombres, personas.apellidos,
                 personas.tipo_persona, personas.telefono, personas.correo, personas.estado

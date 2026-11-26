@@ -1,4 +1,10 @@
-from dominio.compartido.validacion import Conflicto, NoEncontrado, comprobar_version, entero, texto
+from dominio.compartido.validacion import (
+    Conflicto,
+    NoEncontrado,
+    exigir_version_vigente,
+    validar_entero,
+    validar_texto,
+)
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
 from dominio.gestion_recursos.contratos_recursos import IRepositorioRecurso
 from dominio.gestion_recursos.recurso import (
@@ -39,23 +45,23 @@ class ServicioAplicacionRecurso:
             ),
         )
 
-    def consultar_disponibilidad(self) -> int:
-        return self.repositorio.consultar_disponibilidad()
+    def contar_bienes_disponibles(self) -> int:
+        return self.repositorio.contar_bienes_disponibles()
 
     def consultar_recurso(self, identificador: int) -> dict:
-        fila = self.repositorio.consultar_recurso(entero(identificador))
+        fila = self.repositorio.consultar_recurso(validar_entero(identificador))
         if fila is None:
             raise NoEncontrado('Recurso inexistente.')
         return dict(fila, version=version_recurso(fila))
 
     def registrar_recurso(self, datos: dict, actor: int) -> int:
-        return self._guardar_recurso(datos, actor)
+        return self._validar_y_guardar_recurso(datos, actor)
 
     def actualizar_recurso(self, identificador: int, datos: dict, actor: int) -> int:
-        return self._guardar_recurso(datos, actor, entero(identificador))
+        return self._validar_y_guardar_recurso(datos, actor, validar_entero(identificador))
 
-    def _guardar_recurso(self, datos: dict, actor: int, identificador: int | None = None) -> int:
-        actor = entero(actor)
+    def _validar_y_guardar_recurso(self, datos: dict, actor: int, identificador: int | None = None) -> int:
+        actor = validar_entero(actor)
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
             actual = None
@@ -63,7 +69,7 @@ class ServicioAplicacionRecurso:
                 actual = operacion.consultar_recurso(identificador, bloquear=True)
                 if actual is None:
                     raise NoEncontrado('Recurso inexistente.')
-                comprobar_version(datos.get('version'), version_recurso(actual))
+                exigir_version_vigente(datos.get('version'), version_recurso(actual))
             valores = dict(actual or {})
             valores.update(datos)
             campos_recurso: dict = {campo: valores.get(campo) for campo in CAMPOS_RECURSO}
@@ -75,7 +81,7 @@ class ServicioAplicacionRecurso:
             ):
                 raise Conflicto('El recurso conserva su categoría mientras tenga bienes pendientes de devolución o regularización.')
             id_recurso_guardado = operacion.guardar_recurso(recurso)
-            if identificador is None and texto(
+            if identificador is None and validar_texto(
                 datos.get('codigo_inventario'), 'Código de inventario', 40
             ):
                 bien = BienMaterial.desde_datos(datos, id_recurso=id_recurso_guardado)
@@ -83,7 +89,7 @@ class ServicioAplicacionRecurso:
         return id_recurso_guardado
 
     def eliminar_recurso(self, identificador: int, actor: int) -> None:
-        identificador, actor = entero(identificador), entero(actor)
+        identificador, actor = validar_entero(identificador), validar_entero(actor)
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
             if operacion.consultar_recurso(identificador, bloquear=True) is None:
@@ -104,14 +110,19 @@ class ServicioAplicacionRecurso:
         ]
 
     def consultar_categoria(self, identificador: int) -> dict:
-        fila = self.repositorio.consultar_categoria(entero(identificador))
+        fila = self.repositorio.consultar_categoria(validar_entero(identificador))
         if fila is None:
             raise NoEncontrado('Categoría inexistente.')
         return dict(fila, version=version_categoria(fila))
 
-    def guardar_categoria(self, datos: dict, actor: int, identificador: int | None = None) -> int:
-        actor = entero(actor)
-        identificador = entero(identificador) if identificador is not None else None
+    def registrar_categoria(self, datos: dict, actor: int) -> int:
+        return self._validar_y_guardar_categoria(datos, actor)
+
+    def actualizar_categoria(self, identificador: int, datos: dict, actor: int) -> int:
+        return self._validar_y_guardar_categoria(datos, actor, validar_entero(identificador))
+
+    def _validar_y_guardar_categoria(self, datos: dict, actor: int, identificador: int | None = None) -> int:
+        actor = validar_entero(actor)
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
             actual = None
@@ -119,15 +130,15 @@ class ServicioAplicacionRecurso:
                 actual = operacion.consultar_categoria(identificador, bloquear=True)
                 if actual is None:
                     raise NoEncontrado('Categoría inexistente.')
-                comprobar_version(datos.get('version'), version_categoria(actual))
+                exigir_version_vigente(datos.get('version'), version_categoria(actual))
             valores = dict(actual or {})
             valores.update(datos)
-            nombre = texto(valores.get('nombre'), 'Nombre de categoría', 80, True)
-            descripcion = texto(valores.get('descripcion'), 'Descripción', 255)
+            nombre = validar_texto(valores.get('nombre'), 'Nombre de categoría', 80, True)
+            descripcion = validar_texto(valores.get('descripcion'), 'Descripción', 255)
             return operacion.guardar_categoria(nombre, descripcion, identificador)
 
     def eliminar_categoria(self, identificador: int, actor: int) -> None:
-        identificador, actor = entero(identificador), entero(actor)
+        identificador, actor = validar_entero(identificador), validar_entero(actor)
         with self.repositorio.transaccion() as operacion:
             exigir_permiso(operacion.consultar_cuenta_actor(actor), 'RECURSOS_GESTIONAR')
             if operacion.consultar_categoria(identificador, bloquear=True) is None:

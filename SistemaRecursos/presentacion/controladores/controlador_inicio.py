@@ -6,19 +6,19 @@ def registrar_inicio(app, servicios):
     def inicio():
         resumen = {}
         usuario = g.usuario
-        gestionar = usuario.permite('PRESTAMOS_GESTIONAR')
+        gestionar = usuario.tiene_permiso('PRESTAMOS_GESTIONAR')
 
-        if gestionar or usuario.permite('PRESTAMOS_PROPIOS_CONSULTAR'):
+        if gestionar or usuario.tiene_permiso('PRESTAMOS_PROPIOS_CONSULTAR'):
             dni = None if gestionar else usuario.dni
             resumen.update(servicios['prestamos'].consultar_resumen_prestamos(dni))
 
-        if gestionar or usuario.permite('RESERVAS_PROPIAS_GESTIONAR'):
+        if gestionar or usuario.tiene_permiso('RESERVAS_PROPIAS_GESTIONAR'):
             resumen['reservas_pendientes'] = servicios['reservas'].contar_reservas_pendientes(
                 None if gestionar else usuario.dni
             )
 
-        if usuario.permite('CATALOGO_CONSULTAR'):
-            resumen['bienes_disponibles'] = servicios['recursos'].consultar_disponibilidad()
+        if usuario.tiene_permiso('CATALOGO_CONSULTAR'):
+            resumen['bienes_disponibles'] = servicios['recursos'].contar_bienes_disponibles()
 
         solicitudes = (
             len(servicios['ampliaciones'].consultar_solicitudes_ampliacion('PENDIENTE'))
@@ -28,7 +28,7 @@ def registrar_inicio(app, servicios):
 
         procesador = (
             servicios['procesador'].consultar_estado_procesador()
-            if usuario.permite('USUARIOS_GESTIONAR')
+            if usuario.tiene_permiso('USUARIOS_GESTIONAR')
             else None
         )
         return render_template(

@@ -1,12 +1,12 @@
 {% extends 'personas_usuarios/vista_acceso.html' %}
-{% from 'parciales/formularios.html' import csrf %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf %}
 {% block titulo %}Activar cuenta · UNSA{% endblock %}
 {% block panel_acceso %}
   <section class="panel-acceso">
   <div class="contenido-panel-acceso">
   <h2>Activar cuenta</h2>
   <form method="post" class="formulario">
-    {{ csrf() }}
+    {{ campo_oculto_csrf() }}
     {% if error %}<p class="aviso" role="alert">{{ error }}</p>{% endif %}
     <label>Usuario<input name="usuario" autocomplete="username" maxlength="50" required></label>
     <label>Código de activación<input name="codigo" type="password" autocomplete="off" maxlength="43" required></label>

@@ -1,7 +1,8 @@
 -- Estructura del sistema de prestamos de recursos para MySQL 8.
--- Crea prestamos_escuela sin registros: personas, cuentas y catalogo vacios.
--- Acceso actualizado: persona.correo admite NULL y usuario_sistema incluye debe_cambiar_clave.
--- Incluye sanciones por gravedad, sesiones, mantenimientos, solicitudes de ampliacion y procesador. Ejecutar sobre una base nueva.
+-- Crea prestamos_escuela para una instalación nueva. Los datos ficticios se cargan con datos_prueba.sql.
+-- Esquema vigente para instalar el sistema desde cero.
+-- Incluye roles fijos, sanciones por gravedad, sesiones, mantenimientos, ampliaciones,
+-- procesador y auditoría en historial_estado. Importa el archivo completo en una base nueva.
 -- CREATE TABLE IF NOT EXISTS no modifica la estructura de tablas ya existentes.
 SET NAMES utf8mb4;
 
@@ -346,4 +347,5 @@ CREATE TABLE IF NOT EXISTS estado_procesador (
   fallos_consecutivos        INT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB;
 
+-- Fila operativa del procesador para que pueda iniciar desde la primera ejecución.
 INSERT IGNORE INTO estado_procesador(id_procesador) VALUES (1);

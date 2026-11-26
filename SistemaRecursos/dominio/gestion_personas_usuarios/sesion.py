@@ -21,7 +21,7 @@ class AccesoBloqueado(Exception):
         self.minutos = minutos
 
 
-def huella_sesion(token: str) -> str:
+def calcular_huella_del_token_de_sesion(token: str) -> str:
     """El servidor solo guarda la huella del token; la cookie no sirve sin la tabla."""
     return sha256(token.encode()).hexdigest()
 
@@ -52,7 +52,7 @@ class LimitadorIntentos:
     _bloqueos: dict = field(default_factory=dict, repr=False)
     _cerrojo: Lock = field(default_factory=Lock, repr=False)
 
-    def minutos_bloqueo(self, clave) -> int:
+    def calcular_minutos_de_bloqueo_restantes(self, clave) -> int:
         """Minutos restantes de bloqueo de la clave, o 0 si puede intentar."""
         with self._cerrojo:
             hasta = self._bloqueos.get(clave)
@@ -62,7 +62,7 @@ class LimitadorIntentos:
                 return 0
             return max(1, -(-int((hasta - ahora).total_seconds()) // 60))
 
-    def registrar_fallo(self, clave) -> None:
+    def registrar_intento_de_acceso_fallido(self, clave) -> None:
         with self._cerrojo:
             ahora = self.reloj()
             recientes = [f for f in self._fallos.get(clave, []) if ahora - f < self.ventana]
@@ -72,14 +72,14 @@ class LimitadorIntentos:
                 recientes = []
             self._fallos[clave] = recientes
             if len(self._fallos) > 10000:
-                self._depurar(ahora)
+                self._eliminar_intentos_y_bloqueos_expirados(ahora)
 
-    def limpiar(self, clave) -> None:
+    def borrar_intentos_y_bloqueo(self, clave) -> None:
         with self._cerrojo:
             self._fallos.pop(clave, None)
             self._bloqueos.pop(clave, None)
 
-    def _depurar(self, ahora):
+    def _eliminar_intentos_y_bloqueos_expirados(self, ahora):
         for clave in [c for c, f in self._fallos.items() if not f or ahora - f[-1] >= self.ventana]:
             del self._fallos[clave]
         for clave in [c for c, h in self._bloqueos.items() if h <= ahora]:

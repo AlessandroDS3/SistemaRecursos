@@ -1,13 +1,18 @@
-from dominio.compartido.validacion import Conflicto, NoEncontrado, entero, texto
+from datetime import datetime
+from typing import Mapping
+
+from dominio.compartido.validacion import Conflicto, NoEncontrado, validar_entero, validar_texto
 from dominio.gestion_personas_usuarios.acceso import exigir_permiso
-from dominio.gestion_personas_usuarios.persona import validar_elegibilidad
-from dominio.gestion_control.politica_prestamo import HorarioAtencion, PoliticaPrestamo
-from dominio.gestion_prestamos.ampliacion_prestamo import AmpliacionPrestamo
+from dominio.gestion_personas_usuarios.persona import validar_elegibilidad_del_solicitante
+from dominio.gestion_prestamos.ampliacion_prestamo import (
+    EVENTO_AMPLIACION_PLAZO, AmpliacionPrestamo, DatosParaValidarAmpliacion, PrestamoParaAmpliar,
+)
 from dominio.gestion_prestamos.contratos_prestamos import IRepositorioAmpliacionPrestamo
 from dominio.gestion_prestamos.solicitud_ampliacion import (
+    EstadoSolicitudAmpliacion,
     SolicitudAmpliacion,
-    exigir_pendiente,
-    exigir_responsable,
+    exigir_solicitud_ampliacion_pendiente,
+    exigir_titular_del_prestamo_para_ampliacion,
 )
 
 
@@ -15,8 +20,8 @@ class ServicioAplicacionAmpliacionPrestamo:
     def __init__(self, repositorio: IRepositorioAmpliacionPrestamo):
         self.repositorio = repositorio
 
-    def ampliar_prestamo(self, prestamo_id, detalle_id, datos, actor):
-        prestamo_id, detalle_id = entero(prestamo_id), entero(detalle_id)
+    def ampliar_prestamo(self, prestamo_id: int, detalle_id: int, datos: Mapping[str, str], actor: int) -> datetime:
+        prestamo_id, detalle_id = validar_entero(prestamo_id), validar_entero(detalle_id)
         ampliacion = AmpliacionPrestamo(
             cantidad=datos.get('cantidad'),
             unidad=datos.get('unidad'),
@@ -25,23 +30,17 @@ class ServicioAplicacionAmpliacionPrestamo:
         )
         with self.repositorio.transaccion() as operacion:
             cuenta = exigir_permiso(
-                operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
+                operacion.consultar_cuenta_actor(validar_entero(actor)), 'PRESTAMOS_GESTIONAR'
             )
-            prestamo, nueva = self._calcular_ampliacion(
-                operacion, prestamo_id, detalle_id, ampliacion
+            prestamo, nueva = self._validar_y_calcular_nuevo_plazo(
+                operacion, operacion.consultar_datos_para_validar_ampliacion(prestamo_id, detalle_id), ampliacion,
             )
             operacion.actualizar_plazo_prestamo(detalle_id, ampliacion.fecha_anterior, nueva)
-            operacion.registrar_historial_estado(
-                'PRESTAMO',
-                prestamo_id,
-                prestamo['estado'],
-                prestamo['estado'],
-                cuenta['dni_persona'],
-                f'Detalle #{detalle_id}: {ampliacion.fecha_anterior} UTC → {nueva} UTC. {ampliacion.motivo}',
-            )
+            self._registrar_historial_ampliacion(operacion, prestamo, detalle_id, ampliacion, nueva, cuenta['dni_persona'])
         return nueva
 
-    def consultar_ampliacion_prestamo(self, prestamo_id, detalle_id, datos, actor):
+    def previsualizar_ampliacion_prestamo(self, prestamo_id: int, detalle_id: int,
+                                     datos: Mapping[str, str], actor: int) -> datetime:
         ampliacion = AmpliacionPrestamo(
             cantidad=datos.get('cantidad'),
             unidad=datos.get('unidad'),
@@ -49,33 +48,33 @@ class ServicioAplicacionAmpliacionPrestamo:
             motivo=datos.get('motivo', ''),
         )
         with self.repositorio.transaccion() as operacion:
-            exigir_permiso(operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR')
-            _, nueva = self._calcular_ampliacion(
-                operacion, entero(prestamo_id), entero(detalle_id), ampliacion
+            exigir_permiso(operacion.consultar_cuenta_actor(validar_entero(actor)), 'PRESTAMOS_GESTIONAR')
+            _, nueva = self._validar_y_calcular_nuevo_plazo(
+                operacion, operacion.consultar_datos_para_validar_ampliacion(validar_entero(prestamo_id), validar_entero(detalle_id)),
+                ampliacion,
             )
         return nueva
 
     # Solicitudes del usuario (AMP-01)
 
-    def solicitar_ampliacion(self, prestamo_id, detalle_id, datos, actor):
-        prestamo_id, detalle_id = entero(prestamo_id), entero(detalle_id)
+    def solicitar_ampliacion(self, prestamo_id: int, detalle_id: int, datos: Mapping[str, str], actor: int) -> int:
+        prestamo_id, detalle_id = validar_entero(prestamo_id), validar_entero(detalle_id)
         solicitud = SolicitudAmpliacion(
             cantidad=datos.get('cantidad'), unidad=datos.get('unidad'), motivo=datos.get('motivo')
         )
         with self.repositorio.transaccion() as operacion:
             cuenta = exigir_permiso(
-                operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_PROPIOS_CONSULTAR'
+                operacion.consultar_cuenta_actor(validar_entero(actor)), 'PRESTAMOS_PROPIOS_CONSULTAR'
             )
-            contexto = operacion.consultar_contexto_ampliacion_prestamo(prestamo_id, detalle_id)
-            if contexto['prestamo'] is None or contexto['detalle'] is None:
+            contexto = operacion.consultar_datos_para_validar_ampliacion(prestamo_id, detalle_id)
+            if contexto.prestamo is None or contexto.detalle is None:
                 raise NoEncontrado('Préstamo inexistente.')
-            exigir_responsable(contexto['prestamo'], cuenta['dni_persona'])
-            fecha_anterior = contexto['detalle']['fecha_limite_devolucion']
+            exigir_titular_del_prestamo_para_ampliacion(contexto.prestamo.dni_persona, cuenta['dni_persona'])
+            fecha_anterior = contexto.detalle.fecha_limite_devolucion
             # Se revisa ahora contra la política para no registrar pedidos imposibles.
-            prestamo, nueva = self._calcular_ampliacion(
+            prestamo, _ = self._validar_y_calcular_nuevo_plazo(
                 operacion,
-                prestamo_id,
-                detalle_id,
+                contexto,
                 AmpliacionPrestamo(
                     cantidad=solicitud.cantidad,
                     unidad=solicitud.unidad,
@@ -87,21 +86,21 @@ class ServicioAplicacionAmpliacionPrestamo:
                 prestamo_id, detalle_id, cuenta['dni_persona'], solicitud, fecha_anterior
             )
             operacion.registrar_historial_estado(
-                'PRESTAMO', prestamo_id, prestamo['estado'], prestamo['estado'],
+                'PRESTAMO', prestamo_id, prestamo.estado, prestamo.estado,
                 cuenta['dni_persona'],
                 f'Solicitud de ampliación #{identificador} para el detalle #{detalle_id}: '
                 f'{solicitud.motivo}'[:255],
             )
         return identificador
 
-    def aprobar_solicitud_ampliacion(self, identificador, datos, actor):
-        identificador = entero(identificador)
-        observacion = texto(datos.get('observacion'), 'Observación', 255)
+    def aprobar_solicitud_ampliacion(self, identificador: int, datos: Mapping[str, str], actor: int) -> datetime:
+        identificador = validar_entero(identificador)
+        observacion = validar_texto(datos.get('observacion'), 'Observación', 255)
         with self.repositorio.transaccion() as operacion:
             cuenta = exigir_permiso(
-                operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
+                operacion.consultar_cuenta_actor(validar_entero(actor)), 'PRESTAMOS_GESTIONAR'
             )
-            solicitud = exigir_pendiente(
+            solicitud = exigir_solicitud_ampliacion_pendiente(
                 operacion.consultar_solicitud_ampliacion(identificador)
             )
             ampliacion = AmpliacionPrestamo(
@@ -111,38 +110,56 @@ class ServicioAplicacionAmpliacionPrestamo:
                 motivo=f'Solicitud #{identificador}',
             )
             try:
-                prestamo, nueva = self._calcular_ampliacion(
-                    operacion, solicitud['id_prestamo'], solicitud['id_detalle'], ampliacion
+                contexto = operacion.consultar_datos_para_validar_ampliacion(solicitud['id_prestamo'], solicitud['id_detalle'])
+                prestamo, nueva = self._validar_y_calcular_nuevo_plazo(
+                    operacion, contexto, ampliacion,
                 )
             except Conflicto as error:
                 raise Conflicto(f'{error} Rechaza la solicitud con un motivo.') from None
-            exigir_pendiente(operacion.consultar_solicitud_ampliacion(identificador, bloquear=True))
+            exigir_solicitud_ampliacion_pendiente(operacion.consultar_solicitud_ampliacion(identificador, bloquear=True))
             operacion.actualizar_plazo_prestamo(
                 solicitud['id_detalle'], ampliacion.fecha_anterior, nueva
             )
             operacion.resolver_solicitud_ampliacion(
-                identificador, 'APROBADA', cuenta['dni_persona'], nueva, observacion or None
+                identificador, EstadoSolicitudAmpliacion.APROBADA, cuenta['dni_persona'], nueva, observacion or None
             )
-            operacion.registrar_historial_estado(
-                'PRESTAMO', solicitud['id_prestamo'], prestamo['estado'], prestamo['estado'],
-                cuenta['dni_persona'],
-                f"Solicitud #{identificador} aprobada. Detalle #{solicitud['id_detalle']}: "
-                f'{ampliacion.fecha_anterior} UTC → {nueva} UTC',
+            self._registrar_historial_ampliacion(
+                operacion, prestamo, solicitud['id_detalle'], ampliacion, nueva, cuenta['dni_persona'],
+                id_solicitud=identificador,
             )
         return nueva
 
-    def rechazar_solicitud_ampliacion(self, identificador, datos, actor):
-        identificador = entero(identificador)
-        observacion = texto(datos.get('observacion'), 'Motivo del rechazo', 255, True)
+    @staticmethod
+    def _registrar_historial_ampliacion(
+        operacion: IRepositorioAmpliacionPrestamo, prestamo: PrestamoParaAmpliar,
+        detalle_id: int, ampliacion: AmpliacionPrestamo, nueva_fecha: datetime, documento: str,
+        *, id_solicitud: int | None = None,
+    ) -> None:
+        anterior = ampliacion.fecha_anterior
+        observacion = f'Detalle #{detalle_id}: {anterior} UTC → {nueva_fecha} UTC'
+        datos: dict[str, object] = dict(evento=EVENTO_AMPLIACION_PLAZO, id_detalle=detalle_id,
+                                       fecha_limite_anterior=anterior.isoformat(), fecha_limite_nueva=nueva_fecha.isoformat())
+        if id_solicitud is not None:
+            observacion = f'Solicitud #{id_solicitud} aprobada. {observacion}'
+            datos['id_solicitud'] = id_solicitud
+        else:
+            observacion = f'{observacion}. {ampliacion.motivo}'
+        operacion.registrar_historial_estado(
+            'PRESTAMO', prestamo.id_prestamo, prestamo.estado, prestamo.estado, documento, observacion, datos=datos,
+        )
+
+    def rechazar_solicitud_ampliacion(self, identificador: int, datos: Mapping[str, str], actor: int) -> None:
+        identificador = validar_entero(identificador)
+        observacion = validar_texto(datos.get('observacion'), 'Motivo del rechazo', 255, True)
         with self.repositorio.transaccion() as operacion:
             cuenta = exigir_permiso(
-                operacion.consultar_cuenta_actor(entero(actor)), 'PRESTAMOS_GESTIONAR'
+                operacion.consultar_cuenta_actor(validar_entero(actor)), 'PRESTAMOS_GESTIONAR'
             )
-            solicitud = exigir_pendiente(
+            solicitud = exigir_solicitud_ampliacion_pendiente(
                 operacion.consultar_solicitud_ampliacion(identificador, bloquear=True)
             )
             operacion.resolver_solicitud_ampliacion(
-                identificador, 'RECHAZADA', cuenta['dni_persona'], None, observacion
+                identificador, EstadoSolicitudAmpliacion.RECHAZADA, cuenta['dni_persona'], None, observacion
             )
             operacion.registrar_historial_estado(
                 'PRESTAMO', solicitud['id_prestamo'], None, 'SOLICITUD_RECHAZADA',
@@ -152,31 +169,30 @@ class ServicioAplicacionAmpliacionPrestamo:
     def consultar_solicitudes_ampliacion(self, estado='PENDIENTE'):
         return self.repositorio.consultar_solicitudes_ampliacion(estado=estado or None)
 
-    def consultar_solicitudes_prestamo(self, prestamo_id):
-        return self.repositorio.consultar_solicitudes_ampliacion(prestamo=entero(prestamo_id))
+    def consultar_solicitudes_de_ampliacion_del_prestamo(self, prestamo_id):
+        return self.repositorio.consultar_solicitudes_ampliacion(prestamo=validar_entero(prestamo_id))
 
     @staticmethod
-    def _calcular_ampliacion(operacion, prestamo_id, detalle_id, ampliacion):
-        contexto = operacion.consultar_contexto_ampliacion_prestamo(prestamo_id, detalle_id)
-        prestamo, detalle = contexto['prestamo'], contexto['detalle']
+    def _validar_y_calcular_nuevo_plazo(operacion: IRepositorioAmpliacionPrestamo, contexto: DatosParaValidarAmpliacion,
+                            ampliacion: AmpliacionPrestamo) -> tuple[PrestamoParaAmpliar, datetime]:
+        prestamo, detalle = contexto.prestamo, contexto.detalle
         if prestamo is None:
             raise NoEncontrado('Préstamo inexistente.')
         if detalle is None:
             raise NoEncontrado('El detalle no pertenece a este préstamo.')
-        fila, horario = contexto['politica'], contexto['horario']
-        if fila is None:
+        if contexto.politica is None:
             raise ValueError('No se encontró la política aplicada al bien.')
-        nueva = ampliacion.calcular(
+        nueva = ampliacion.calcular_nuevo_plazo_de_devolucion(
             detalle,
             operacion.consultar_fecha_actual(),
-            PoliticaPrestamo.desde_datos(fila),
-            HorarioAtencion(**horario) if horario else None,
+            contexto.politica,
+            contexto.horario,
         )
-        restricciones = operacion.consultar_restricciones_ampliacion(prestamo, detalle['id_recurso'])
-        for persona in restricciones['personas']:
-            validar_elegibilidad(persona)
-        if restricciones['sancion']:
+        restricciones = operacion.consultar_restricciones_ampliacion(prestamo, detalle.id_recurso)
+        for persona in restricciones.personas:
+            validar_elegibilidad_del_solicitante(persona)
+        if restricciones.sancion:
             raise Conflicto('El responsable o un integrante tiene una sanción activa.')
-        if restricciones['reservas_sin_bien']:
+        if restricciones.reservas_sin_bien:
             raise Conflicto('Hay reservas vigentes de este recurso sin otro ejemplar disponible.')
         return prestamo, nueva

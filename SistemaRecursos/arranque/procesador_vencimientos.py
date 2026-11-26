@@ -14,7 +14,7 @@ def procesar_vencimientos(sanciones, reservas, procesador, detener, intervalo=30
 
     periodo = timedelta(seconds=intervalo)
     while not detener.is_set():
-        procesador.ejecutar_revision(operaciones, intervalo_minimo=periodo)
+        procesador.ejecutar_revision_de_vencimientos(operaciones, intervalo_minimo=periodo)
         detener.wait(intervalo)
 
 
@@ -26,7 +26,7 @@ def iniciar_procesador_vencimientos(sanciones, reservas, procesador, intervalo=3
     return detener
 
 
-def main(argv=None):
+def ejecutar_procesador_desde_consola(argv=None):
     parser = ArgumentParser(description='Ejecuta la revisión automática de vencimientos.')
     parser.parse_args(argv)
 
@@ -43,4 +43,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    raise SystemExit(ejecutar_procesador_desde_consola())

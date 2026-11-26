@@ -52,9 +52,9 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
             if recurso and recurso['marca'] and recurso['modelo']:
                 self.validar_serie_por_modelo(bien.numero_serie, recurso['marca'], recurso['modelo'], identificador)
         if identificador is None:
-            bien.id_bien = self._insertar_con_identificador(datos)
+            bien.id_bien = self._insertar_bien_con_identificador_de_sistema(datos)
         else:
-            self.ejecutar(
+            self.ejecutar_escritura_sql(
                 'UPDATE bien_material SET '
                 + ','.join(c + '=%s' for c in datos)
                 + ' WHERE id_bien=%s',
@@ -73,7 +73,7 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
         if repetido:
             raise Conflicto('Ese número de serie ya está registrado para la misma marca y modelo.')
 
-    def _insertar_con_identificador(self, datos: dict) -> int:
+    def _insertar_bien_con_identificador_de_sistema(self, datos: dict) -> int:
         """Genera el identificador en el servidor; una colisión reintenta con otro valor.
 
         En InnoDB un INSERT rechazado por clave única no revierte la transacción en curso.
@@ -81,7 +81,7 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
         anio = self.consultar_fecha_actual().year
         for _ in range(INTENTOS_IDENTIFICADOR):
             try:
-                return self.insertar(
+                return self.insertar_fila_sql(
                     'bien_material',
                     dict(datos, identificador_sistema=generar_identificador_sistema(anio)),
                 )
@@ -91,7 +91,7 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
         raise RuntimeError('No se pudo generar un identificador único para el bien.')
 
     def cambiar_estado_bien_material(self, identificador, anterior, nuevo, motivo, actor) -> None:
-        self.ejecutar('UPDATE bien_material SET estado=%s WHERE id_bien=%s', (nuevo, identificador))
+        self.ejecutar_escritura_sql('UPDATE bien_material SET estado=%s WHERE id_bien=%s', (nuevo, identificador))
         self.registrar_historial_estado(
             'BIEN_MATERIAL', identificador, anterior, nuevo, actor, motivo
         )
@@ -134,7 +134,7 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
         )
 
     def eliminar_bien_material(self, identificador: int) -> None:
-        self.ejecutar('DELETE FROM bien_material WHERE id_bien=%s', (identificador,))
+        self.ejecutar_escritura_sql('DELETE FROM bien_material WHERE id_bien=%s', (identificador,))
 
     # Mantenimientos (MAN-01)
 
@@ -158,7 +158,7 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
         )
 
     def abrir_mantenimiento(self, identificador, apertura, estado_previo, actor) -> int:
-        return self.ejecutar(
+        return self.ejecutar_escritura_sql(
             '''INSERT INTO mantenimiento_bien(id_bien,tipo,motivo,estado_previo,fecha_inicio,
             fecha_fin_estimada,dni_apertura) VALUES(%s,%s,%s,%s,UTC_TIMESTAMP(),%s,%s)''',
             (identificador, apertura.tipo, apertura.motivo, estado_previo,
@@ -166,7 +166,7 @@ class RepositorioBienMaterialSQL(RepositorioSQL):
         )
 
     def cerrar_mantenimiento(self, id_mantenimiento, cierre, actor) -> None:
-        self.ejecutar(
+        self.ejecutar_escritura_sql(
             '''UPDATE mantenimiento_bien SET fecha_fin_real=UTC_TIMESTAMP(),dni_cierre=%s,
             resultado=%s,observacion_cierre=%s
             WHERE id_mantenimiento=%s AND fecha_fin_real IS NULL''',

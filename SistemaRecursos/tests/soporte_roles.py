@@ -4,7 +4,7 @@ from dominio.gestion_personas_usuarios.acceso import CuentaAcceso
 from dominio.gestion_personas_usuarios.rol import permisos_del_rol
 
 
-def cliente_autenticado(prueba, app, acceso, identificador=None):
+def crear_cliente_con_sesion_simulada(prueba, app, acceso, identificador=None):
     """Cliente de Flask con sesión válida: cuenta activa y sesión vigente en el servidor."""
     servicio = app.extensions['servicios']['acceso']
     prueba.enterContext(patch.object(servicio, 'consultar_cuenta_activa', return_value=acceso))
@@ -20,7 +20,7 @@ def cliente_autenticado(prueba, app, acceso, identificador=None):
     return cliente
 
 
-def cuenta(rol):
+def crear_cuenta_de_prueba(rol):
     return CuentaAcceso(
         id_usuario=1, dni='20000001', nombre_usuario='prueba',
         nombres='Ana', apellidos='Prueba', rol=rol,

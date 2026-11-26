@@ -5,20 +5,20 @@ from unittest.mock import patch
 
 from app import create_app
 from dominio.gestion_personas_usuarios.rol import permisos_del_rol
-from tests.soporte_roles import cliente_autenticado, cuenta
+from tests.soporte_roles import crear_cliente_con_sesion_simulada, crear_cuenta_de_prueba
 
 
 class PantallaRolesFijosTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with patch('app.clave_local', return_value='pruebas-roles'):
+        with patch('app.obtener_clave_de_sesion_flask', return_value='pruebas-roles'):
             cls.app = create_app(dict(TESTING=True))
 
-    def cliente(self, rol):
-        return cliente_autenticado(self, self.app, cuenta(rol))
+    def crear_cliente_para_rol(self, rol):
+        return crear_cliente_con_sesion_simulada(self, self.app, crear_cuenta_de_prueba(rol))
 
     def test_administrador_consulta_permisos_sin_formulario_de_edicion(self):
-        cliente = self.cliente('ADMINISTRADOR')
+        cliente = self.crear_cliente_para_rol('ADMINISTRADOR')
         cuentas = self.app.extensions['servicios']['cuentas']
         with patch.object(cuentas, 'consultar_cuenta', return_value=dict(
             nombre_usuario='prueba', estado_cuenta='ACTIVA', rol='USUARIO', version='vigente',
@@ -32,7 +32,7 @@ class PantallaRolesFijosTest(unittest.TestCase):
         self.assertNotIn('href="/roles"', html)
 
     def test_antigua_ruta_de_edicion_no_existe(self):
-        cliente = self.cliente('ADMINISTRADOR')
+        cliente = self.crear_cliente_para_rol('ADMINISTRADOR')
         respuesta = cliente.post('/roles/permisos', data={
             'csrf_token': 'token', 'permisos_USUARIO': 'ROLES_GESTIONAR',
         })
@@ -45,7 +45,7 @@ class PantallaRolesFijosTest(unittest.TestCase):
         datos = {'csrf_token': 'token', 'version': 'vigente', 'rol': 'ENCARGADO_PRESTAMOS'}
         for rol in ('USUARIO', 'ENCARGADO_PRESTAMOS', 'ADMINISTRADOR'):
             with self.subTest(rol=rol):
-                cliente = self.cliente(rol)
+                cliente = self.crear_cliente_para_rol(rol)
                 with patch.object(cuentas, 'actualizar_cuenta') as actualizar:
                     respuesta = cliente.post('/cuentas/20000002/editar', data=datos)
                     if rol == 'ADMINISTRADOR':

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf %}
-{% from 'parciales/componentes.html' import estado as etiqueta_estado %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf %}
+{% from 'parciales/componentes.html' import insignia_de_estado as etiqueta_estado %}
 {% block titulo %}Solicitudes de ampliación · UNSA{% endblock %}
 {% block contenido %}
   <div class="cabecera">
@@ -12,7 +12,7 @@
   </div>
   <nav class="pestanas-recursos" aria-label="Estado de las solicitudes">
     {% for codigo, nombre in (('PENDIENTE', 'Pendientes'), ('APROBADA', 'Aprobadas'), ('RECHAZADA', 'Rechazadas'), ('', 'Todas')) %}
-      <a href="{{ url_for('ampliaciones.consultar_solicitudes', estado=codigo) }}"
+      <a href="{{ url_for('ampliaciones.consultar_solicitudes_ampliacion', estado=codigo) }}"
          {% if estado == codigo %}aria-current="page"{% endif %}>{{ nombre }}</a>
     {% endfor %}
   </nav>
@@ -46,13 +46,13 @@
               <td>{{ etiqueta_estado(s.estado) }}</td>
               <td>
                 {% if s.estado == 'PENDIENTE' %}
-                  <form method="post" class="formulario" action="{{ url_for('ampliaciones.aprobar_solicitud', identificador=s.id_solicitud) }}">
-                    {{ csrf() }}
+                  <form method="post" class="formulario" action="{{ url_for('ampliaciones.aprobar_solicitud_ampliacion', identificador=s.id_solicitud) }}">
+                    {{ campo_oculto_csrf() }}
                     <label>Observación (opcional)<input name="observacion" maxlength="255"></label>
                     <button>Aprobar</button>
                   </form>
-                  <form method="post" class="formulario operacion-bien" action="{{ url_for('ampliaciones.rechazar_solicitud', identificador=s.id_solicitud) }}">
-                    {{ csrf() }}
+                  <form method="post" class="formulario operacion-bien" action="{{ url_for('ampliaciones.rechazar_solicitud_ampliacion', identificador=s.id_solicitud) }}">
+                    {{ campo_oculto_csrf() }}
                     <label>Motivo del rechazo<input name="observacion" maxlength="255" required></label>
                     <button class="secundario">Rechazar</button>
                   </form>

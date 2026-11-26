@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf,campo,opciones %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf,campo_de_formulario,selector_de_opciones %}
 {% block contenido %}
   {% if modo=="lista" %}
     <h1>Políticas de préstamo</h1>
     <section class="panel configuracion-compacta" aria-label="Límites y horario">
       <form method="post" action="{{ url_for('politicas.guardar_limites_articulos') }}" class="bloque-maximos">
-        {{ csrf() }}
+        {{ campo_oculto_csrf() }}
         <h2>Máximo de artículos por persona</h2>
         <div class="campos-configuracion-compacta">
           {% for tipo in tipos %}
@@ -19,8 +19,8 @@
           {% if g.usuario.rol == 'ADMINISTRADOR' %}<button class="secundario">Guardar</button>{% endif %}
         </div>
       </form>
-      <form method="post" action="{{ url_for('politicas.guardar_configuracion_general') }}" id="configuracion-general" class="bloque-horario">
-        {{ csrf() }}
+      <form method="post" action="{{ url_for('politicas.guardar_horario_y_plazos_de_reserva') }}" id="configuracion-general" class="bloque-horario">
+        {{ campo_oculto_csrf() }}
         <h2>Horario de atención</h2>
         <fieldset class="dias-atencion">
           <legend>Días de atención</legend>
@@ -35,8 +35,8 @@
           </div>
         </fieldset>
         <div class="campos-configuracion-compacta">
-          {{ campo('hora_apertura','Apertura (Lima)',configuracion.hora_apertura|default('08:00')|hora,tipo='time',requerido=true) }}
-          {{ campo('hora_cierre','Cierre (Lima)',configuracion.hora_cierre|default('16:00')|hora,tipo='time',requerido=true) }}
+          {{ campo_de_formulario('hora_apertura','Apertura (Lima)',configuracion.hora_apertura|default('08:00')|hora,tipo='time',requerido=true) }}
+          {{ campo_de_formulario('hora_cierre','Cierre (Lima)',configuracion.hora_cierre|default('16:00')|hora,tipo='time',requerido=true) }}
           <button>Guardar</button>
         </div>
       </form>
@@ -73,7 +73,7 @@
                     <form method="post"
                           action="{{ url_for('politicas.editar_politica_prestamo',identificador=p.get('id_politica')) }}"
                           class="formulario politica-celda" data-guardar-modificada>
-                      {{ csrf() }}
+                      {{ campo_oculto_csrf() }}
                       <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
                       <input type="hidden" name="tipo_persona" value="{{ tipo }}">
                       <input type="hidden" name="version" value="{{ p.get('version', '') }}">
@@ -117,15 +117,15 @@
         <fieldset>
           <legend>Reservas en espera</legend>
           <div class="rejilla dos-columnas">
-            {{ campo('plazo_espera','Plazo',configuracion.plazo_espera|default(2),tipo='number',requerido=true,formulario='configuracion-general') }}
-            {{ opciones('unidad_espera','Unidad',('HORAS','DIAS'),configuracion.unidad_espera|default('DIAS'),formulario='configuracion-general') }}
+            {{ campo_de_formulario('plazo_espera','Plazo',configuracion.plazo_espera|default(2),tipo='number',requerido=true,formulario='configuracion-general') }}
+            {{ selector_de_opciones('unidad_espera','Unidad',('HORAS','DIAS'),configuracion.unidad_espera|default('DIAS'),formulario='configuracion-general') }}
           </div>
         </fieldset>
         <fieldset>
           <legend>Reservas listas para retiro</legend>
           <div class="rejilla dos-columnas">
-            {{ campo('plazo_retiro','Plazo',configuracion.plazo_retiro|default(24),tipo='number',requerido=true,formulario='configuracion-general') }}
-            {{ opciones('unidad_retiro','Unidad',('HORAS','DIAS'),configuracion.unidad_retiro|default('HORAS'),formulario='configuracion-general') }}
+            {{ campo_de_formulario('plazo_retiro','Plazo',configuracion.plazo_retiro|default(24),tipo='number',requerido=true,formulario='configuracion-general') }}
+            {{ selector_de_opciones('unidad_retiro','Unidad',('HORAS','DIAS'),configuracion.unidad_retiro|default('HORAS'),formulario='configuracion-general') }}
           </div>
         </fieldset>
       </div>
@@ -140,10 +140,10 @@
       política
     </h1>
     <form method="post" class="formulario panel">
-      {{ csrf() }}
+      {{ campo_oculto_csrf() }}
       <input type="hidden" name="version" value="{{ valor_formulario('version', version) }}">
       <div class="rejilla">
-        {{ opciones('tipo_persona','Tipo de persona',tipos,politica.tipo_persona) }}
+        {{ selector_de_opciones('tipo_persona','Tipo de persona',tipos,politica.tipo_persona) }}
         <label>
           Categoría
           <select name="id_categoria" required>
@@ -154,8 +154,8 @@
             {% endfor %}
           </select>
         </label>
-        {{ campo('plazo_maximo','Plazo máximo',politica.plazo_maximo,tipo='number',requerido=true) }}
-        {{ opciones('unidad_plazo','Unidad',('HORAS','DIAS'),politica.unidad_plazo) }}
+        {{ campo_de_formulario('plazo_maximo','Plazo máximo',politica.plazo_maximo,tipo='number',requerido=true) }}
+        {{ selector_de_opciones('unidad_plazo','Unidad',('HORAS','DIAS'),politica.unidad_plazo) }}
         <label class="check">
           <input name="permite_salida"
                  type="checkbox"
@@ -172,7 +172,7 @@
         <p class="suave">Solo se puede eliminar si no tiene préstamos asociados.</p>
         <form method="post"
               action="{{ url_for('politicas.eliminar_politica_prestamo',identificador=politica.id_politica) }}">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <button class="secundario">Eliminar política</button>
         </form>
       </details>

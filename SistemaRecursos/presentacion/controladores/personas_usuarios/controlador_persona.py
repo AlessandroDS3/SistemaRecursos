@@ -7,7 +7,7 @@ from dominio.gestion_personas_usuarios.persona import (
     TIPOS_PERSONA,
 )
 from presentacion.seguridad import requiere_permiso
-from presentacion.formularios import recuperar_formulario
+from presentacion.formularios import recuperar_formulario_tras_error
 
 VISTA_PERSONA = 'personas_usuarios/vista_persona.html'
 
@@ -60,12 +60,12 @@ class ControladorPersona:
             persona=persona,
             cambios_tipo=(self.servicio.consultar_cambios_tipo_persona(documento)
                            if g.usuario.rol == 'ADMINISTRADOR' else []),
-            tiene_cuenta=g.usuario.permite('USUARIOS_GESTIONAR')
+            tiene_cuenta=g.usuario.tiene_permiso('USUARIOS_GESTIONAR')
             and self.cuentas.tiene_cuenta(documento),
         )
 
     @requiere_permiso('PERSONAS_GESTIONAR')
-    @recuperar_formulario(lambda self: self._mostrar_formulario_persona())
+    @recuperar_formulario_tras_error(lambda self: self._mostrar_formulario_persona())
     def registrar_persona(self):
         if request.method == 'POST':
             dni_guardado = self.servicio.registrar_persona(
@@ -76,7 +76,7 @@ class ControladorPersona:
         return self._mostrar_formulario_persona()
 
     @requiere_permiso('PERSONAS_GESTIONAR')
-    @recuperar_formulario(lambda self, documento: self._mostrar_formulario_persona(documento))
+    @recuperar_formulario_tras_error(lambda self, documento: self._mostrar_formulario_persona(documento))
     def editar_persona(self, documento):
         if request.method == 'POST':
             dni_guardado = self.servicio.actualizar_persona(

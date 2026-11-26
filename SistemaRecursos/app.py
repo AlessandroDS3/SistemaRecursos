@@ -36,10 +36,10 @@ from arranque.procesador_vencimientos import iniciar_procesador_vencimientos
 from dominio.gestion_personas_usuarios.sesion import DURACION_MAXIMA
 
 from presentacion.controladores.controlador_inicio import registrar_inicio
-from presentacion.errores_http import registrar_errores
-from presentacion.filtros_plantillas import registrar_filtros
+from presentacion.errores_http import registrar_manejadores_de_errores_http
+from presentacion.filtros_plantillas import registrar_filtros_de_plantillas
 from presentacion.seguridad import configurar_seguridad
-from presentacion.formularios import error_campo, identificador_campo, valor_formulario
+from presentacion.formularios import error_campo, generar_id_del_campo, valor_formulario
 from presentacion.controladores.personas_usuarios.controlador_acceso import ControladorAcceso
 from presentacion.controladores.personas_usuarios.controlador_cuenta import ControladorCuenta
 from presentacion.controladores.personas_usuarios.controlador_persona import ControladorPersona
@@ -53,7 +53,7 @@ from presentacion.controladores.control.controlador_sancion import ControladorSa
 from presentacion.controladores.reportes.controlador_reporte import ControladorReporte
 
 
-def clave_local():
+def obtener_clave_de_sesion_flask():
     if os.getenv('FLASK_SECRET_KEY'):
         return os.environ['FLASK_SECRET_KEY']
     archivo = Path(__file__).parent / 'clave_sesion.txt'
@@ -112,7 +112,7 @@ def create_app(config=None):
         __name__, template_folder='presentacion/vistas', static_folder='presentacion/static'
     )
     app.config.update(
-        SECRET_KEY=clave_local(),
+        SECRET_KEY=obtener_clave_de_sesion_flask(),
         SESSION_COOKIE_NAME='recursos_rehecho',
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
@@ -133,17 +133,17 @@ def create_app(config=None):
 
     configurar_seguridad(app, servicios['acceso'])
     app.jinja_env.globals.update(
-        error_campo=error_campo, identificador_campo=identificador_campo,
+        error_campo=error_campo, generar_id_del_campo=generar_id_del_campo,
         valor_formulario=valor_formulario,
     )
     registrar_controladores(app, servicios)
     registrar_inicio(app, servicios)
-    registrar_filtros(app)
-    registrar_errores(app)
+    registrar_filtros_de_plantillas(app)
+    registrar_manejadores_de_errores_http(app)
     return app
 
 
-def main(argv=None):
+def iniciar_servidor_web(argv=None):
     parser = ArgumentParser(description='Inicia el servidor web del Sistema de Recursos.')
     parser.add_argument('--sin-procesador', action='store_true',
                         help='Ejecuta la revisión automática en un proceso independiente.')
@@ -164,4 +164,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    main()
+    iniciar_servidor_web()

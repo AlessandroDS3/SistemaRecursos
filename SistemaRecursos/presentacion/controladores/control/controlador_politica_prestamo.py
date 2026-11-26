@@ -2,7 +2,7 @@ from flask import Blueprint, flash, g, redirect, render_template, request, url_f
 from dominio.gestion_control.politica_prestamo import DIAS_LABORABLES, NOMBRES_DIAS, dias_habilitados
 from dominio.gestion_personas_usuarios.persona import TIPOS_PERSONA
 from presentacion.seguridad import requiere_permiso
-from presentacion.formularios import recuperar_formulario
+from presentacion.formularios import recuperar_formulario_tras_error
 
 RUTA_POLITICAS = 'politicas.consultar_politicas_prestamo'
 
@@ -33,8 +33,8 @@ class ControladorPoliticaPrestamo:
             ),
             (
                 '/configuracion',
-                'guardar_configuracion_general',
-                self.guardar_configuracion_general,
+                'guardar_horario_y_plazos_de_reserva',
+                self.guardar_horario_y_plazos_de_reserva,
                 ['POST'],
             ),
             ('/limite', 'guardar_limite_articulos', self.guardar_limite_articulos, ['POST']),
@@ -46,10 +46,10 @@ class ControladorPoliticaPrestamo:
     def consultar_politicas_prestamo(self):
         politicas = self.servicio.consultar_politicas_prestamo()
         matriz = {(p['id_categoria'], p['tipo_persona']): p for p in politicas}
-        configuracion = self.servicio.consultar_configuracion_general()
+        configuracion = self.servicio.consultar_horario_y_plazos_de_reserva()
         dias = (
             request.form.getlist('dias_atencion')
-            if request.endpoint == 'politicas.guardar_configuracion_general'
+            if request.endpoint == 'politicas.guardar_horario_y_plazos_de_reserva'
             else tuple(map(str, dias_habilitados(configuracion.get('dias_atencion', DIAS_LABORABLES))))
         )
         return render_template(
@@ -66,7 +66,7 @@ class ControladorPoliticaPrestamo:
         )
 
     @requiere_permiso('POLITICAS_GESTIONAR')
-    @recuperar_formulario(lambda self: self._mostrar_formulario_politica())
+    @recuperar_formulario_tras_error(lambda self: self._mostrar_formulario_politica())
     def registrar_politica_prestamo(self):
         if request.method == 'POST':
             self.servicio.registrar_politica_prestamo(
@@ -77,7 +77,7 @@ class ControladorPoliticaPrestamo:
         return self._mostrar_formulario_politica()
 
     @requiere_permiso('POLITICAS_GESTIONAR')
-    @recuperar_formulario(lambda self, identificador: self._mostrar_formulario_politica(identificador))
+    @recuperar_formulario_tras_error(lambda self, identificador: self._mostrar_formulario_politica(identificador))
     def editar_politica_prestamo(self, identificador):
         if request.method == 'POST':
             self.servicio.actualizar_politica_prestamo(
@@ -104,15 +104,15 @@ class ControladorPoliticaPrestamo:
         )
 
     @requiere_permiso('POLITICAS_GESTIONAR')
-    @recuperar_formulario(lambda self: self.consultar_politicas_prestamo())
-    def guardar_configuracion_general(self):
+    @recuperar_formulario_tras_error(lambda self: self.consultar_politicas_prestamo())
+    def guardar_horario_y_plazos_de_reserva(self):
         datos = dict(request.form, dias_atencion=request.form.getlist('dias_atencion'))
-        self.servicio.guardar_configuracion_general(datos, g.usuario.id_usuario)
+        self.servicio.guardar_horario_y_plazos_de_reserva(datos, g.usuario.id_usuario)
         flash('Horario y plazos de reserva guardados.')
         return redirect(url_for(RUTA_POLITICAS))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
-    @recuperar_formulario(lambda self: self.consultar_politicas_prestamo())
+    @recuperar_formulario_tras_error(lambda self: self.consultar_politicas_prestamo())
     def guardar_limite_articulos(self):
         self.servicio.guardar_limite_articulos(
             request.form.get('tipo_persona'),
@@ -123,7 +123,7 @@ class ControladorPoliticaPrestamo:
         return redirect(url_for(RUTA_POLITICAS))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
-    @recuperar_formulario(lambda self: self.consultar_politicas_prestamo())
+    @recuperar_formulario_tras_error(lambda self: self.consultar_politicas_prestamo())
     def guardar_limites_articulos(self):
         self.servicio.guardar_limites_articulos(
             {tipo: request.form.get('maximo_' + tipo) for tipo in TIPOS_PERSONA},
@@ -133,7 +133,7 @@ class ControladorPoliticaPrestamo:
         return redirect(url_for(RUTA_POLITICAS))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
-    @recuperar_formulario(lambda self, identificador: self._mostrar_formulario_politica(identificador))
+    @recuperar_formulario_tras_error(lambda self, identificador: self._mostrar_formulario_politica(identificador))
     def eliminar_politica_prestamo(self, identificador):
         self.servicio.eliminar_politica_prestamo(identificador, g.usuario.id_usuario)
         flash('Política sin préstamos asociados eliminada.')

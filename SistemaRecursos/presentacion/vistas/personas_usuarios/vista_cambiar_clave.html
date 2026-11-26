@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf %}
 {% block contenido %}
   <h1>Cambiar mi contraseña</h1>
   {% if g.usuario.debe_cambiar_clave %}
     <p class="aviso" role="status">Debes reemplazar tu contraseña temporal antes de utilizar el sistema.</p>
   {% endif %}
   <form method="post" class="formulario panel estrecho">
-    {{ csrf() }}
+    {{ campo_oculto_csrf() }}
     <label>
       Contraseña actual
       <input name="clave_actual"

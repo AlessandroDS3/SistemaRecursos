@@ -19,7 +19,7 @@ class RepositorioPoliticaPrestamoSQL(RepositorioSQL):
             una=True,
         )
 
-    def consultar_configuracion_general(self, bloquear=False):
+    def consultar_horario_y_plazos_de_reserva(self, bloquear=False):
         return self.consultar_sql(
             'SELECT * FROM configuracion_general WHERE id_configuracion=1'
             + (' FOR UPDATE' if bloquear else ''),
@@ -29,19 +29,19 @@ class RepositorioPoliticaPrestamoSQL(RepositorioSQL):
     def consultar_limites_articulos(self):
         return self.consultar_sql('SELECT * FROM limite_articulos_prestamo ORDER BY tipo_persona')
 
-    def guardar_politica_prestamo(self, politica):
+    def insertar_politica_prestamo(self, politica):
         datos = asdict(politica)
         datos.pop('id_politica')
-        return self.insertar('politica_prestamo', datos)
+        return self.insertar_fila_sql('politica_prestamo', datos)
 
     def desactivar_politica_prestamo(self, identificador):
-        self.ejecutar(
+        self.ejecutar_escritura_sql(
             'UPDATE politica_prestamo SET vigente=FALSE WHERE id_politica=%s', (identificador,)
         )
 
     def eliminar_politica_prestamo(self, identificador):
         try:
-            self.ejecutar('DELETE FROM politica_prestamo WHERE id_politica=%s', (identificador,))
+            self.ejecutar_escritura_sql('DELETE FROM politica_prestamo WHERE id_politica=%s', (identificador,))
         except IntegrityError as error:
             if error.errno == errorcode.ER_ROW_IS_REFERENCED_2:
                 raise Conflicto(
@@ -49,18 +49,18 @@ class RepositorioPoliticaPrestamoSQL(RepositorioSQL):
                 ) from None
             raise
 
-    def guardar_configuracion_general(self, datos):
+    def guardar_horario_y_plazos_de_reserva(self, datos):
         columnas = ','.join(k + '=%s' for k in datos)
-        if self.consultar_configuracion_general(bloquear=True) is None:
-            self.insertar('configuracion_general', dict(id_configuracion=1, **datos))
+        if self.consultar_horario_y_plazos_de_reserva(bloquear=True) is None:
+            self.insertar_fila_sql('configuracion_general', dict(id_configuracion=1, **datos))
         else:
-            self.ejecutar(
+            self.ejecutar_escritura_sql(
                 'UPDATE configuracion_general SET ' + columnas + ' WHERE id_configuracion=1',
                 tuple(datos.values()),
             )
 
     def guardar_limite_articulos(self, tipo, cantidad):
-        self.ejecutar(
+        self.ejecutar_escritura_sql(
             '''INSERT INTO limite_articulos_prestamo(tipo_persona,maximo_articulos) VALUES(%s,%s)
             ON DUPLICATE KEY UPDATE maximo_articulos=%s''',
             (tipo, cantidad, cantidad),

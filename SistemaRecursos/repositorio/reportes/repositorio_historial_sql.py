@@ -18,7 +18,7 @@ ALCANCE_PERSONA = '''(p.dni_persona=%s OR EXISTS (
 
 
 class RepositorioHistorialSQL(RepositorioSQL):
-    def _buscar_sujetos(self, filtro):
+    def _buscar_personas_o_bienes_del_historial(self, filtro):
         termino = f'%{filtro.q}%'
         if filtro.tipo == 'historial_bien':
             return self.consultar_sql(
@@ -58,7 +58,7 @@ class RepositorioHistorialSQL(RepositorioSQL):
         valor = filtro.codigo_inventario if por_bien else filtro.dni_persona
         if not valor:
             if filtro.q and not solo_prestamos:
-                resultado['coincidencias'] = self._buscar_sujetos(filtro)
+                resultado['coincidencias'] = self._buscar_personas_o_bienes_del_historial(filtro)
             return resultado
         if por_bien:
             sujeto = self.consultar_sql(

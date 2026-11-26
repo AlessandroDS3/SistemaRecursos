@@ -1,6 +1,14 @@
 from contextlib import AbstractContextManager
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, TypedDict
+
+
+class FilaHistorialEstado(TypedDict):
+    fecha: datetime
+    estado_anterior: str | None
+    estado_nuevo: str
+    responsable: str | None
+    observacion: str | None
 
 
 class IRepositorioTransaccional(Protocol):
@@ -17,5 +25,7 @@ class IRepositorioTransaccional(Protocol):
         nuevo: str,
         actor: str | None,
         observacion: str,
+        *,
+        datos: dict[str, object] | None = None,
     ): ...
-    def consultar_historial_estado(self, entidad: str, identificador: int) -> list[dict]: ...
+    def consultar_historial_estado(self, entidad: str, identificador: int) -> list[FilaHistorialEstado]: ...

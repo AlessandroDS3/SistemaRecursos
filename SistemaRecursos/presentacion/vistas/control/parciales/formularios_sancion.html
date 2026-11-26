@@ -1,7 +1,7 @@
-{% from 'parciales/formularios.html' import csrf %}
-{% macro evaluacion_sancion(accion) %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf %}
+{% macro formulario_de_evaluacion_de_sancion(accion) %}
   <form method="post" action="{{ accion }}" class="formulario">
-    {{ csrf() }}
+    {{ campo_oculto_csrf() }}
     <label>Causa confirmada
       <select name="causa" required>
         <option value="PERDIDA">Pérdida confirmada</option>

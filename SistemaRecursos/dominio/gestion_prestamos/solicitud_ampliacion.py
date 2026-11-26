@@ -6,32 +6,38 @@ de pedirla con un motivo. Al aprobar se revalida todo con las reglas de Ampliaci
 
 from dataclasses import dataclass
 
-from dominio.compartido.validacion import Conflicto, NoEncontrado, entero, texto
+from dominio.compartido.codigos import Codigo
+from dominio.compartido.validacion import Conflicto, NoEncontrado, validar_entero, validar_texto
+from dominio.gestion_control.politica_prestamo import UnidadPlazo
 
-ESTADOS_SOLICITUD = ('PENDIENTE', 'APROBADA', 'RECHAZADA')
+class EstadoSolicitudAmpliacion(Codigo):
+    PENDIENTE = 'PENDIENTE'
+    APROBADA = 'APROBADA'
+    RECHAZADA = 'RECHAZADA'
 
 
-@dataclass(kw_only=True)
+@dataclass(init=False)
 class SolicitudAmpliacion:
     cantidad: int
-    unidad: str
+    unidad: UnidadPlazo
     motivo: str
 
-    def __post_init__(self):
-        self.cantidad = entero(self.cantidad, 'Tiempo adicional', maximo=87600)
-        if self.unidad not in ('HORAS', 'DIAS'):
+    def __init__(self, *, cantidad: int | str | None, unidad: str | None, motivo: str | None) -> None:
+        self.cantidad = validar_entero(cantidad, 'Tiempo adicional', maximo=87600)
+        if unidad not in tuple(UnidadPlazo):
             raise ValueError('Selecciona horas o días.')
-        self.motivo = texto(self.motivo, 'Motivo de la solicitud', 255, True)
+        self.unidad = UnidadPlazo(unidad)
+        self.motivo = validar_texto(motivo, 'Motivo de la solicitud', 255, True)
 
 
-def exigir_pendiente(solicitud: dict | None) -> dict:
+def exigir_solicitud_ampliacion_pendiente(solicitud: dict | None) -> dict:
     if solicitud is None:
         raise NoEncontrado('Solicitud inexistente.')
-    if solicitud['estado'] != 'PENDIENTE':
+    if solicitud['estado'] != EstadoSolicitudAmpliacion.PENDIENTE:
         raise Conflicto('La solicitud ya fue resuelta. Recarga la lista.')
     return solicitud
 
 
-def exigir_responsable(prestamo: dict, documento: str) -> None:
-    if prestamo['dni_persona'] != documento:
+def exigir_titular_del_prestamo_para_ampliacion(responsable: str, documento: str) -> None:
+    if responsable != documento:
         raise PermissionError('Solo la persona responsable del préstamo puede pedir una ampliación.')

@@ -11,7 +11,7 @@ from repositorio.personas_usuarios.repositorio_cuenta_sql import RepositorioCuen
 from servicios.personas_usuarios.servicio_cuenta import ServicioAplicacionCuenta
 
 
-def main(argv=None):
+def inicializar_administrador_desde_consola(argv=None):
     parser = ArgumentParser(description='Crea la primera cuenta administradora del sistema.')
     for campo in ('dni', 'nombres', 'apellidos', 'correo', 'codigo-empleado', 'area', 'usuario'):
         parser.add_argument('--' + campo, required=True)
@@ -37,4 +37,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    raise SystemExit(inicializar_administrador_desde_consola())

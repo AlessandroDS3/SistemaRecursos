@@ -25,16 +25,16 @@ def establecer_sesion(cuenta_acceso, token_sesion):
 
 
 def requiere_permiso(*permisos):
-    def decorar(funcion):
+    def decorar_verificacion_de_permisos(funcion):
         @wraps(funcion)
-        def protegida(*args, **kwargs):
-            if g.usuario is None or not any(g.usuario.permite(p) for p in permisos):
+        def ejecutar_con_verificacion_de_permisos(*args, **kwargs):
+            if g.usuario is None or not any(g.usuario.tiene_permiso(p) for p in permisos):
                 abort(403, description='Tu cuenta no tiene permiso para esta operación.')
             return funcion(*args, **kwargs)
 
-        return protegida
+        return ejecutar_con_verificacion_de_permisos
 
-    return decorar
+    return decorar_verificacion_de_permisos
 
 
 def configurar_seguridad(app, acceso):

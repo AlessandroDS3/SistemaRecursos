@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf, campo, opciones %}
-{% from 'parciales/componentes.html' import indicador, estado %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf, campo_de_formulario, selector_de_opciones %}
+{% from 'parciales/componentes.html' import tarjeta_indicadora, insignia_de_estado %}
 {% block contenido %}
   {% if modo == "lista" %}
     <div class="cabecera">
       <h1>Personas</h1>
-      {% if g.usuario.permite("PERSONAS_GESTIONAR") %}
+      {% if g.usuario.tiene_permiso("PERSONAS_GESTIONAR") %}
         <a class="boton"
            href="{{ url_for('personas.registrar_persona') }}">Registrar persona</a>
       {% endif %}
     </div>
     <section class="resumen-estadisticas"
              aria-label="Resumen de personas encontradas">
-      {{ indicador('Personas encontradas', resultado.total) }}
-      {{ indicador('Activas', resultado.activas) }}
-      {{ indicador('Inactivas', resultado.inactivas) }}
+      {{ tarjeta_indicadora('Personas encontradas', resultado.total) }}
+      {{ tarjeta_indicadora('Activas', resultado.activas) }}
+      {{ tarjeta_indicadora('Inactivas', resultado.inactivas) }}
     </section>
     <form class="filtros filtros-bloque" method="get">
       <div class="rejilla filtros-cuatro">
@@ -85,10 +85,10 @@
                 </td>
                 <td>{{ p.correo or 'Sin correo' }}</td>
                 <td>{{ p.tipo|capitalize }}</td>
-                <td>{{ estado(p.estado) }}</td>
+                <td>{{ insignia_de_estado(p.estado) }}</td>
                 <td>
-                  {{ estado('SIN_CUENTA' if not p.id_usuario else 'INACTIVA' if p.estado=='INACTIVA' else 'CON_ACCESO' if p.estado_cuenta=='ACTIVA' else p.estado_cuenta) }}
-                  {% if g.usuario.permite("USUARIOS_GESTIONAR") %}
+                  {{ insignia_de_estado('SIN_CUENTA' if not p.id_usuario else 'INACTIVA' if p.estado=='INACTIVA' else 'CON_ACCESO' if p.estado_cuenta=='ACTIVA' else p.estado_cuenta) }}
+                  {% if g.usuario.tiene_permiso("USUARIOS_GESTIONAR") %}
                     {% if p.id_usuario or p.estado=="ACTIVA" %}
                       <a href="{{ url_for('cuentas.actualizar_cuenta' if p.id_usuario else 'cuentas.registrar_cuenta',documento=p.dni) }}">{{ 'Ver cuenta' if p.id_usuario else 'Crear acceso' }}</a>
                     {% endif %}
@@ -122,7 +122,7 @@
       {{ persona.estado }}
     </p>
     <dl>
-      {% for nombre, valor in persona.datos().items() if valor is not none and valor != '' and nombre not in ('estado_matricula','dni','nombres','apellidos','tipo','estado') %}
+      {% for nombre, valor in persona.como_diccionario().items() if valor is not none and valor != '' and nombre not in ('estado_matricula','dni','nombres','apellidos','tipo','estado') %}
         <dt>{{ nombre|replace('_', ' ')|title }}</dt>
         <dd>
           {{ valor }}
@@ -146,19 +146,19 @@
       </details>
     {% endif %}
     <div class="acciones">
-      {% if g.usuario.permite('REPORTES_CONSULTAR') %}
+      {% if g.usuario.tiene_permiso('REPORTES_CONSULTAR') %}
         <a class="boton secundario" href="{{ url_for('reportes.consultar_reportes', tipo='historial_persona', dni_persona=persona.dni) }}">Ver historial completo</a>
       {% endif %}
-      {% if g.usuario.permite("PERSONAS_GESTIONAR") %}
+      {% if g.usuario.tiene_permiso("PERSONAS_GESTIONAR") %}
         <a class="boton"
            href="{{ url_for('personas.editar_persona', documento=persona.dni) }}">Editar</a>
         <form method="post"
               action="{{ url_for('personas.desactivar_persona',documento=persona.dni) }}">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <button class="secundario">Desactivar persona</button>
         </form>
       {% endif %}
-      {% if g.usuario.permite("USUARIOS_GESTIONAR") %}
+      {% if g.usuario.tiene_permiso("USUARIOS_GESTIONAR") %}
         {% if tiene_cuenta %}
           <a href="{{ url_for('cuentas.actualizar_cuenta',documento=persona.dni) }}">Editar cuenta y rol</a>
         {% elif persona.estado=="ACTIVA" %}
@@ -172,27 +172,27 @@
       persona
     </h1>
     <form method="post" class="formulario panel">
-      {{ csrf() }}
+      {{ campo_oculto_csrf() }}
       <input type="hidden" name="version" value="{{ valor_formulario('version', version) }}">
       <div class="rejilla">
-        {{ campo('dni','DNI',persona.dni, requerido=true,maximo=8) }}
-        {{ campo('nombres','Nombres',persona.nombres,requerido=true,maximo=100) }}
-        {{ campo('apellidos','Apellidos',persona.apellidos,requerido=true,maximo=100) }}
-        {{ campo('correo','Correo',persona.correo,tipo='email',maximo=120) }}
-        {{ campo('telefono','Teléfono',persona.telefono,maximo=20) }}
+        {{ campo_de_formulario('dni','DNI',persona.dni, requerido=true,maximo=8) }}
+        {{ campo_de_formulario('nombres','Nombres',persona.nombres,requerido=true,maximo=100) }}
+        {{ campo_de_formulario('apellidos','Apellidos',persona.apellidos,requerido=true,maximo=100) }}
+        {{ campo_de_formulario('correo','Correo',persona.correo,tipo='email',maximo=120) }}
+        {{ campo_de_formulario('telefono','Teléfono',persona.telefono,maximo=20) }}
         {% if persona %}
           {% if g.usuario.rol == 'ADMINISTRADOR' %}
-            {{ opciones('tipo','Tipo',tipos,persona.tipo) }}
+            {{ selector_de_opciones('tipo','Tipo',tipos,persona.tipo) }}
             <div data-motivo-cambio-tipo="{{ persona.tipo }}" hidden>
-              {{ campo('motivo_cambio_tipo','Motivo del cambio de tipo',maximo=255) }}
+              {{ campo_de_formulario('motivo_cambio_tipo','Motivo del cambio de tipo',maximo=255) }}
             </div>
           {% else %}
             <input type="hidden" name="tipo" value="{{ persona.tipo }}">
             <p>Tipo: {{ persona.tipo }}</p>
           {% endif %}
-          {{ opciones('estado','Estado',estados,persona.estado) }}
+          {{ selector_de_opciones('estado','Estado',estados,persona.estado) }}
         {% else %}
-          {{ opciones('tipo','Tipo',tipos,'ESTUDIANTE') }}
+          {{ selector_de_opciones('tipo','Tipo',tipos,'ESTUDIANTE') }}
         {% endif %}
       </div>
       {% for tipo, campos in campos_tipo.items() %}
@@ -201,9 +201,9 @@
           <div class="rejilla">
             {% for nombre in campos %}
               {% if nombre=="estado_matricula" %}
-                {{ opciones(nombre,'Matrícula',estados_matricula,persona[nombre]|default('VIGENTE')) }}
+                {{ selector_de_opciones(nombre,'Matrícula',estados_matricula,persona[nombre]|default('VIGENTE')) }}
               {% else %}
-                {{ campo(nombre,nombre|replace('_',' ')|title,persona[nombre],tipo='number' if nombre=='ciclo' else 'text',requerido=nombre!='ciclo',maximo=8 if nombre=='cui' else longitud_codigo if nombre.startswith('codigo_') else 100) }}
+                {{ campo_de_formulario(nombre,nombre|replace('_',' ')|title,persona[nombre],tipo='number' if nombre=='ciclo' else 'text',requerido=nombre!='ciclo',maximo=8 if nombre=='cui' else longitud_codigo if nombre.startswith('codigo_') else 100) }}
               {% endif %}
             {% endfor %}
           </div>

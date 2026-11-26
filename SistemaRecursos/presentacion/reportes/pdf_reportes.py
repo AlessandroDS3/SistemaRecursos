@@ -15,7 +15,7 @@ from reportlab.platypus import (
 
 from dominio.compartido.validacion import LIMA
 from presentacion.reportes.graficos_reportes import preparar_graficos
-from presentacion.reportes.dibujos_reportes import dibujos_graficos
+from presentacion.reportes.dibujos_reportes import dibujar_graficos_de_reporte
 from presentacion.reportes.formatos_reportes import (
     CampoVistaReporte, etiqueta_reporte, presentar_reporte, valor_reporte,
 )
@@ -48,7 +48,7 @@ def _texto_pdf(valor):
     return escape(str(valor)).replace('\r\n', '\n').replace('\n', '<br/>')
 
 
-def _fecha_lima(valor):
+def _formatear_fecha_pdf_en_lima(valor):
     if valor is None:
         return '-'
     if valor.tzinfo is None:
@@ -56,12 +56,12 @@ def _fecha_lima(valor):
     return valor.astimezone(LIMA).strftime('%d/%m/%Y %H:%M')
 
 
-def _celda_pdf(fila, columna):
+def _formatear_celda_del_reporte_pdf(fila, columna):
     valor = fila.get(columna.nombre)
     if valor is None or valor == '':
         return '-'
     if isinstance(valor, datetime):
-        return _fecha_lima(valor).replace(' ', '<br/>')
+        return _formatear_fecha_pdf_en_lima(valor).replace(' ', '<br/>')
     if isinstance(valor, date):
         return valor.strftime('%d/%m/%Y')
     if columna.formato == 'persona':
@@ -81,7 +81,7 @@ def _celda_pdf(fila, columna):
     return _texto_pdf(valor_reporte(valor, columna.formato))
 
 
-def _peso_columna(columna):
+def _calcular_peso_de_columna_pdf(columna):
     if columna.formato == 'persona':
         return 2.5
     if columna.formato in ('bien', 'inventario'):
@@ -97,7 +97,7 @@ def _peso_columna(columna):
     return 1.2
 
 
-def _preparar_pdf(titulo, generado_en):
+def _preparar_documento_pdf(titulo, generado_en):
     salida = BytesIO()
     documento = SimpleDocTemplate(
         salida,
@@ -109,7 +109,7 @@ def _preparar_pdf(titulo, generado_en):
         title=titulo,
         author='Sistema de préstamos escolares',
     )
-    fecha = _fecha_lima(generado_en or datetime.now(LIMA))
+    fecha = _formatear_fecha_pdf_en_lima(generado_en or datetime.now(LIMA))
     contenido = [
         Paragraph(_texto_pdf(titulo), TITULO),
         Spacer(1, 5),
@@ -120,7 +120,7 @@ def _preparar_pdf(titulo, generado_en):
 
 
 def _tabla_pdf(columnas, filas, ancho, mensaje_vacio='No hay resultados para estos filtros.'):
-    pesos = [_peso_columna(c) for c in columnas]
+    pesos = [_calcular_peso_de_columna_pdf(c) for c in columnas]
     minimos = [
         max(stringWidth(palabra, 'Helvetica-Bold', 8) for palabra in c.etiqueta.split()) + 12
         for c in columnas
@@ -129,7 +129,7 @@ def _tabla_pdf(columnas, filas, ancho, mensaje_vacio='No hay resultados para est
     anchos = [minimo + restante * peso / sum(pesos) for minimo, peso in zip(minimos, pesos)]
     datos = [[Paragraph(_texto_pdf(c.etiqueta), ENCABEZADO) for c in columnas]]
     for fila in filas:
-        datos.append([Paragraph(_celda_pdf(fila, c), CUERPO) for c in columnas])
+        datos.append([Paragraph(_formatear_celda_del_reporte_pdf(fila, c), CUERPO) for c in columnas])
 
     estilos = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eeeeee')),
@@ -168,13 +168,13 @@ def _pie_pagina(canvas, doc):
 def generar_pdf_reporte(filtro, filas, generado_en=None):
     reporte = presentar_reporte(filtro.tipo)
     titulo = 'Bienes prestados' if filtro.tipo == 'prestamos' else reporte.titulo
-    documento, salida, contenido = _preparar_pdf(titulo, generado_en)
+    documento, salida, contenido = _preparar_documento_pdf(titulo, generado_en)
     graficos = preparar_graficos(filtro.tipo, filas)
     if graficos and filas:
         tarjetas = []
         for nombre, serie, dibujo in zip(
             (graficos['titulo'], graficos['titulo_barras']),
-            (graficos['circular'], graficos['barras']), dibujos_graficos(graficos),
+            (graficos['circular'], graficos['barras']), dibujar_graficos_de_reporte(graficos),
         ):
             leyenda = '<br/>'.join(
                 f'{i + 1}. {_texto_pdf(item["etiqueta"])}: <b>{item["cantidad"]}</b> ({item["porcentaje"]} %)'
@@ -197,7 +197,7 @@ def generar_pdf_reporte(filtro, filas, generado_en=None):
     return salida.getvalue()
 
 
-def _datos_pdf(campos):
+def _formatear_datos_de_ficha_pdf(campos):
     return Paragraph(
         '<br/>'.join(f'<b>{etiqueta}:</b> {_texto_pdf(valor)}' for etiqueta, valor in campos if valor),
         TEXTO,
@@ -238,7 +238,7 @@ def _detalle_prestamo_pdf(detalle):
     return dict(detalle, recibido=recibido, condiciones='\n'.join(condiciones))
 
 
-def _prestamo_pdf(prestamo, ancho):
+def _construir_ficha_de_prestamo_pdf(prestamo, ancho):
     titulo = ' · '.join((
         f"Préstamo #{prestamo['id_prestamo']}",
         etiqueta_reporte(prestamo['tipo_prestamo']),
@@ -248,7 +248,7 @@ def _prestamo_pdf(prestamo, ancho):
     datos = [
         ('Solicitante', f"{prestamo['solicitante']} · DNI: {prestamo['dni_persona']}"),
         ('Entregado por', f"{entregado} · DNI: {prestamo['dni_encargado']}"),
-        ('Fecha de entrega', _fecha_lima(prestamo['fecha_entrega'])),
+        ('Fecha de entrega', _formatear_fecha_pdf_en_lima(prestamo['fecha_entrega'])),
         ('Integrantes', prestamo['integrantes']),
         ('Observaciones', prestamo['observaciones_prestamo']),
     ]
@@ -263,7 +263,7 @@ def _prestamo_pdf(prestamo, ancho):
     filas = [_detalle_prestamo_pdf(detalle) for detalle in prestamo['detalles']]
     return [
         Paragraph(_texto_pdf(titulo), SUBTITULO),
-        _datos_pdf(datos),
+        _formatear_datos_de_ficha_pdf(datos),
         Spacer(1, 6),
         _tabla_pdf(columnas, filas, ancho),
     ]
@@ -281,7 +281,7 @@ def _tabla_sanciones_pdf(sanciones, ancho):
     for sancion in sanciones:
         motivo = [sancion['motivo'], sancion['descripcion']]
         if sancion['fecha_levantamiento']:
-            fecha = _fecha_lima(sancion['fecha_levantamiento'])
+            fecha = _formatear_fecha_pdf_en_lima(sancion['fecha_levantamiento'])
             operador = sancion['levantada_por'] or 'No registrado'
             motivo.extend([f'Levantada: {fecha} · {operador}', sancion['justificacion_levantamiento']])
         filas.append(dict(
@@ -316,11 +316,11 @@ def _tabla_reservas_pdf(reservas, ancho):
 def generar_pdf_historial(historial, generado_en=None):
     filtro = historial['filtro']
     titulo = 'Mi historial de préstamos' if historial['propio'] else filtro.definicion.titulo
-    documento, salida, contenido = _preparar_pdf(titulo, generado_en)
+    documento, salida, contenido = _preparar_documento_pdf(titulo, generado_en)
     ancho = documento.width - 12
     sujeto = historial['sujeto']
     if sujeto:
-        contenido.append(_datos_pdf(_ficha_historial(sujeto, filtro.tipo == 'historial_bien')))
+        contenido.append(_formatear_datos_de_ficha_pdf(_ficha_historial(sujeto, filtro.tipo == 'historial_bien')))
         contenido.append(Paragraph('Resumen', SECCION))
         columnas_resumen = (
             CampoVistaReporte('prestamos', 'Préstamos relacionados'),
@@ -330,7 +330,7 @@ def generar_pdf_historial(historial, generado_en=None):
         contenido.append(_tabla_pdf(columnas_resumen, [historial['resumen']], ancho))
         contenido.append(Paragraph('Préstamos relacionados', SECCION))
         for prestamo in historial['prestamos_agrupados']:
-            contenido.extend(_prestamo_pdf(prestamo, ancho))
+            contenido.extend(_construir_ficha_de_prestamo_pdf(prestamo, ancho))
         if not historial['prestamos_agrupados']:
             contenido.append(Paragraph('No hay préstamos registrados.', TEXTO))
         if historial['sanciones']:
