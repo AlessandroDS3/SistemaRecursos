@@ -9,6 +9,7 @@ if (formularioPrestamo) {
   const campoSolicitante = document.getElementById("buscar-solicitante");
   const resultadosSolicitante = document.getElementById("resultados-solicitante");
   const estadoSolicitante = document.getElementById("resultado-busqueda-persona");
+  const indicacionBusqueda = estadoSolicitante.textContent.trim();
   const uso = document.getElementById("uso-bienes");
   const modalidad = document.getElementById("modalidad");
   const grupo = document.getElementById("grupo");
@@ -153,7 +154,7 @@ if (formularioPrestamo) {
       oculto.value = persona.dni;
       const etiqueta = document.createElement("span");
       etiqueta.textContent = persona.nombre_completo + " · " + formatearDocumentosDePersona(persona);
-      if (!persona.elegible) etiqueta.textContent += ' · Persona no elegible';
+      if (!persona.elegible) etiqueta.textContent += ' · No habilitada para préstamos';
       const quitar = document.createElement("button");
       quitar.type = "button";
       quitar.className = "secundario";
@@ -292,12 +293,12 @@ if (formularioPrestamo) {
       if (politica.salida === "1") permisoSalida = "Salida permitida";
       resumenPolitica.append(plazo, document.createTextNode(" · " + permisoSalida));
     } else if (tipoSolicitante.value) {
-      resumenPolitica.textContent = "Sin política configurada";
+      resumenPolitica.textContent = "Sin política de préstamo";
     } else {
-      resumenPolitica.textContent = "Selecciona al solicitante para ver el plazo.";
+      resumenPolitica.textContent = "Selecciona un solicitante.";
     }
     identidad.append(resumenPolitica);
-    if (bien.estado && bien.estado !== 'DISPONIBLE') resumenPolitica.textContent = 'Este bien ya no está disponible. Quítalo y selecciona otro ejemplar.';
+    if (bien.estado && bien.estado !== 'DISPONIBLE') resumenPolitica.textContent = 'Bien no disponible. Selecciona otro.';
 
     const devolucion = document.createElement("div");
     devolucion.className = "prestamo-bien-fecha";
@@ -326,7 +327,6 @@ if (formularioPrestamo) {
     const contenedor = document.getElementById("bienes-seleccionados");
     contenedor.replaceChildren();
     document.getElementById("cantidad-bienes").textContent = "BIENES SELECCIONADOS · " + bienesElegidos.size;
-    document.getElementById("bienes-vacios").hidden = bienesElegidos.size > 0;
     for (const bien of bienesElegidos.values()) {
       contenedor.append(crearFilaDeBienSeleccionado(bien));
     }
@@ -357,7 +357,7 @@ if (formularioPrestamo) {
       resultados.replaceChildren();
       resultados.hidden = true;
       if (termino.length < 2) {
-        estado.textContent = "Escribe al menos 2 caracteres.";
+        estado.textContent = indicacionBusqueda;
         return;
       }
       const solicitud = new AbortController();
@@ -380,10 +380,10 @@ if (formularioPrestamo) {
         }
         resultados.hidden = cantidad === 0;
         if (cantidad > 0) {
-          estado.textContent = cantidad + " coincidencia(s). Selecciona la persona correcta.";
+          estado.textContent = cantidad + (cantidad === 1 ? " coincidencia." : " coincidencias.");
           if (datos.resultados.length === datos.limite) estado.textContent += " Afina la búsqueda si no aparece.";
         } else {
-          estado.textContent = "No encontramos personas elegibles con esos datos.";
+          estado.textContent = "No se encontraron personas para seleccionar.";
         }
       } catch (error) {
         if (!solicitud.signal.aborted && solicitudActiva === solicitud && termino === campo.value.trim()) {
@@ -452,11 +452,11 @@ if (formularioPrestamo) {
         const iniciales = JSON.parse(formularioPrestamo.dataset.bienesIniciales || "[]");
         for (const bien of iniciales) resultados.append(crearOpcionBien(bien, agregarBien));
         resultados.hidden = iniciales.length === 0;
-        estado.textContent = iniciales.length + " bien(es) cargado(s). Selecciona los que se llevará.";
+        estado.textContent = "Bienes encontrados: " + iniciales.length;
         return;
       }
       if (termino.length < 2 && !recurso) {
-        estado.textContent = "Escribe al menos 2 caracteres.";
+        estado.textContent = indicacionBusqueda;
         return;
       }
       const solicitud = new AbortController();
@@ -474,7 +474,7 @@ if (formularioPrestamo) {
         for (const bien of datos.resultados) resultados.append(crearOpcionBien(bien, agregarBien));
         resultados.hidden = resultados.childElementCount === 0;
         if (datos.resultados.length > 0) {
-          estado.textContent = datos.resultados.length + " bien(es) cargado(s). Selecciona los que se llevará.";
+          estado.textContent = "Bienes encontrados: " + datos.resultados.length;
         } else {
           estado.textContent = "No hay bienes disponibles con esos datos.";
         }
@@ -527,7 +527,7 @@ if (formularioPrestamo) {
       campoSolicitante.focus();
     } else if (bienesElegidos.size === 0) {
       evento.preventDefault();
-      document.getElementById("estado-bienes").textContent = "Agrega al menos un bien disponible.";
+      document.getElementById("estado-bienes").textContent = "Selecciona los bienes.";
       document.getElementById("buscar-bien").focus();
     } else if (modalidad.querySelector("input:checked").value === "GRUPAL" && participantes.size === 0) {
       evento.preventDefault();
@@ -568,7 +568,7 @@ if (formularioPrestamo) {
       formularioPrestamo.elements.acepta_condiciones.checked = previos.acepta_condiciones?.includes('1') || false;
       actualizarCondicionesDeEntrega();
     })().catch(() => {
-      estadoSolicitante.textContent = 'Los bienes se conservaron. Busca de nuevo al solicitante para continuar.';
+      estadoSolicitante.textContent = 'Selecciona nuevamente al solicitante.';
     });
   }
 

@@ -182,15 +182,18 @@ class SancionesMySQLTest(BaseMySQLTest):
         from repositorio.prestamos.repositorio_reserva_sql import RepositorioReservaSQL
 
         repo = RepositorioReservaSQL(self.conexion)
-        for orden, requerida, vence in ((4, 60, 180), (3, -120, -60), (2, -30, 60), (1, -15, 60)):
+        for orden, requerida, vence in ((4, 60, 180), (3, -120, -60), (2, -30, 60), (1, -15, 60), (1, 30, 180)):
             self.ejecutar_sql_de_prueba('''INSERT INTO reserva(dni_persona,id_recurso,fecha_solicitud,
                 fecha_requerida,fecha_limite_vencimiento) VALUES('20000001',1,%s,%s,%s)''',
                 (self.ahora - timedelta(days=orden), self.ahora + timedelta(minutes=requerida),
                  self.ahora + timedelta(minutes=vence)))
         self.assertEqual({r['id_reserva']: r['posicion'] for r in repo.consultar_reservas()},
-                         {1: None, 2: None, 3: 1, 4: 2})
+                         {1: 4, 2: None, 3: 1, 4: 2, 5: 3})
         with repo.transaccion() as op:
             self.assertEqual(op.consultar_primera_reserva_en_espera(1, self.ahora), 3)
+        self.ejecutar_sql_de_prueba("UPDATE reserva SET estado='CANCELADA' WHERE id_reserva IN (3,4)")
+        with repo.transaccion() as op:
+            self.assertEqual(op.consultar_primera_reserva_en_espera(1, self.ahora), 5)
 
     def test_reservas_cerradas_conservan_historial_del_bien_liberado(self):
         from repositorio.prestamos.repositorio_reserva_sql import RepositorioReservaSQL
@@ -338,6 +341,27 @@ class SancionesMySQLTest(BaseMySQLTest):
             if formato == 'actual':
                 self.ejecutar_sql_de_prueba('''DELETE FROM historial_estado WHERE entidad='SANCION' AND id_entidad=%s
                     AND estado_anterior='LEVANTADA' AND estado_nuevo='ANULADA' ''', (sancion,))
+
+    def test_historial_distingue_cumplimiento_automatico_sin_duplicar_el_motivo(self):
+        self.registrar_devolucion_del_bien_de_prueba()
+        self.ejecutar_sql_de_prueba(
+            'UPDATE sancion SET fecha_fin=UTC_TIMESTAMP()-INTERVAL 1 SECOND, descripcion=motivo'
+        )
+        self.servicio.procesar_sanciones_por_vencimiento()
+        sancion = self.consultar_sancion_de_prueba()
+        self.assertEqual(sancion['estado'], 'CUMPLIDA')
+
+        cliente = self.crear_cliente_para_rol('ADMINISTRADOR')
+        consulta = '?tipo=historial_bien&codigo_inventario=ORIGINAL'
+        respuesta = cliente.get('/reportes' + consulta)
+        self.assertEqual(respuesta.status_code, 200)
+        html = respuesta.get_data(as_text=True)
+        tabla = html.split('<section id="sanciones-historial">', 1)[1].split('</section>', 1)[0]
+        self.assertIn('<small>Cumplida:', tabla)
+        self.assertNotIn('<small>Levantada:', tabla)
+        self.assertEqual(tabla.count(sancion['motivo']), 1)
+        self.assertIn('Cumplimiento de sanción', html)
+        self.assertTrue(cliente.get('/reportes/exportar.pdf' + consulta).data.startswith(b'%PDF'))
 
     def test_encargado_integrante_no_puede_adjudicar_sancion_propia(self):
         self.ejecutar_sql_de_prueba("INSERT INTO participante_prestamo(id_prestamo,dni_persona) VALUES(1,'10000002')")

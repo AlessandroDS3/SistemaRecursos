@@ -71,7 +71,7 @@ class ControladorPersona:
             dni_guardado = self.servicio.registrar_persona(
                 request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Ficha de persona guardada.')
+            flash('Persona guardada.')
             return redirect(url_for('personas.consultar_persona', documento=dni_guardado))
         return self._mostrar_formulario_persona()
 
@@ -82,7 +82,7 @@ class ControladorPersona:
             dni_guardado = self.servicio.actualizar_persona(
                 documento, request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Ficha de persona guardada.')
+            flash('Persona guardada.')
             return redirect(url_for('personas.consultar_persona', documento=dni_guardado))
         return self._mostrar_formulario_persona(documento)
 

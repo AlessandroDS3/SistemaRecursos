@@ -81,7 +81,7 @@ class ControladorBienMaterial:
             id_bien_guardado = self.servicio.registrar_bien_material(
                 request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Bien guardado.')
+            flash('Bien registrado.')
             session['bien_recien_registrado'] = id_bien_guardado
             return redirect(
                 url_for('bienes.consultar_bien_material', identificador=id_bien_guardado)
@@ -97,7 +97,7 @@ class ControladorBienMaterial:
             id_bien_guardado = self.servicio.actualizar_bien_material(
                 identificador, request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Bien guardado.')
+            flash('Bien actualizado.')
             return redirect(
                 url_for('bienes.consultar_bien_material', identificador=id_bien_guardado)
             )

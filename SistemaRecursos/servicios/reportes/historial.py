@@ -16,6 +16,11 @@ CIERRES_SANCION = {
 }
 
 
+def textos_de_incidencia(sancion: dict) -> list[str]:
+    textos = ((sancion.get(campo) or '').strip() for campo in ('motivo', 'descripcion'))
+    return list(dict.fromkeys(texto for texto in textos if texto))
+
+
 def _identificar_detalle_de_ampliacion(movimiento: dict) -> tuple[bool, int | None]:
     datos = movimiento.get('datos')
     if isinstance(datos, str):
@@ -102,7 +107,7 @@ def construir_cronologia_historial(datos):
         referencia = f'Préstamo #{prestamo_id}'
         if ampliacion:
             afectados = [d for d in detalles if d['id_detalle'] == detalle_id]
-            # Una ampliación de otro bien del mismo préstamo no altera este objeto.
+            # Solo se registran las ampliaciones del bien consultado.
             if not afectados:
                 continue
             evento = 'Ampliación de plazo'
@@ -153,16 +158,7 @@ def construir_cronologia_historial(datos):
             f'Sanción #{s["id_sancion"]}',
             registrador=None,
             estado_nuevo='ACTIVA',
-            observacion=' '.join(
-                filter(
-                    None,
-                    (
-                        s.get('motivo'),
-                        s.get('descripcion'),
-                        f'Estado actual: {s["estado"]}.',
-                    ),
-                )
-            ),
+            observacion=' '.join([*textos_de_incidencia(s), f'Estado actual: {s["estado"]}.']),
         )
         # El último cierre de datos antiguos puede existir solo en la fila de la sanción.
         estado = s['estado']

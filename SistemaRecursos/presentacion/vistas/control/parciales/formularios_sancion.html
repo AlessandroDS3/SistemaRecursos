@@ -2,7 +2,7 @@
 {% macro formulario_de_evaluacion_de_sancion(accion) %}
   <form method="post" action="{{ accion }}" class="formulario">
     {{ campo_oculto_csrf() }}
-    <label>Causa confirmada
+    <label>Tipo de incidencia
       <select name="causa" required>
         <option value="PERDIDA">Pérdida confirmada</option>
         <option value="DANIO">Daño que requiere reparación o reposición</option>
@@ -16,10 +16,10 @@
         {% if g.usuario.rol == 'ADMINISTRADOR' %}<option value="MUY_GRAVE">Muy grave</option>{% endif %}
       </select>
     </label>
-    <label>Evaluación y justificación
+    <label>Justificación
       <textarea name="motivo" maxlength="255" required></textarea>
     </label>
-    <p class="suave">Confirma lo ocurrido antes de sancionar. El desgaste normal y los daños preexistentes no son faltas. Solo el administrador aplica una muy grave.</p>
+    <p class="suave">Confirma la incidencia. Excluye el desgaste normal y los daños previos.{% if g.usuario.rol != 'ADMINISTRADOR' %} Solo el administrador aplica una sanción muy grave.{% endif %}</p>
     <button>Registrar evaluación</button>
   </form>
 {% endmacro %}

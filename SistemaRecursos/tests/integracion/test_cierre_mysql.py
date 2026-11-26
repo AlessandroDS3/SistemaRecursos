@@ -540,6 +540,42 @@ class CierreMySQLTest(BaseMySQLTest):
         self.assertEqual(reservas.consultar_reserva(reserva, '20000001')['estado'], 'ATENDIDA')
         self.assertIsNotNone(self.consultar_detalle_por_prestamo_y_bien(prestamo, 1))
 
+    def test_entrega_anticipada_de_reserva_preparada_dentro_del_horario(self):
+        reservas = self.servicios['reservas']
+        manana = (datetime.now(LIMA).date() + timedelta(days=1)).isoformat()
+        reserva = reservas.registrar_reserva(dict(
+            id_recurso=1, fecha_requerida=f'{manana}T10:00', acepta_condiciones='1',
+        ), 3)
+
+        with self.assertRaisesRegex(Conflicto, 'El estado de la reserva'):
+            reservas.entregar_reserva(reserva, {'acepta_condiciones': '1'}, 2)
+        reservas.preparar_reserva(reserva, {}, 2)
+        preparada = reservas.consultar_reserva(reserva, '20000001')
+        self.assertEqual((preparada['estado'], preparada['id_bien'], preparada['estado_bien']),
+                         ('LISTA_PARA_RETIRO', 1, 'RESERVADO'))
+        self.assertLess(preparada['fecha_preparacion'], preparada['fecha_requerida'])
+        self.assertEqual(preparada['fecha_limite_vencimiento'],
+                         preparada['fecha_requerida'] + timedelta(hours=24))
+        dias_sin_atencion_hoy = 127 ^ (1 << datetime.now(LIMA).weekday())
+        self.ejecutar_sql_de_prueba(
+            'UPDATE configuracion_general SET dias_atencion=%s', (dias_sin_atencion_hoy,),
+        )
+        with self.assertRaisesRegex(ValueError, 'No hay atención ese día'):
+            reservas.entregar_reserva(reserva, {'acepta_condiciones': '1'}, 2)
+        self.assertEqual(self.ejecutar_sql_de_prueba('SELECT id_prestamo FROM prestamo'), [])
+        self.assertEqual(reservas.consultar_reserva(reserva, '20000001')['estado'], 'LISTA_PARA_RETIRO')
+
+        self.ejecutar_sql_de_prueba('UPDATE configuracion_general SET dias_atencion=127')
+        prestamo = reservas.entregar_reserva(reserva, {'acepta_condiciones': '1'}, 2)
+        atendida = reservas.consultar_reserva(reserva, '20000001')
+        self.assertEqual((atendida['estado'], atendida['estado_bien']), ('ATENDIDA', 'PRESTADO'))
+        entrega = self.ejecutar_sql_de_prueba(
+            'SELECT fecha_entrega FROM prestamo WHERE id_prestamo=%s', (prestamo,),
+        )[0]['fecha_entrega']
+        self.assertLess(entrega, preparada['fecha_requerida'])
+        self.assertEqual(self.consultar_detalle_por_prestamo_y_bien(prestamo, 1)['fecha_limite_devolucion'],
+                         entrega + timedelta(days=3))
+
     def test_ampliacion_unica_y_reserva_sin_ejemplar(self):
         ampliaciones = self.servicios['ampliaciones']
         prestamo = self.registrar_prestamo_de_prueba([1, 2, 3])

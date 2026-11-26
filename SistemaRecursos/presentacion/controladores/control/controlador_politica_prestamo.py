@@ -72,7 +72,7 @@ class ControladorPoliticaPrestamo:
             self.servicio.registrar_politica_prestamo(
                 request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Política guardada. Los préstamos anteriores conservan sus condiciones.')
+            flash('Política registrada.')
             return redirect(url_for(RUTA_POLITICAS))
         return self._mostrar_formulario_politica()
 
@@ -83,7 +83,7 @@ class ControladorPoliticaPrestamo:
             self.servicio.actualizar_politica_prestamo(
                 identificador, request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Política guardada. Los préstamos anteriores conservan sus condiciones.')
+            flash('Política actualizada.')
             return redirect(url_for(RUTA_POLITICAS))
         return self._mostrar_formulario_politica(identificador)
 
@@ -119,7 +119,7 @@ class ControladorPoliticaPrestamo:
             request.form.get('maximo_articulos'),
             g.usuario.id_usuario,
         )
-        flash('Límite guardado.')
+        flash('Límite actualizado.')
         return redirect(url_for(RUTA_POLITICAS))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
@@ -129,12 +129,12 @@ class ControladorPoliticaPrestamo:
             {tipo: request.form.get('maximo_' + tipo) for tipo in TIPOS_PERSONA},
             g.usuario.id_usuario,
         )
-        flash('Máximos guardados.')
+        flash('Límites actualizados.')
         return redirect(url_for(RUTA_POLITICAS))
 
     @requiere_permiso('POLITICAS_GESTIONAR')
     @recuperar_formulario_tras_error(lambda self, identificador: self._mostrar_formulario_politica(identificador))
     def eliminar_politica_prestamo(self, identificador):
         self.servicio.eliminar_politica_prestamo(identificador, g.usuario.id_usuario)
-        flash('Política sin préstamos asociados eliminada.')
+        flash('Política eliminada.')
         return redirect(url_for(RUTA_POLITICAS))

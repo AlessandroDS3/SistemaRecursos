@@ -102,7 +102,9 @@ class ServicioAplicacionReserva:
         if bien is None:
             raise Conflicto('No hay un bien disponible para preparar la reserva.')
         plazos = self._leer_plazos_de_reserva(self._obtener_horario_y_plazos_de_reserva(op))
-        preparada = reserva.asignar_bien_para_retiro(bien, ahora, plazos.calcular_vencimiento_de_reserva(ahora, 'retiro'))
+        inicio_retiro = max(ahora, reserva.fecha_requerida)
+        limite = plazos.calcular_vencimiento_de_reserva(inicio_retiro, 'retiro')
+        preparada = reserva.asignar_bien_para_retiro(bien, ahora, limite)
         op.cambiar_estado_bien_reservado(bien, 'RESERVADO', 'DISPONIBLE', actor, reserva.identificador)
         return preparada
 

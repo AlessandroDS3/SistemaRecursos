@@ -17,8 +17,9 @@ from dominio.compartido.validacion import LIMA
 from presentacion.reportes.graficos_reportes import preparar_graficos
 from presentacion.reportes.dibujos_reportes import dibujar_graficos_de_reporte
 from presentacion.reportes.formatos_reportes import (
-    CampoVistaReporte, etiqueta_reporte, presentar_reporte, valor_reporte,
+    CampoVistaReporte, etiqueta_cierre_sancion, etiqueta_reporte, presentar_reporte, valor_reporte,
 )
+from servicios.reportes.historial import textos_de_incidencia
 
 
 CUERPO = ParagraphStyle(
@@ -88,7 +89,7 @@ def _calcular_peso_de_columna_pdf(columna):
         return 1.8
     if columna.formato in ('fecha', 'dia'):
         return 1.3
-    if columna.nombre in ('motivo', 'observacion', 'justificacion_levantamiento', 'condiciones'):
+    if columna.nombre in ('motivo', 'observacion', 'justificacion_levantamiento', 'condiciones', 'incidencia_cierre'):
         return 2.3
     if columna.nombre in ('recurso', 'registrador', 'marca', 'modelo'):
         return 1.5
@@ -189,7 +190,7 @@ def generar_pdf_reporte(filtro, filas, generado_en=None):
                                style=TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')])))
         contenido.append(PageBreak())
     else:
-        contenido.append(Paragraph('No hay datos para graficar con estos filtros.', TEXTO))
+        contenido.append(Paragraph('No hay datos para mostrar.', TEXTO))
     contenido.append(Paragraph('Detalle de resultados', SECCION))
     columnas = [c for c in reporte.columnas if c.en_tabla]
     contenido.append(_tabla_pdf(columnas, filas, documento.width - 12))
@@ -207,7 +208,7 @@ def _formatear_datos_de_ficha_pdf(campos):
 def _ficha_historial(sujeto, por_bien):
     if por_bien:
         return [
-            ('Objeto', f"{sujeto['codigo_inventario']} · {sujeto['recurso']}"),
+            ('Bien material', f"{sujeto['codigo_inventario']} · {sujeto['recurso']}"),
             ('Categoría', sujeto['categoria']),
             ('Identificador del sistema', sujeto.get('identificador_sistema')),
             ('Serie del fabricante', sujeto['numero_serie']),
@@ -254,7 +255,7 @@ def _construir_ficha_de_prestamo_pdf(prestamo, ancho):
     ]
     columnas = (
         CampoVistaReporte('codigo_inventario', 'Bien', 'bien'),
-        CampoVistaReporte('situacion', 'Situación en el préstamo', 'estado'),
+        CampoVistaReporte('situacion', 'Situación del bien', 'estado'),
         CampoVistaReporte('fecha_limite_devolucion', 'Plazo vigente', 'fecha'),
         CampoVistaReporte('fecha_devolucion', 'Devolución', 'fecha'),
         CampoVistaReporte('recibido', 'Recibida por'),
@@ -275,20 +276,23 @@ def _tabla_sanciones_pdf(sanciones, ancho):
         CampoVistaReporte('prestamo_bien', 'Préstamo y bien'),
         CampoVistaReporte('fecha', 'Fecha', 'fecha'),
         CampoVistaReporte('estado', 'Estado actual', 'estado'),
-        CampoVistaReporte('motivo', 'Motivo y levantamiento'),
+        CampoVistaReporte('incidencia_cierre', 'Incidencia y cierre'),
     )
     filas = []
     for sancion in sanciones:
-        motivo = [sancion['motivo'], sancion['descripcion']]
-        if sancion['fecha_levantamiento']:
+        textos = textos_de_incidencia(sancion)
+        cierre = etiqueta_cierre_sancion(sancion)
+        if cierre:
             fecha = _formatear_fecha_pdf_en_lima(sancion['fecha_levantamiento'])
-            operador = sancion['levantada_por'] or 'No registrado'
-            motivo.extend([f'Levantada: {fecha} · {operador}', sancion['justificacion_levantamiento']])
+            operador = sancion.get('levantada_por')
+            textos.append(f'{cierre}: {fecha}' + (f' · {operador}' if operador else ''))
+            if sancion.get('justificacion_levantamiento'):
+                textos.append(sancion['justificacion_levantamiento'])
         filas.append(dict(
             sancion,
             sancion=f"#{sancion['id_sancion']}",
             prestamo_bien=f"#{sancion['id_prestamo']} · {sancion['codigo_inventario']}",
-            motivo='\n'.join(filter(None, motivo)),
+            incidencia_cierre='\n'.join(textos),
         ))
     return _tabla_pdf(columnas, filas, ancho)
 
@@ -323,27 +327,27 @@ def generar_pdf_historial(historial, generado_en=None):
         contenido.append(_formatear_datos_de_ficha_pdf(_ficha_historial(sujeto, filtro.tipo == 'historial_bien')))
         contenido.append(Paragraph('Resumen', SECCION))
         columnas_resumen = (
-            CampoVistaReporte('prestamos', 'Préstamos relacionados'),
+            CampoVistaReporte('prestamos', 'Préstamos'),
             CampoVistaReporte('pendientes', 'Bienes pendientes de devolución'),
-            CampoVistaReporte('eventos', 'Eventos registrados'),
+            CampoVistaReporte('eventos', 'Eventos'),
         )
         contenido.append(_tabla_pdf(columnas_resumen, [historial['resumen']], ancho))
-        contenido.append(Paragraph('Préstamos relacionados', SECCION))
+        contenido.append(Paragraph('Préstamos', SECCION))
         for prestamo in historial['prestamos_agrupados']:
             contenido.extend(_construir_ficha_de_prestamo_pdf(prestamo, ancho))
         if not historial['prestamos_agrupados']:
             contenido.append(Paragraph('No hay préstamos registrados.', TEXTO))
         if historial['sanciones']:
-            contenido.append(Paragraph('Sanciones vinculadas a los préstamos', SECCION))
+            contenido.append(Paragraph('Sanciones', SECCION))
             contenido.append(_tabla_sanciones_pdf(historial['sanciones'], ancho))
         if not historial['propio'] and historial['reservas']:
             contenido.append(Paragraph('Solicitudes y reservas', SECCION))
             contenido.append(_tabla_reservas_pdf(historial['reservas'], ancho))
         contenido.append(CondPageBreak(90))
-        contenido.append(Paragraph('Cronología registrada', TITULO_CRONOLOGIA))
+        contenido.append(Paragraph('Cronología', TITULO_CRONOLOGIA))
         columnas = [c for c in presentar_reporte(filtro.tipo).columnas if c.en_tabla]
         contenido.append(_tabla_pdf(columnas, historial['filas'], ancho, 'No hay eventos registrados.'))
     else:
-        contenido.append(Paragraph('Selecciona un objeto o una persona para descargar su historial.', TEXTO))
+        contenido.append(Paragraph('Selecciona un bien o una persona para descargar su historial.', TEXTO))
     documento.build(contenido, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)
     return salida.getvalue()

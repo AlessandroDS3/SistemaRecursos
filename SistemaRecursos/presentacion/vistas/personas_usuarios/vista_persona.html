@@ -90,7 +90,7 @@
                   {{ insignia_de_estado('SIN_CUENTA' if not p.id_usuario else 'INACTIVA' if p.estado=='INACTIVA' else 'CON_ACCESO' if p.estado_cuenta=='ACTIVA' else p.estado_cuenta) }}
                   {% if g.usuario.tiene_permiso("USUARIOS_GESTIONAR") %}
                     {% if p.id_usuario or p.estado=="ACTIVA" %}
-                      <a href="{{ url_for('cuentas.actualizar_cuenta' if p.id_usuario else 'cuentas.registrar_cuenta',documento=p.dni) }}">{{ 'Ver cuenta' if p.id_usuario else 'Crear acceso' }}</a>
+                      <a href="{{ url_for('cuentas.actualizar_cuenta' if p.id_usuario else 'cuentas.registrar_cuenta',documento=p.dni) }}">{{ 'Ver cuenta' if p.id_usuario else 'Crear cuenta' }}</a>
                     {% endif %}
                   {% endif %}
                 </td>

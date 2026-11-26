@@ -10,34 +10,35 @@
       <h1>Sanción #{{ sancion.id_sancion }}</h1>
       <div>{{ insignia_de_estado(sancion.gravedad) }} {{ insignia_de_estado(sancion.estado) }}</div>
     </div>
-    <section class="panel ficha-resumen" aria-label="Estado del bien y la sanción">
-      <div><small>Estado actual del bien original</small>{{ insignia_de_estado(sancion.estado_bien) }}</div>
-      <div><small>Estado de la sanción</small>{{ insignia_de_estado(sancion.estado) }}</div>
+    <section class="panel ficha-resumen" aria-label="Estado del bien y regularización">
+      <div><small>Estado del bien</small>{{ insignia_de_estado(sancion.estado_bien) }}</div>
       <div><small>Regularización</small><strong>{{ texto_estado(sancion.tipo_regularizacion) if sancion.tipo_regularizacion else 'Pendiente' }}</strong></div>
     </section>
     <section class="panel">
-      <h2>Incidente y personas afectadas</h2>
+      <h2>Incidencia</h2>
       <p><strong>Responsable:</strong> {{ sancion.responsable }} · DNI: {{ sancion.dni_persona }}</p>
       {% if sancion.participantes %}
-        <p>La sanción también afecta a los integrantes del préstamo:</p>
+        <p>Integrantes afectados</p>
         <ul>{% for p in sancion.participantes %}<li>{{ p.nombre }} · {{ p.dni_persona }}</li>{% endfor %}</ul>
       {% endif %}
       <dl>
         <dt>Préstamo</dt><dd><a href="{{ prestamo_url }}">#{{ sancion.id_prestamo }}</a></dd>
         <dt>Bien original</dt><dd>{{ sancion.codigo_inventario }} · {{ sancion.recurso }}</dd>
-        <dt>Causa</dt><dd>{{ texto_estado(sancion.tipo) }}</dd>
+        <dt>Tipo de incidencia</dt><dd>{{ texto_estado(sancion.tipo) }}</dd>
         <dt>Motivo</dt><dd>{{ sancion.motivo }}</dd>
-        <dt>Aplicación original</dt><dd>{{ sancion.fecha|fecha }}</dd>
-        <dt>Inicio del nivel actual</dt><dd>{{ sancion.fecha_inicio_nivel|fecha }}</dd>
-        <dt>Fin del periodo</dt><dd>{{ sancion.fecha_fin|fecha if sancion.fecha_fin else 'Sin vencimiento automático' }}</dd>
-        <dt>Devolución física</dt><dd>{{ sancion.fecha_devolucion|fecha }}</dd>
-        {% if sancion.fecha_regularizacion %}<dt>Regularizada el</dt><dd>{{ sancion.fecha_regularizacion|fecha }}</dd>{% endif %}
+        <dt>Fecha de aplicación</dt><dd>{{ sancion.fecha|fecha }}</dd>
+        {% if sancion.fecha_inicio_nivel and sancion.fecha_inicio_nivel != sancion.fecha %}
+          <dt>Inicio de la sanción vigente</dt><dd>{{ sancion.fecha_inicio_nivel|fecha }}</dd>
+        {% endif %}
+        <dt>Fecha de finalización</dt><dd>{{ sancion.fecha_fin|fecha if sancion.fecha_fin else 'Sin vencimiento automático' }}</dd>
+        <dt>Fecha de devolución</dt><dd>{{ sancion.fecha_devolucion|fecha }}</dd>
+        {% if sancion.fecha_regularizacion %}<dt>Fecha de regularización</dt><dd>{{ sancion.fecha_regularizacion|fecha }}</dd>{% endif %}
         {% if sancion.id_bien_reposicion %}<dt>Bien de reposición</dt><dd>#{{ sancion.id_bien_reposicion }}</dd>{% endif %}
       </dl>
       {% if sancion.observacion_regularizacion %}<p>{{ sancion.observacion_regularizacion }}</p>{% endif %}
-      {% if sancion.posible_perdida %}<p class="aviso" role="status">Posible pérdida: se cumplió el plazo adicional sin devolución. Requiere confirmación del encargado.</p>{% endif %}
-      {% if sancion.revisar_custodia %}<p class="aviso" role="status">Revisar custodia: el bien de uso interno no fue devuelto en su jornada. No confirma por sí solo una salida sin autorización.</p>{% endif %}
-      {% if sancion.revision_administrador %}<p class="aviso" role="status">El periodo grave terminó sin regularización. El administrador debe revisar el caso; el bloqueo continúa.</p>{% endif %}
+      {% if sancion.posible_perdida %}<p class="aviso" role="status">El plazo adicional venció. El encargado debe verificar la posible pérdida.</p>{% endif %}
+      {% if sancion.revisar_custodia %}<p class="aviso" role="status">El bien de uso interno quedó pendiente al cierre. Verifica la custodia antes de determinar si hubo una salida sin autorización.</p>{% endif %}
+      {% if sancion.revision_administrador %}<p class="aviso" role="status">La sanción grave venció sin regularización. El bloqueo sigue activo. Requiere revisión del administrador.</p>{% endif %}
     </section>
     {% if sancion.estado == 'ACTIVA' %}
       {% if caso_propio %}<p class="aviso">Otro responsable autorizado debe revisar esta sanción.</p>{% endif %}
@@ -46,7 +47,7 @@
           <h2>Aceptar regularización</h2>
           <form method="post" class="formulario" action="{{ url_for('sanciones.regularizar_sancion', identificador=sancion.id_sancion) }}">
             {{ campo_oculto_csrf() }}
-            <label>Forma de regularización
+            <label>Tipo de regularización
               <select name="tipo_regularizacion" required>
                 {% if sancion.tipo == 'PERDIDA' %}<option value="RECUPERACION">Recuperación del original en buen estado</option>{% endif %}
                 {% if sancion.tipo == 'DANIO' and not caso_propio %}<option value="REPARACION">Reparación aceptada</option>{% endif %}
@@ -54,7 +55,7 @@
                 {% if sancion.tipo in ('CUSTODIA', 'SALIDA_NO_AUTORIZADA') %}<option value="VERIFICACION">Devolución y custodia verificadas</option>{% endif %}
               </select>
             </label>
-            <label>Observación de aceptación<textarea name="observacion" required maxlength="255"></textarea></label>
+            <label>Observación<textarea name="observacion" required maxlength="255"></textarea></label>
             {% if sancion.tipo == 'PERDIDA' %}
               <label>Código de inventario leído en el original (para recuperación)<input name="codigo_recibido" maxlength="40"></label>
             {% endif %}
@@ -63,8 +64,8 @@
             {% endif %}
             {% if sancion.tipo in ('DANIO', 'PERDIDA') %}
               <details>
-                <summary>Datos del nuevo bien, solo para una reposición</summary>
-                <p>Debe ser equivalente al recurso original. Se registra con otro código de inventario; el original conserva su estado.</p>
+                <summary>Datos del bien de reposición</summary>
+                <p>Usa un bien equivalente con otro código de inventario.</p>
                 <label>Nuevo código de inventario<input name="codigo_inventario" maxlength="40"></label>
                 <label>Serie del fabricante (opcional)<input name="numero_serie" maxlength="60"></label>
                 <label>Ubicación<input name="ubicacion" maxlength="120"></label>
@@ -73,39 +74,40 @@
             {% endif %}
             <button>Aceptar regularización</button>
           </form>
-          <p class="suave">La aceptación no acorta la sanción. Las leves y graves se cumplen automáticamente cuando terminan su periodo y el pendiente está regularizado.</p>
+          <p class="suave">La regularización no reduce el periodo de sanción.</p>
         </section>
       {% endif %}
       {% if not caso_propio %}<section class="panel">
         <h2>Levantar sanción</h2>
         {% if not sancion.fecha_regularizacion %}
-          <p>Primero debe registrarse la devolución o aceptarse la reparación o reposición. Si el bien está perdido y se recuperó dañado, registra su recepción en el préstamo.</p>
+          <p>Regulariza el bien antes de levantar la sanción.</p>
+          {% if sancion.tipo == 'PERDIDA' %}<p>Si recuperas el bien dañado, registra la devolución en el préstamo.</p>{% endif %}
         {% elif sancion.gravedad == 'MUY_GRAVE' and g.usuario.rol != 'ADMINISTRADOR' %}
-          <p>Solo el administrador puede rehabilitar este caso.</p>
+          <p>Solo el administrador puede levantar esta sanción.</p>
         {% else %}
-          <p>El encargado puede retirar una leve con justificación. Una grave debe completar su periodo; una muy grave requiere autorización del administrador.</p>
+          {% if sancion.gravedad == 'GRAVE' %}<p>La sanción grave debe completar su periodo.</p>{% endif %}
           <form method="post" class="formulario" action="{{ url_for('sanciones.levantar_sancion', identificador=sancion.id_sancion) }}">
             {{ campo_oculto_csrf() }}
             <input type="hidden" name="origen" value="prestamo">
             <input type="hidden" name="volver" value="{{ volver }}">
             <label>Justificación<input name="justificacion" required maxlength="255"></label>
-            <button>Autorizar levantamiento</button>
+            <button>Levantar sanción</button>
           </form>
         {% endif %}
       </section>
       {% endif %}
       {% if not caso_propio and (sancion.gravedad != 'MUY_GRAVE' or g.usuario.rol == 'ADMINISTRADOR') %}
         <details class="panel">
-          <summary>Evaluar o elevar la gravedad</summary>
-          <p>Una elevación inicia su nuevo periodo al confirmarse. No se duplica la sanción ni se reinicia el plazo por registrar otra causa del mismo nivel.</p>
+          <summary>Reevaluar sanción</summary>
+          <p>Solo el aumento de gravedad inicia un nuevo periodo de sanción.</p>
           {{ formulario_de_evaluacion_de_sancion(url_for('sanciones.evaluar_sancion', identificador=sancion.id_sancion)) }}
         </details>
       {% endif %}
-    {% else %}
+    {% elif sancion.fecha_levantamiento or sancion.justificacion_levantamiento %}
       <section class="panel">
-        <h2>{{ sancion.estado|capitalize }}</h2>
-        <p>{{ sancion.justificacion_levantamiento or 'Sin observación adicional.' }}</p>
-        <p>{{ sancion.fecha_levantamiento|fecha }}</p>
+        <h2>Cierre de la sanción</h2>
+        {% if sancion.fecha_levantamiento %}<p>{{ sancion.fecha_levantamiento|fecha }}</p>{% endif %}
+        {% if sancion.justificacion_levantamiento %}<p>{{ sancion.justificacion_levantamiento }}</p>{% endif %}
       </section>
     {% endif %}
     {% if not caso_propio and g.usuario.rol == 'ADMINISTRADOR' and sancion.estado != 'ANULADA' %}
@@ -133,17 +135,17 @@
   {% else %}
     <div class="sanciones-administracion">
       <h1>Sanciones</h1>
-      <p>Las sanciones bloquean nuevos préstamos y reservas; las devoluciones y la regularización siguen disponibles.</p>
+      <p>Las sanciones activas bloquean nuevos préstamos y reservas. Puedes devolver y regularizar bienes.</p>
       {% if g.usuario.rol == 'ADMINISTRADOR' %}
         <details class="panel" {% if g.error_formulario and request.endpoint == 'sanciones.guardar_configuracion_sanciones' %}open{% endif %}>
           <summary>Configurar plazos de sanciones</summary>
           <form method="post" class="formulario" action="{{ url_for('sanciones.guardar_configuracion_sanciones') }}">
             {{ campo_oculto_csrf() }}
             <input type="hidden" name="version" value="{{ valor_formulario('version', version_configuracion) }}">
-            <label>Duración leve, en días<input name="dias_leve" type="number" min="1" max="3650" required value="{{ valor_formulario('dias_leve', configuracion.dias_leve) }}"></label>
-            <label>Duración grave, en días<input name="dias_grave" type="number" min="1" max="3650" required value="{{ valor_formulario('dias_grave', configuracion.dias_grave) }}"></label>
-            <label>Espera adicional para revisar posible pérdida, en días<input name="dias_espera_perdida" type="number" min="1" max="365" required value="{{ valor_formulario('dias_espera_perdida', configuracion.dias_espera_perdida) }}"></label>
-            <p class="suave">La leve se aplica apenas vence el préstamo, sin tolerancia automática. La espera se suma al plazo leve. Los cambios afectan a nuevas sanciones; 180 días es la referencia inicial configurable del semestre.</p>
+            <label>Sanción leve (días)<input name="dias_leve" type="number" min="1" max="3650" required value="{{ valor_formulario('dias_leve', configuracion.dias_leve) }}"></label>
+            <label>Sanción grave (días)<input name="dias_grave" type="number" min="1" max="3650" required value="{{ valor_formulario('dias_grave', configuracion.dias_grave) }}"></label>
+            <label>Plazo adicional por posible pérdida (días)<input name="dias_espera_perdida" type="number" min="1" max="365" required value="{{ valor_formulario('dias_espera_perdida', configuracion.dias_espera_perdida) }}"></label>
+            <p class="suave">Los nuevos plazos se aplican a sanciones futuras. El plazo adicional se cuenta después del periodo leve.</p>
             <button>Guardar plazos</button>
           </form>
         </details>

@@ -38,7 +38,7 @@
       {% if "estado" in reporte.filtros %}
         {{ selector_de_filtro('estado',reporte.etiqueta_estado,reporte.estados,filtro.estado) }}
       {% endif %}
-      {% for nombre, etiqueta in (('modalidad','Modalidad'),('tipo_persona','Tipo de persona' if filtro.tipo == 'personas' else 'Tipo de solicitante'),('cumplimiento','Cumplimiento'),('tipo_gestion','Tipo de gestión')) if nombre in reporte.filtros %}
+      {% for nombre, etiqueta in (('modalidad','Tipo de préstamo'),('tipo_persona','Tipo de persona' if filtro.tipo == 'personas' else 'Tipo de solicitante'),('cumplimiento','Cumplimiento'),('tipo_gestion','Tipo de gestión')) if nombre in reporte.filtros %}
         {{ selector_de_filtro(nombre,etiqueta,opciones_filtros[nombre],filtro[nombre]) }}
       {% endfor %}
       {% if 'id_categoria' in reporte.filtros %}
@@ -158,7 +158,7 @@
   </section>
   {% if graficos and filas %}
     <details class="panel">
-      <summary>Ver gráficos de estos resultados</summary>
+      <summary>Estadísticas</summary>
       {% include 'reportes/parciales/graficos_reportes.html' %}
     </details>
   {% endif %}

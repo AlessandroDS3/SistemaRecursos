@@ -4,6 +4,7 @@ from reportlab.graphics import renderSVG
 from presentacion.reportes.csv_reportes import generar_csv_reporte
 from presentacion.reportes.dibujos_reportes import dibujar_graficos_de_reporte
 from presentacion.reportes.formatos_reportes import (
+    etiqueta_cierre_sancion,
     etiqueta_reporte,
     presentar_reporte,
     valor_reporte,
@@ -12,6 +13,7 @@ from presentacion.reportes.pdf_reportes import generar_pdf_historial, generar_pd
 from presentacion.reportes.graficos_reportes import preparar_graficos
 from presentacion.seguridad import requiere_permiso
 from servicios.reportes.catalogo_reportes import OPCIONES_FILTROS, REPORTES
+from servicios.reportes.historial import textos_de_incidencia
 
 
 class ControladorReporte:
@@ -20,6 +22,8 @@ class ControladorReporte:
         self.blueprint = Blueprint('reportes', __name__, url_prefix='/reportes')
         self.blueprint.add_app_template_filter(etiqueta_reporte, 'etiqueta_reporte')
         self.blueprint.add_app_template_filter(valor_reporte, 'valor_reporte')
+        self.blueprint.add_app_template_filter(etiqueta_cierre_sancion, 'etiqueta_cierre_sancion')
+        self.blueprint.add_app_template_filter(textos_de_incidencia, 'textos_de_incidencia')
         self.blueprint.add_url_rule('', 'consultar_reportes', self.consultar_reportes)
         self.blueprint.add_url_rule(
             '/exportar.csv', 'exportar_reportes_csv', self.exportar_reportes_csv

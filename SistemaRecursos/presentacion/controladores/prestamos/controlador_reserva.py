@@ -108,7 +108,7 @@ class ControladorReserva:
     def _ejecutar_accion_reserva_y_redirigir(self, identificador, operacion):
         prestamo = operacion(identificador, request.form.to_dict(), g.usuario.id_usuario)
         mensajes = {
-            'reservas.preparar_reserva': 'Bien preparado.',
+            'reservas.preparar_reserva': 'Reserva preparada.',
             'reservas.entregar_reserva': 'Préstamo registrado.',
             'reservas.cancelar_reserva': 'Reserva cancelada.',
             'reservas.rechazar_reserva': 'Reserva rechazada.',

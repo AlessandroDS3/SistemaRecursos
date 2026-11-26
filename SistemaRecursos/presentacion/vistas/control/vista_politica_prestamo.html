@@ -3,10 +3,11 @@
 {% block contenido %}
   {% if modo=="lista" %}
     <h1>Políticas de préstamo</h1>
-    <section class="panel configuracion-compacta" aria-label="Límites y horario">
+    <section class="panel configuracion-compacta" aria-label="Límites de bienes y horario">
       <form method="post" action="{{ url_for('politicas.guardar_limites_articulos') }}" class="bloque-maximos">
         {{ campo_oculto_csrf() }}
-        <h2>Máximo de artículos por persona</h2>
+        <h2>Límite de bienes por tipo de persona</h2>
+        <p class="suave">Cada bien pendiente de devolución y cada reserva activa ocupan un cupo. En préstamos grupales, los bienes cuentan para cada integrante.</p>
         <div class="campos-configuracion-compacta">
           {% for tipo in tipos %}
             {% set actual = limites|selectattr('tipo_persona','equalto',tipo)|first|default({}) %}
@@ -16,14 +17,14 @@
                      {% if g.usuario.rol != 'ADMINISTRADOR' %}readonly{% endif %}>
             </label>
           {% endfor %}
-          {% if g.usuario.rol == 'ADMINISTRADOR' %}<button class="secundario">Guardar</button>{% endif %}
+          {% if g.usuario.rol == 'ADMINISTRADOR' %}<button class="secundario">Guardar límites</button>{% endif %}
         </div>
       </form>
       <form method="post" action="{{ url_for('politicas.guardar_horario_y_plazos_de_reserva') }}" id="configuracion-general" class="bloque-horario">
         {{ campo_oculto_csrf() }}
-        <h2>Horario de atención</h2>
+        <h2>Horario de atención (Lima)</h2>
         <fieldset class="dias-atencion">
-          <legend>Días de atención</legend>
+          <legend>Días</legend>
           <div>
             {% for dia, nombre in dias_semana %}
               <label class="check">
@@ -35,14 +36,39 @@
           </div>
         </fieldset>
         <div class="campos-configuracion-compacta">
-          {{ campo_de_formulario('hora_apertura','Apertura (Lima)',configuracion.hora_apertura|default('08:00')|hora,tipo='time',requerido=true) }}
-          {{ campo_de_formulario('hora_cierre','Cierre (Lima)',configuracion.hora_cierre|default('16:00')|hora,tipo='time',requerido=true) }}
-          <button>Guardar</button>
+          {{ campo_de_formulario('hora_apertura','Apertura',configuracion.hora_apertura|default('08:00')|hora,tipo='time',requerido=true) }}
+          {{ campo_de_formulario('hora_cierre','Cierre',configuracion.hora_cierre|default('16:00')|hora,tipo='time',requerido=true) }}
         </div>
       </form>
     </section>
+    <section class="panel">
+      <h2>Plazos de reserva</h2>
+      <p class="suave">Máximo por plazo: 30 días o 720 horas.</p>
+      <div class="rejilla dos-columnas">
+        <fieldset>
+          <legend>Espera</legend>
+          <p class="suave">Desde la fecha y hora solicitadas.</p>
+          <div class="rejilla dos-columnas">
+            {{ campo_de_formulario('plazo_espera','Plazo',configuracion.plazo_espera|default(2),tipo='number',requerido=true,formulario='configuracion-general') }}
+            {{ selector_de_opciones('unidad_espera','Unidad',('HORAS','DIAS'),configuracion.unidad_espera|default('DIAS'),formulario='configuracion-general') }}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Retiro</legend>
+          <p class="suave">Desde la hora reservada o desde la preparación si es posterior.</p>
+          <div class="rejilla dos-columnas">
+            {{ campo_de_formulario('plazo_retiro','Plazo',configuracion.plazo_retiro|default(24),tipo='number',requerido=true,formulario='configuracion-general') }}
+            {{ selector_de_opciones('unidad_retiro','Unidad',('HORAS','DIAS'),configuracion.unidad_retiro|default('HORAS'),formulario='configuracion-general') }}
+          </div>
+        </fieldset>
+      </div>
+      <div class="acciones acciones-configuracion">
+        <button type="submit" form="configuracion-general">Guardar horario y plazos de reserva</button>
+      </div>
+    </section>
     <section class="panel politicas-panel">
       <h2>Plazos de préstamo</h2>
+      <p class="suave">Los plazos por horas terminan como máximo al cierre. Si un plazo en días vence en un día sin atención, pasa al siguiente día de atención.</p>
       <div class="busqueda-local">
         <label>
           Buscar categoría<input type="search"
@@ -51,7 +77,7 @@
         </label>
         <button type="button"
                 class="secundario"
-                data-limpiar-busqueda="politicas-matriz">Limpiar</button>
+                data-limpiar-busqueda="politicas-matriz">Limpiar búsqueda</button>
       </div>
       <div class="tabla">
         <table class="politicas-matriz" id="politicas-matriz">
@@ -71,7 +97,7 @@
                   {% set p = matriz.get((c.id_categoria,tipo),{}) %}
                   <td>
                     <form method="post"
-                          action="{{ url_for('politicas.editar_politica_prestamo',identificador=p.get('id_politica')) }}"
+                          action="{{ url_for('politicas.editar_politica_prestamo',identificador=p.id_politica) if p else url_for('politicas.registrar_politica_prestamo') }}"
                           class="formulario politica-celda" data-guardar-modificada>
                       {{ campo_oculto_csrf() }}
                       <input type="hidden" name="id_categoria" value="{{ c.id_categoria }}">
@@ -94,7 +120,7 @@
                       <input type="checkbox"
                              name="permite_salida"
                              value="1"
-                             {% if p.get('permite_salida') %}checked{% endif %}>Fuera de la escuela</label>
+                             {% if p.get('permite_salida') %}checked{% endif %}>Permite salida de la institución</label>
                       <button class="secundario" data-guardar-cambios>Guardar</button>
                     </form>
                   </td>
@@ -108,30 +134,7 @@
           </tbody>
         </table>
       </div>
-      <p class="suave">Los cambios se aplican a nuevas entregas. Los préstamos registrados conservan sus condiciones.</p>
-    </section>
-    <section class="panel">
-      <h2>Vencimiento de reservas</h2>
-      <p class="suave">Cada plazo admite hasta 30 días o 720 horas.</p>
-      <div class="rejilla dos-columnas">
-        <fieldset>
-          <legend>Reservas en espera</legend>
-          <div class="rejilla dos-columnas">
-            {{ campo_de_formulario('plazo_espera','Plazo',configuracion.plazo_espera|default(2),tipo='number',requerido=true,formulario='configuracion-general') }}
-            {{ selector_de_opciones('unidad_espera','Unidad',('HORAS','DIAS'),configuracion.unidad_espera|default('DIAS'),formulario='configuracion-general') }}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>Reservas listas para retiro</legend>
-          <div class="rejilla dos-columnas">
-            {{ campo_de_formulario('plazo_retiro','Plazo',configuracion.plazo_retiro|default(24),tipo='number',requerido=true,formulario='configuracion-general') }}
-            {{ selector_de_opciones('unidad_retiro','Unidad',('HORAS','DIAS'),configuracion.unidad_retiro|default('HORAS'),formulario='configuracion-general') }}
-          </div>
-        </fieldset>
-      </div>
-      <div class="acciones acciones-configuracion">
-        <button type="submit" form="configuracion-general">Guardar</button>
-      </div>
+      <p class="suave">Los cambios de política se aplican a nuevas entregas.</p>
     </section>
     <a href="{{ url_for('prestamos.consultar_prestamos') }}">Ir a préstamos</a>
   {% else %}
@@ -169,11 +172,11 @@
     {% if politica %}
       <details class="panel">
         <summary>Eliminar política</summary>
-        <p class="suave">Solo se puede eliminar si no tiene préstamos asociados.</p>
+        <p class="suave">Solo para políticas sin préstamos asociados.</p>
         <form method="post"
               action="{{ url_for('politicas.eliminar_politica_prestamo',identificador=politica.id_politica) }}">
           {{ campo_oculto_csrf() }}
-          <button class="secundario">Eliminar política</button>
+          <button class="secundario">Eliminar</button>
         </form>
       </details>
     {% endif %}

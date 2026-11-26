@@ -79,7 +79,7 @@ class RepositorioHistorialSQL(RepositorioSQL):
                 una=True,
             )
         if sujeto is None:
-            raise NoEncontrado('No se encontró el objeto o la persona seleccionada.')
+            raise NoEncontrado('No se encontró el bien o la persona seleccionada.')
         resultado['sujeto'] = sujeto
         if por_bien:
             alcance, parametros = 'd.id_bien=%s', (sujeto['id_bien'],)

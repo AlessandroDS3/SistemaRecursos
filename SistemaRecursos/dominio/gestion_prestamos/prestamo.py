@@ -90,7 +90,7 @@ class DatosParaValidarPrestamo:
 def validar_cupo_articulos(persona: PersonaParaPrestamo, cupo: CupoArticulos, nuevos: int = 1) -> None:
     if cupo.limite is None:
         tipo = (persona['tipo'] or 'desconocido').lower()
-        raise ValueError(f'Configura el límite de artículos para el tipo {tipo}.')
+        raise ValueError(f'Configura el límite de bienes para {tipo}.')
     if cupo.pendientes + cupo.reservas + nuevos <= cupo.limite:
         return
     nombre = f'{persona["nombres"]} {persona["apellidos"]}'

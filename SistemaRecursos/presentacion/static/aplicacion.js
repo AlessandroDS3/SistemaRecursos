@@ -100,15 +100,16 @@ document.querySelectorAll('[data-fila-devolucion]').forEach(fila => {
 
 document.querySelectorAll('[data-ampliacion-previa]').forEach(formulario => {
   const resultado = formulario.querySelector('[data-resultado-ampliacion]');
+  const indicacionInicial = resultado.textContent.trim();
   const boton = formulario.querySelector('button[type="submit"], button:not([type])');
   const formato = new Intl.DateTimeFormat('es-PE', {timeZone:'America/Lima', dateStyle:'short', timeStyle:'short'});
   let temporizador, solicitud;
   async function consultarFechaPreviaDeAmpliacion() {
     solicitud?.abort();
     const cantidad = formulario.elements.cantidad.value;
-    if (!cantidad) { resultado.textContent = 'Indica el tiempo adicional para ver la nueva fecha de devolución.'; boton.disabled = false; return; }
+    if (!cantidad) { resultado.textContent = indicacionInicial; boton.disabled = false; return; }
     if (!Number.isInteger(Number(cantidad)) || Number(cantidad) < 1) {
-      resultado.textContent = 'Indica una cantidad entera y positiva.'; boton.disabled = true; return;
+      resultado.textContent = 'Introduce un número entero mayor que cero.'; boton.disabled = true; return;
     }
     const actual = new AbortController();
     solicitud = actual;
@@ -120,7 +121,7 @@ document.querySelectorAll('[data-ampliacion-previa]').forEach(formulario => {
       const datos = await respuesta.json();
       if (actual.signal.aborted || solicitud !== actual) return;
       if (!respuesta.ok) { resultado.textContent = datos.error || 'No se pudo calcular la ampliación.'; return; }
-      resultado.textContent = `Nueva devolución estimada en Lima: ${formato.format(new Date(datos.fecha))}. Se confirma al guardar.`;
+      resultado.textContent = `Nueva fecha límite estimada: ${formato.format(new Date(datos.fecha))}. Se confirma al guardar.`;
       boton.disabled = false;
     } catch (error) {
       if (error.name !== 'AbortError' && solicitud === actual) {

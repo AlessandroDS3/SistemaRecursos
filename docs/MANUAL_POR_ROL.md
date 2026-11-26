@@ -42,7 +42,7 @@ botones no salen en el papel.
 | Ver o cancelar mis reservas | **Mis reservas** | Puedes cancelar mientras no se haya entregado. |
 | Recibir el préstamo | En el mostrador | El encargado registra la entrega. Los estudiantes necesitan matrícula vigente. |
 | Ver mis préstamos | **Mis préstamos** | Cada bien tiene su propia fecha límite. |
-| **Pedir más plazo** | **Mis préstamos** → abrir el préstamo → **Solicitar más plazo** | Indica el tiempo adicional y el motivo. El encargado lo aprueba o rechaza; mientras tanto, el plazo actual sigue vigente. Solo la persona responsable del préstamo puede pedirlo, y solo antes del vencimiento. |
+| **Solicitar ampliación** | **Mis préstamos** → abrir el préstamo → **Solicitar ampliación** | Indica el tiempo adicional y el motivo. El plazo actual sigue vigente hasta la aprobación. Solo la persona responsable puede enviar la solicitud antes del vencimiento. |
 | Ver o descargar mi historial | **Mis préstamos** → **Mi historial completo** | Se descarga en CSV o PDF. |
 
 **Bloqueos:** si tienes una sanción activa o un bien vencido sin devolver, no podrás reservar
@@ -79,10 +79,15 @@ debe evaluar, levantar o anular el caso.
 
 ### Reservas
 
-**Reservas → Atender reservas:** prepara un ejemplar para cada reserva en espera, entrégalo
-cuando la persona llegue, o recházala con un motivo. Si la persona pierde su habilitación,
-la reserva queda pendiente de atención hasta que se cierre o venza. Cuando vence el retiro
-de un bien preparado, el sistema registra que la persona no se presentó y libera el ejemplar.
+En **Reservas → Atender reserva**, puedes preparar el bien antes de la hora solicitada si hay
+uno disponible y la reserva tiene prioridad. Se atienden primero las reservas que ya llegaron
+a su hora, por orden de solicitud. Entre las futuras, tiene prioridad la hora de retiro más próxima.
+Cuando el bien está preparado, puedes entregarlo dentro del horario de atención, incluso antes de
+la hora reservada. El plazo de devolución empieza con la entrega real. El plazo para recogerlo
+empieza a la hora solicitada si el bien ya está listo, o al prepararlo si se hace más tarde.
+Si vence sin entrega, el sistema libera el bien.
+Puedes rechazar la reserva con un motivo. Si la persona pierde su habilitación, la reserva
+queda pendiente hasta que se cierre o venza.
 
 ### Devoluciones
 
@@ -161,7 +166,7 @@ del bien. Un bien solo vuelve a estar disponible cerrando su mantenimiento.
 ### Reglas del servicio
 
 - **Políticas de préstamo:** plazo por tipo de persona y categoría (en horas o días) y permiso de salida.
-- **Máximo de artículos** por tipo de persona y **horario de atención**. Elige los días y la
+- **Límite de bienes** por tipo de persona y **horario de atención**. Elige los días y la
   hora de apertura y cierre en Lima. Por defecto, de lunes a viernes de 08:00 a 16:00.
   Si el plazo de devolución en días cae en un día sin atención, vence el siguiente día de atención.
 - **Sanciones → Configurar plazos:** días de la leve, de la grave y espera para revisar pérdidas.

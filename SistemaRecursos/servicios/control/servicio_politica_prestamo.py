@@ -97,12 +97,12 @@ class ServicioAplicacionPoliticaPrestamo:
 
     def guardar_limites_articulos(self, cantidades, actor):
         if set(cantidades) != set(TIPOS_PERSONA):
-            raise ValueError('Indica el máximo para cada tipo de persona.')
+            raise ValueError('Indica el límite de bienes para cada tipo de persona.')
         self._validar_y_guardar_limites_por_tipo_de_persona(cantidades, actor)
 
     def _validar_y_guardar_limites_por_tipo_de_persona(self, cantidades, actor):
         cantidades = {
-            tipo: validar_entero(cantidad, 'Máximo total de bienes')
+            tipo: validar_entero(cantidad, 'Límite de bienes')
             for tipo, cantidad in cantidades.items()
         }
         with self.repositorio.transaccion() as operacion:
@@ -111,7 +111,7 @@ class ServicioAplicacionPoliticaPrestamo:
             )
             if cuenta['rol'] != 'ADMINISTRADOR':
                 raise PermissionError(
-                    'Solo el administrador modifica el límite total de artículos.'
+                    'Solo el administrador puede modificar el límite de bienes.'
                 )
             for tipo, cantidad in cantidades.items():
                 operacion.guardar_limite_articulos(tipo, cantidad)

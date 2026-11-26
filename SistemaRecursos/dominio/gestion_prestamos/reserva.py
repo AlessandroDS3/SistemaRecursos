@@ -162,11 +162,8 @@ class Reserva:
         ventana = self.ventana_atencion(ahora)
         if accion == 'expirar' and ventana != 'VENCIDA':
             raise Conflicto('La reserva solo puede marcarse vencida después de su plazo.')
-        if accion in ('preparar', 'entregar'):
-            if ventana == 'VENCIDA':
-                raise Conflicto('El plazo de la reserva venció.')
-            if ventana == 'FUTURA':
-                raise Conflicto('Todavía no llegó la fecha requerida.')
+        if accion in ('preparar', 'entregar') and ventana == 'VENCIDA':
+            raise Conflicto('El plazo de la reserva venció.')
 
     def asignar_bien_para_retiro(self, bien: int, ahora: datetime, limite: datetime) -> 'Reserva':
         self.validar_accion_reserva('preparar', ahora)

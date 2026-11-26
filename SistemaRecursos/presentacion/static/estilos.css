@@ -2493,6 +2493,7 @@ html [hidden], body[hidden] {
 .ficha-historial h2 { margin: 6px 0; font-size: 26px; font-weight: 300; letter-spacing: -.03em; }
 .ficha-historial p { margin: 4px 0; }
 .resumen-historial { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.resumen-historial-propio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .resumen-historial article { display: grid; gap: 4px; padding: 18px 20px; }
 .resumen-historial span { color: var(--suave); font-size: var(--letra-pequena); }
 .resumen-historial strong { font-size: 30px; font-weight: 300; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }

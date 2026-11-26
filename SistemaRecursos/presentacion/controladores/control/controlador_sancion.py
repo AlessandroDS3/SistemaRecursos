@@ -76,7 +76,7 @@ class ControladorSancion:
         self.servicio.levantar_sancion(
             identificador, request.form.get('justificacion'), g.usuario.id_usuario
         )
-        flash('Sanción levantada. Las demás sanciones y pendientes se conservan.')
+        flash('Sanción levantada.')
         if sancion is not None:
             return redirect(obtener_url_del_detalle_de_prestamo(sancion['id_prestamo']) + '#devolucion')
         return redirect(url_for('sanciones.consultar_sanciones', q=request.form.get('q', '')))
@@ -87,14 +87,14 @@ class ControladorSancion:
         self.servicio.guardar_configuracion_sanciones(
             request.form, request.form.get('version'), g.usuario.id_usuario
         )
-        flash('Plazos actualizados; las sanciones existentes conservan sus valores.')
+        flash('Plazos actualizados.')
         return redirect(url_for('sanciones.consultar_sanciones'))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     @recuperar_formulario_tras_error(lambda self, identificador: self.consultar_sancion(identificador))
     def evaluar_sancion(self, identificador):
         self.servicio.evaluar_sancion(identificador, request.form, g.usuario.id_usuario)
-        flash('Evaluación registrada en el historial de la sanción.')
+        flash('Evaluación registrada.')
         return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
@@ -109,7 +109,7 @@ class ControladorSancion:
         identificador = self.servicio.aplicar_sancion_a_bien_prestado(
             prestamo_id, detalle_id, request.form, g.usuario.id_usuario,
         )
-        flash('Falta evaluada y sanción registrada.')
+        flash('Sanción registrada.')
         return redirect(url_for('sanciones.consultar_sancion', identificador=identificador))
 
     @requiere_permiso('USUARIOS_GESTIONAR')

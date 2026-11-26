@@ -44,12 +44,23 @@ def crear_prestamo_de_prueba():
         observaciones='', participantes=[], historial=[],
         detalles=[dict(
             id_detalle=7, codigo_inventario='LAP-5', recurso='Laptop', fecha_devolucion=None,
-            fecha_regularizacion=None, estado_bien='PRESTADO', unidad_plazo='DIAS',
+            fecha_regularizacion=None, estado_bien='PRESTADO', unidad_plazo='DIAS', ampliado=False,
             fecha_limite_devolucion=datetime(2099, 1, 1), condicion_entrega='BUENO',
             condicion_devolucion=None, observaciones_devolucion=None, estado_sancion=None,
             gravedad=None, id_sancion=None,
         )],
     )
+
+
+def crear_reserva_de_prueba(**cambios):
+    return dict(dict(
+        id_reserva=6, id_recurso=1, recurso='Laptop', dni_persona='20000001',
+        solicitante='Ana Prueba', estado='EN_ESPERA', ventana_atencion='FUTURA',
+        fecha_solicitud=AHORA, fecha_requerida=AHORA + timedelta(days=1),
+        fecha_limite_vencimiento=AHORA + timedelta(days=2), fecha_preparacion=None,
+        codigo_inventario=None, id_prestamo_ref=None, salida_solicitada=False,
+        observaciones='', historial=[],
+    ), **cambios)
 
 
 class PantallasCierreTest(unittest.TestCase):
@@ -92,14 +103,49 @@ class PantallasCierreTest(unittest.TestCase):
         self.assertIn('Aprobar', html)
         self.assertIn('Sustentación', html)
 
-    def test_usuario_ve_el_formulario_para_pedir_mas_plazo(self):
+    def test_usuario_ve_el_formulario_para_solicitar_ampliacion(self):
         cliente = self.crear_cliente_para_rol('USUARIO')
         with patch.object(self.servicios['prestamos'], 'consultar_prestamo', return_value=crear_prestamo_de_prueba()), \
                 patch.object(self.servicios['ampliaciones'], 'consultar_solicitudes_de_ampliacion_del_prestamo', return_value=[]):
             html = cliente.get('/prestamos/4').get_data(as_text=True)
-        self.assertIn('Solicitar más plazo', html)
+        self.assertIn('<summary>Solicitar ampliación</summary>', html)
         self.assertIn('Enviar solicitud', html)
         self.assertNotIn('Ampliar plazo', html)
+
+    def test_usuario_ve_solicitud_pendiente_sin_otro_formulario_para_el_mismo_bien(self):
+        cliente = self.crear_cliente_para_rol('USUARIO')
+        with patch.object(self.servicios['prestamos'], 'consultar_prestamo', return_value=crear_prestamo_de_prueba()), \
+                patch.object(self.servicios['ampliaciones'], 'consultar_solicitudes_de_ampliacion_del_prestamo',
+                             return_value=[crear_solicitud_de_ampliacion_de_prueba()]):
+            respuesta = cliente.get('/prestamos/4')
+        html = respuesta.get_data(as_text=True)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn('Solicitudes de ampliación', html)
+        self.assertIn('Pendiente', html)
+        self.assertNotIn('<summary>Solicitar ampliación</summary>', html)
+        self.assertNotIn('En revisión', html)
+
+    def test_encargado_ve_paneles_solo_con_bienes_aptos(self):
+        cliente = self.crear_cliente_para_rol('ENCARGADO_PRESTAMOS')
+        prestamo = crear_prestamo_de_prueba()
+        bien = prestamo['detalles'][0]
+        paneles = ('<summary>Ampliar plazo</summary>', '<summary>Reportar pérdida</summary>',
+                   '<summary>Evaluar incidencia</summary>')
+        with patch.object(self.servicios['prestamos'], 'consultar_prestamo', return_value=prestamo), \
+                patch.object(self.servicios['ampliaciones'], 'consultar_solicitudes_de_ampliacion_del_prestamo',
+                             return_value=[]):
+            pendiente = cliente.get('/prestamos/4').get_data(as_text=True)
+            bien.update(fecha_devolucion=AHORA, estado_bien='DANADO', condicion_devolucion='DANADO')
+            danado = cliente.get('/prestamos/4').get_data(as_text=True)
+            bien.update(id_sancion=8, estado_sancion='ACTIVA', gravedad='GRAVE')
+            sancionado = cliente.get('/prestamos/4').get_data(as_text=True)
+        for panel in paneles:
+            self.assertIn(panel, pendiente)
+            self.assertNotIn(panel, sancionado)
+        self.assertNotIn(paneles[0], danado)
+        self.assertNotIn(paneles[1], danado)
+        self.assertIn(paneles[2], danado)
+        self.assertIn('Gestionar sanción', sancionado)
 
     def test_inicio_avisa_solicitudes_y_procesador_detenido(self):
         cliente = self.crear_cliente_para_rol('ADMINISTRADOR')
@@ -117,6 +163,59 @@ class PantallasCierreTest(unittest.TestCase):
         self.assertIn('/reservas?estado=PENDIENTES', html)
         self.assertIn('no se está ejecutando', html)
         self.assertIn('sin conexión', html)
+
+    def test_reserva_cerrada_muestra_resultado_si_tiene_prestamo(self):
+        cliente = self.crear_cliente_para_rol('USUARIO')
+        for estado, prestamo in (('CANCELADA', None), ('RECHAZADA', None), ('EXPIRADA', None),
+                                  ('ATENDIDA', None), ('ATENDIDA', 4)):
+            with self.subTest(estado=estado, prestamo=prestamo), \
+                    patch.object(self.servicios['reservas'], 'consultar_reserva',
+                                 return_value=crear_reserva_de_prueba(estado=estado, id_prestamo_ref=prestamo)), \
+                    patch.object(self.servicios['reservas'], 'consultar_recursos_para_reserva', return_value=[]):
+                respuesta = cliente.get('/reservas/6')
+                html = respuesta.get_data(as_text=True)
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertEqual('Resultado de la reserva' in html, prestamo is not None)
+                self.assertEqual('href="/prestamos/4">Ver préstamo</a>' in html, prestamo is not None)
+                self.assertIn('Historial de la reserva', html)
+
+    def test_encargado_ve_la_entrega_si_el_bien_esta_preparado(self):
+        cliente = self.crear_cliente_para_rol('ENCARGADO_PRESTAMOS')
+        reserva = crear_reserva_de_prueba()
+        with patch.object(self.servicios['reservas'], 'consultar_reserva', return_value=reserva), \
+                patch.object(self.servicios['reservas'], 'consultar_recursos_para_reserva', return_value=[]):
+            en_espera = cliente.get('/reservas/6').get_data(as_text=True)
+            reserva['estado'] = 'LISTA_PARA_RETIRO'
+            preparada = cliente.get('/reservas/6').get_data(as_text=True)
+            reserva['ventana_atencion'] = 'VENCIDA'
+            vencida = cliente.get('/reservas/6').get_data(as_text=True)
+        self.assertIn('Retiro solicitado', en_espera)
+        self.assertIn('<button>Preparar bien</button>', en_espera)
+        self.assertNotIn('action="/reservas/6/entregar"', en_espera)
+        self.assertIn('Retiro solicitado', preparada)
+        self.assertIn('action="/reservas/6/entregar"', preparada)
+        self.assertIn('<button>Entregar y registrar préstamo</button>', preparada)
+        self.assertNotIn('action="/reservas/6/entregar"', vencida)
+
+    def test_politicas_muestra_el_guardado_compartido_y_las_politicas_faltantes(self):
+        cliente = self.crear_cliente_para_rol('ADMINISTRADOR')
+        politicas = self.servicios['politicas']
+        politica = dict(id_politica=1, id_categoria=1, tipo_persona='ESTUDIANTE',
+                        plazo_maximo=3, unidad_plazo='DIAS', permite_salida=False, version='v')
+        with patch.object(self.servicios['recursos'], 'consultar_categorias',
+                          return_value=[dict(id_categoria=1, nombre='Equipos')]), \
+                patch.object(politicas, 'consultar_politicas_prestamo', return_value=[politica]), \
+                patch.object(politicas, 'consultar_horario_y_plazos_de_reserva', return_value={}), \
+                patch.object(politicas, 'consultar_limites_articulos', return_value=[]):
+            respuesta = cliente.get('/politicas')
+        html = respuesta.get_data(as_text=True)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn('Horario de atención (Lima)', html)
+        self.assertIn('Límite de bienes por tipo de persona', html)
+        self.assertIn('Plazos de reserva', html)
+        self.assertEqual(html.count('<button type="submit" form="configuracion-general">'), 1)
+        self.assertIn('action="/politicas/1/editar"', html)
+        self.assertIn('action="/politicas/nueva"', html)
 
 
 if __name__ == '__main__':

@@ -215,7 +215,7 @@ class ControladorPrestamo:
             identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario,
             gravedad=request.form.get('gravedad', 'GRAVE'),
         )
-        flash('Pérdida registrada. El bien queda pendiente de recuperación o reposición.')
+        flash('Pérdida registrada. Pendiente de regularización.')
         return redirect(obtener_url_del_detalle_de_prestamo(identificador))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
