@@ -1,19 +1,37 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf,campo,historial %}
-{% from 'parciales/componentes.html' import estado as etiqueta_estado %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf,campo_de_formulario,tabla_de_historial %}
+{% from 'parciales/componentes.html' import insignia_de_estado as etiqueta_estado %}
+{% macro fila_de_recurso(recursos, seleccionado='', cantidad='1') %}
+  <div data-linea-reserva>
+    <div class="rejilla filtros-tres">
+      <label>Recurso
+        <select name="id_recurso" data-condiciones-reserva required>
+          <option value="">Selecciona un recurso</option>
+          {% for r in recursos %}
+            <option value="{{ r.id_recurso }}"
+                    data-condiciones="{% if r.plazo_maximo %}Plazo máximo: {{ r.plazo_maximo }} {{ r.unidad_plazo|lower }}. Salida de la institución: {{ 'permitida' if r.permite_salida else 'no permitida' }}.{% else %}Sin política de préstamo aplicable.{% endif %}"
+                    {% if not r.plazo_maximo %}disabled{% endif %}
+                    {% if seleccionado==r.id_recurso|string %}selected{% endif %}>{{ r.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Cantidad<input type="number" name="cantidad" min="1" max="100" step="1" value="{{ cantidad }}" required></label>
+      <div class="acciones"><button type="button" class="secundario" data-quitar-recurso>Quitar</button></div>
+    </div>
+    <p class="suave" data-texto-condiciones-reserva aria-live="polite" hidden></p>
+  </div>
+{% endmacro %}
 {% block contenido %}
   {% if modo=="lista" %}
     <div class="cabecera">
       <h1>{{ 'Reservas' if gestionar else 'Mis reservas' }}</h1>
-      {% if g.usuario.permite("CATALOGO_CONSULTAR") %}
-        <a class="{{ 'boton secundario' if gestionar else 'boton' }}" href="{{ url_for('recursos.consultar_recursos') }}">Buscar un recurso</a>
-      {% elif g.usuario.permite("RESERVAS_PROPIAS_GESTIONAR") %}
-        <a class="boton" href="{{ url_for('reservas.registrar_reserva') }}">Reservar recurso</a>
+      {% if g.usuario.tiene_permiso("RESERVAS_PROPIAS_GESTIONAR") %}
+        <a class="boton" href="{{ url_for('reservas.registrar_reserva') }}">Nueva reserva</a>
+      {% endif %}
+      {% if g.usuario.tiene_permiso("CATALOGO_CONSULTAR") %}
+        <a class="boton secundario" href="{{ url_for('recursos.consultar_recursos') }}">Buscar recurso</a>
       {% endif %}
     </div>
-    <p class="suave">
-      {{ 'La posición se muestra cuando llega la hora solicitada para el retiro.' if gestionar else 'Consulta el estado de tus reservas y espera la confirmación antes de recoger el bien.' }}
-    </p>
     <form class="filtros filtros-bloque">
       <div class="rejilla dos-columnas">
         <label>
@@ -27,6 +45,7 @@
         <label>
           Estado<select name="estado">
           <option value="">Todos</option>
+          <option value="PENDIENTES" {% if request.args.get('estado')=='PENDIENTES' %}selected{% endif %}>Pendientes (en espera y listas para retiro)</option>
           {% for estado in estados_reserva %}
             <option value="{{ estado }}"
                     {% if request.args.get('estado')==estado %}selected{% endif %}>{{ estado|replace('_', ' ')|capitalize }}
@@ -37,87 +56,89 @@
       </div>
       <div class="acciones">
         <button>Buscar</button>
-        <a href="{{ url_for('reservas.consultar_reservas') }}">Limpiar</a>
+        <a href="{{ url_for('reservas.consultar_reservas') }}">Limpiar filtros</a>
       </div>
     </form>
     <section class="panel panel-tabla">
-      <p class="suave">{{ reservas|length }} {{ 'registro' if reservas|length == 1 else 'registros' }}.</p>
+      <p class="suave">{{ reservas|length }} {{ 'reserva' if reservas|length == 1 else 'reservas' }}</p>
       <div class="tabla">
         <table>
           <thead>
             <tr>
               <th>Reserva</th>
               <th>Solicitante</th>
-              <th>Recurso</th>
+              <th>Bienes solicitados</th>
               <th>Retiro solicitado</th>
               <th>Estado</th>
               <th>Vencimiento</th>
-              <th>Acción</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {% for r in reservas %}
               <tr>
-                <td>
-                  #{{ r.id_reserva }}
-                  {% if r.tipo_gestion=="PRESTAMO" %}<small>Solicitud anterior</small>{% endif %}
-                </td>
+                <td>#{{ r.id_reserva }}<small>{{ 'Grupal' if r.participantes else 'Individual' }}</small></td>
                 <td>
                   {{ r.solicitante }}
                   <small>{{ r.dni_persona }}</small>
                 </td>
-                <td>{{ r.recurso }}</td>
+                <td>{{ r.recursos }}{% if r.cantidad_bienes > 1 %}<small>{{ r.cantidad_bienes }} bienes</small>{% endif %}</td>
                 <td>{{ r.fecha_requerida|fecha }}</td>
-                <td>{{ etiqueta_estado(r.estado) }}{% if r.posicion %}
-                  <small>Posición para atención: {{ r.posicion }}</small>
-            {% endif %}
-          </td>
-          <td>{{ r.fecha_limite_vencimiento|fecha }}</td>
-          <td>
-            <a class="boton secundario"
-               href="{{ url_for('reservas.consultar_reserva',identificador=r.id_reserva) }}">Ver detalle</a>
-          </td>
-        </tr>
-  {% else %}
-    <tr>
-      <td colspan="7">No se encontraron registros.</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-  </table>
-  </div>
-  </section>
+                <td>{{ etiqueta_estado(r.estado) }}{% if r.posicion and r.cantidad_bienes == 1 %}
+                  <small>Posición en cola: {{ r.posicion }}</small>
+                {% endif %}</td>
+                <td>{{ r.fecha_limite_vencimiento|fecha }}</td>
+                <td>
+                  <a class="boton secundario"
+                     href="{{ url_for('reservas.consultar_reserva',identificador=r.id_reserva) }}"
+                     aria-label="Ver reserva {{ r.id_reserva }}">Ver</a>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="7">No se encontraron reservas.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
 {% elif modo=="formulario" %}
-  <h1>Reservar recurso</h1>
-  <form method="post" class="formulario panel">
-    {{ csrf() }}
+  <h1>Nueva reserva</h1>
+  <form method="post" class="formulario panel" data-formulario-reserva>
+    {{ campo_oculto_csrf() }}
     <div class="rejilla dos-columnas">
-      <label>
-        Recurso
-        <select name="id_recurso" data-condiciones-reserva required>
-          {% for r in recursos %}
-            <option value="{{ r.id_recurso }}"
-                    data-condiciones="{% if r.plazo_maximo %}Plazo máximo: {{ r.plazo_maximo }} {{ r.unidad_plazo|lower }}. Salida externa: {{ 'permitida' if r.permite_salida else 'no permitida' }}. Atención: {{ r.hora_apertura|hora }} a {{ r.hora_cierre|hora }}; los plazos en horas terminan al cierre.{% else %}No hay política para tu tipo de persona.{% endif %}"
-                    {% if not r.plazo_maximo %}disabled{% endif %}
-                    {% if seleccionado==r.id_recurso|string %}selected{% endif %}>{{ r.nombre }}{% if r.plazo_maximo %} · {{ r.plazo_maximo }} {{ r.unidad_plazo|lower }}{% endif %}
-            </option>
-          {% endfor %}
+      <label>Tipo de reserva
+        <select name="tipo_prestamo">
+          <option value="INDIVIDUAL" {% if tipo_prestamo == 'INDIVIDUAL' %}selected{% endif %}>Individual</option>
+          <option value="GRUPAL" {% if tipo_prestamo == 'GRUPAL' %}selected{% endif %}>Grupal</option>
         </select>
       </label>
-      {{ campo('fecha_requerida','Fecha y hora de retiro',tipo='datetime-local',requerido=true) }}
+      {{ campo_de_formulario('fecha_requerida','Fecha y hora de retiro (hora de Lima)',tipo='datetime-local',requerido=true) }}
     </div>
-    <p class="aviso" data-texto-condiciones-reserva aria-live="polite"></p>
-    <p>
-      Elige una fecha y hora futuras en hora de Lima. Podrás recoger el bien cuando la reserva figure como lista para retiro.
-    </p>
-    {{ campo('observaciones','Observaciones',maximo=220) }}
+    <label data-integrantes-reserva>DNI de los integrantes, separados por comas
+      <input name="participantes" value="{{ participantes }}" maxlength="999" autocomplete="off">
+      <small>Cada bien ocupa un cupo de cada integrante, incluido el titular.</small>
+    </label>
+    <fieldset>
+      <legend>Bienes solicitados</legend>
+      <div data-lineas-reserva>
+        {% for recurso, cantidad in lineas %}{{ fila_de_recurso(recursos, recurso, cantidad) }}{% endfor %}
+      </div>
+      <template data-plantilla-recurso>{{ fila_de_recurso(recursos) }}</template>
+      <button type="button" class="secundario" data-agregar-recurso>Agregar recurso</button>
+    </fieldset>
+    {% set horario = recursos|first %}
+    {% if horario and horario.dias_atencion %}<p class="suave">Atención de {{ horario.dias_atencion|dias_atencion_texto }}, de {{ horario.hora_apertura|hora }} a {{ horario.hora_cierre|hora }}.</p>{% endif %}
+    <p>Reserva con hasta 7 días de anticipación. Los bienes se recogen juntos.</p>
+    {{ campo_de_formulario('observaciones','Observaciones',maximo=220) }}
     <label class="check">
       <input type="checkbox" name="salida_solicitada" value="1">
-      Necesito salida fuera de la institución
+      Uso fuera de la institución
     </label>
     <label class="check">
       <input type="checkbox" name="acepta_condiciones" value="1" required>
-      Revisé el plazo y el permiso de salida del recurso.
+      He revisado las condiciones del préstamo.
     </label>
     <div class="acciones">
       <button>Registrar reserva</button>
@@ -127,61 +148,67 @@
 {% else %}
   <a class="regreso-vista" href="{{ url_for('reservas.consultar_reservas') }}">{{ 'Volver a reservas' if gestionar else 'Volver a mis reservas' }}</a>
   <div class="cabecera">
-    <div><p class="etiqueta">Reserva #{{ reserva.id_reserva }}</p><h1>{{ reserva.recurso }}</h1></div>
+    {% set bienes = reserva.bienes|default([reserva]) %}
+    {% set integrantes = reserva.participantes|default([]) %}
+    <div><p class="etiqueta">Reserva #{{ reserva.id_reserva }}</p><h1>{{ reserva.recurso if bienes|length == 1 else 'Reserva de ' ~ bienes|length ~ ' bienes' }}</h1></div>
     {{ etiqueta_estado(reserva.estado) }}
   </div>
   {% set pendiente = reserva.estado in estados_por_accion.cancelar %}
   {% set lista = reserva.estado in estados_por_accion.entregar %}
   {% set ventana = reserva.ventana_atencion %}
-  <section class="panel" aria-labelledby="siguiente-reserva">
-    <h2 id="siguiente-reserva">{{ 'Siguiente paso' if pendiente else 'Resultado de la reserva' }}</h2>
-    {% if reserva.estado == 'ATENDIDA' and reserva.id_prestamo_ref %}
-      <a class="boton" href="{{ url_for('prestamos.consultar_prestamo',identificador=reserva.id_prestamo_ref) }}">Ver préstamo</a>
-    {% elif pendiente and ventana == 'VENCIDA' %}
-      <p>El plazo terminó el {{ reserva.fecha_limite_vencimiento|fecha }} (Lima).</p>
-    {% elif pendiente and ventana == 'FUTURA' %}
-      <p>{{ 'Se podrá preparar desde' if gestionar else 'Solicitaste el retiro para el' }} <strong>{{ reserva.fecha_requerida|fecha }} (Lima)</strong>.</p>
-      {% if gestionar %}<a href="{{ url_for('reservas.consultar_reserva', identificador=reserva.id_reserva) }}">Actualizar reserva</a>{% else %}<p>Consulta esta ficha para saber cuándo está listo el bien.</p>{% endif %}
-    {% elif lista %}
-      {% if reserva.fecha_limite_vencimiento %}<p><strong>Recoger antes del {{ reserva.fecha_limite_vencimiento|fecha }} (Lima).</strong></p>{% endif %}
-      {% if gestionar %}
-        <form method="post" class="formulario" action="{{ url_for('reservas.entregar_reserva',identificador=reserva.id_reserva) }}">
-          {{ csrf() }}
-          <label class="check">
-            <input type="checkbox" name="acepta_condiciones" value="1" required>
-            Comuniqué al solicitante el plazo y las condiciones de entrega.
-          </label>
-          <button>Confirmar entrega</button>
-        </form>
-      {% endif %}
-    {% elif pendiente %}
-      {% if gestionar %}
-        <p>Prepara el bien cuando corresponda su turno y haya un ejemplar disponible.</p>
+  {% set prestamo_vinculado = reserva.estado == 'ATENDIDA' and reserva.id_prestamo_ref %}
+  {% if pendiente or prestamo_vinculado %}
+    <section class="panel" aria-labelledby="estado-atencion-reserva">
+      <h2 id="estado-atencion-reserva">{{ ('Atender reserva' if gestionar else 'Estado de atención') if pendiente else 'Resultado de la reserva' }}</h2>
+      {% if prestamo_vinculado %}
+        <a class="boton" href="{{ url_for('prestamos.consultar_prestamo',identificador=reserva.id_prestamo_ref) }}">Ver préstamo</a>
+      {% elif ventana == 'VENCIDA' %}
+        <p>Plazo vencido el {{ reserva.fecha_limite_vencimiento|fecha }}.</p>
+      {% elif lista %}
+        {% if reserva.fecha_limite_vencimiento %}<p><strong>Recoger antes del {{ reserva.fecha_limite_vencimiento|fecha }}.</strong></p>{% endif %}
+        {% if gestionar %}
+          <form method="post" class="formulario" action="{{ url_for('reservas.entregar_reserva',identificador=reserva.id_reserva) }}">
+            {{ campo_oculto_csrf() }}
+            <label class="check">
+              <input type="checkbox" name="acepta_condiciones" value="1" required>
+              He comunicado las condiciones del préstamo al solicitante.
+            </label>
+            {% if g.usuario.dni == reserva.dni_persona or g.usuario.dni in integrantes %}
+              {{ campo_de_formulario('autorizacion','N.º de autorización de otro administrador',tipo='number',requerido=true) }}
+            {% endif %}
+            <button>Entregar y registrar préstamo</button>
+          </form>
+        {% endif %}
+      {% elif gestionar %}
+        <p>Prepara {{ 'todos los bienes' if bienes|length > 1 else 'el bien' }} según el turno y la disponibilidad.</p>
         <form method="post" action="{{ url_for('reservas.preparar_reserva',identificador=reserva.id_reserva) }}">
-          {{ csrf() }}
-          <button>Preparar bien</button>
+          {{ campo_oculto_csrf() }}
+          <button>{{ 'Preparar bienes' if bienes|length > 1 else 'Preparar bien' }}</button>
         </form>
-      {% else %}<p>Espera a que el encargado prepare el bien antes de ir a recogerlo.</p>{% endif %}
-    {% else %}<p>La reserva ya está cerrada.</p>{% endif %}
-  </section>
+      {% else %}
+        <p>Recoge {{ 'todos los bienes' if bienes|length > 1 else 'el bien' }} cuando la reserva esté lista.</p>
+      {% endif %}
+    </section>
+  {% endif %}
   <section class="panel">
     <h2>Datos de la reserva</h2>
+    <p class="suave">Fechas y horarios en hora de Lima.</p>
     <dl class="datos-vista">
-    {% if gestionar %}<dt>Solicitante</dt><dd>{{ reserva.solicitante }} · DNI: {{ reserva.dni_persona }}</dd>{% endif %}
-    <dt>Solicitud registrada</dt><dd>{{ reserva.fecha_solicitud|fecha }}</dd>
+    {% if gestionar or integrantes %}<dt>Titular</dt><dd>{{ reserva.solicitante }} · DNI: {{ reserva.dni_persona }}</dd>{% endif %}
+    <dt>Tipo de reserva</dt><dd>{{ 'Grupal' if integrantes else 'Individual' }}</dd>
+    {% if integrantes %}<dt>DNI de los integrantes</dt><dd>{{ integrantes|join(', ') }}</dd>{% endif %}
+    <dt>Fecha de solicitud</dt><dd>{{ reserva.fecha_solicitud|fecha }}</dd>
     <dt>Retiro solicitado</dt><dd>{{ reserva.fecha_requerida|fecha }}</dd>
     {% if not lista and pendiente and reserva.fecha_limite_vencimiento %}
       <dt>Fin del plazo de espera</dt><dd>{{ reserva.fecha_limite_vencimiento|fecha }}</dd>
     {% endif %}
-    <dt>Bien preparado</dt>
-    <dd>
-      {{ reserva.codigo_inventario or 'Pendiente' }}
-    </dd>
+    <dt>Bienes</dt>
+    <dd><ul>{% for bien in bienes %}<li>{{ bien.recurso }} · {{ bien.codigo_inventario or 'Pendiente' }}</li>{% endfor %}</ul></dd>
     <dt>Fecha de preparación</dt>
     <dd>{{ reserva.fecha_preparacion|fecha }}</dd>
     <dt>Uso solicitado</dt>
     <dd>{{ 'Fuera de la institución' if reserva.salida_solicitada else 'Dentro de la institución' }}</dd>
-    <dt>Observación</dt>
+    <dt>Observaciones</dt>
     <dd>
       {{ reserva.observaciones or '—' }}
     </dd>
@@ -189,20 +216,25 @@
   </section>
   <details class="panel" {% if lista and gestionar %}open{% endif %}>
     <summary>Condiciones del préstamo</summary>
-    {% if condiciones and condiciones.plazo_maximo %}
-      <p>Plazo máximo: {{ condiciones.plazo_maximo }} {{ condiciones.unidad_plazo|lower }}.
-        Salida de la institución: {{ 'permitida' if condiciones.permite_salida else 'no permitida' }}.</p>
-      <p class="suave">Atención: {{ condiciones.hora_apertura|hora }} a {{ condiciones.hora_cierre|hora }}. Los plazos por horas terminan al cierre.</p>
-    {% else %}<p>No hay una política vigente para el tipo de persona del solicitante y esta categoría.</p>{% endif %}
+    {% for politica in condiciones %}
+      <p><strong>{{ politica.nombre }}</strong>
+        {% if politica.plazo_maximo %}· Plazo máximo de {{ politica.plazo_maximo }} {{ politica.unidad_plazo|lower }}. Salida de la institución {{ 'permitida' if politica.permite_salida else 'no permitida' }}.
+        {% else %}· Sin política vigente.{% endif %}
+      </p>
+    {% else %}<p>Sin políticas vigentes para esta reserva.</p>{% endfor %}
+    {% if condiciones and condiciones[0].dias_atencion %}
+      {% set horario = condiciones[0] %}
+      <p class="suave">Atención de {{ horario.dias_atencion|dias_atencion_texto }}, de {{ horario.hora_apertura|hora }} a {{ horario.hora_cierre|hora }}. Los préstamos por horas terminan al cierre.</p>
+    {% endif %}
   </details>
-  {% if pendiente %}
+  {% if pendiente and (gestionar or g.usuario.dni == reserva.dni_persona) %}
   <details class="panel">
     <summary>Otras acciones</summary>
     {% if reserva.estado in estados_por_accion.cancelar %}
       <form method="post"
             data-confirmar="¿Deseas cancelar esta reserva?"
             action="{{ url_for('reservas.cancelar_reserva',identificador=reserva.id_reserva) }}">
-        {{ csrf() }}
+        {{ campo_oculto_csrf() }}
         <button class="secundario">Cancelar reserva</button>
       </form>
     {% endif %}
@@ -210,25 +242,25 @@
     <form class="filtros"
           method="post"
           action="{{ url_for('reservas.rechazar_reserva',identificador=reserva.id_reserva) }}">
-      {{ csrf() }}
-      {{ campo('motivo','Motivo de rechazo',requerido=true) }}
+      {{ campo_oculto_csrf() }}
+      {{ campo_de_formulario('motivo','Motivo de rechazo',requerido=true) }}
       <button class="secundario">Rechazar reserva</button>
     </form>
   {% endif %}
-  {% if gestionar and reserva.estado in estados_por_accion.expirar %}
+  {% if gestionar and ventana == 'VENCIDA' and reserva.estado in estados_por_accion.expirar %}
     <details class="panel">
-      <summary>Dar por vencida la reserva</summary>
+      <summary>Registrar vencimiento</summary>
       <form method="post"
             class="filtros"
             action="{{ url_for('reservas.expirar_reserva',identificador=reserva.id_reserva) }}">
-        {{ csrf() }}
-        {{ campo('motivo','Motivo',requerido=true) }}
+        {{ campo_oculto_csrf() }}
+        {{ campo_de_formulario('motivo','Motivo',requerido=true) }}
         <button class="secundario">Registrar vencimiento</button>
       </form>
     </details>
   {% endif %}
   </details>
   {% endif %}
-  <details class="panel"><summary>Historial de la reserva</summary>{{ historial(reserva.historial) }}</details>
+  <details class="panel"><summary>Historial de la reserva</summary>{{ tabla_de_historial(reserva.historial) }}</details>
 {% endif %}
 {% endblock %}

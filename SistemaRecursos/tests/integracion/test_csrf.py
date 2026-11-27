@@ -4,13 +4,13 @@ import unittest
 from unittest.mock import patch
 
 from app import create_app
-from tests.soporte_roles import cuenta
+from tests.soporte_roles import crear_cliente_con_sesion_simulada, crear_cuenta_de_prueba
 
 
 class CsrfTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        with patch('app.clave_local', return_value='pruebas-csrf'):
+        with patch('app.obtener_clave_de_sesion_flask', return_value='pruebas-csrf'):
             cls.app = create_app(dict(TESTING=True))
 
     def test_login_rechaza_tokens_invalidos_sin_autenticar(self):
@@ -28,25 +28,23 @@ class CsrfTest(unittest.TestCase):
         cliente = self.app.test_client()
         with cliente.session_transaction() as sesion:
             sesion['csrf'] = 'token'
-        with patch.object(self.app.extensions['servicios']['acceso'], 'autenticar_cuenta',
-                          return_value=cuenta('USUARIO')) as autenticar:
+        acceso = self.app.extensions['servicios']['acceso']
+        with patch.object(acceso, 'autenticar_cuenta', return_value=crear_cuenta_de_prueba('USUARIO')) as autenticar, \
+                patch.object(acceso, 'crear_sesion_de_cuenta', return_value='token-sesion') as iniciar:
             respuesta = cliente.post('/login', data={
                 'csrf_token': 'token', 'usuario': 'prueba', 'clave': 'clave',
             })
         self.assertEqual(respuesta.status_code, 302)
-        autenticar.assert_called_once_with('prueba', 'clave')
+        autenticar.assert_called_once_with('prueba', 'clave', '127.0.0.1')
+        iniciar.assert_called_once_with(1)
+        with cliente.session_transaction() as sesion:
+            self.assertEqual(sesion['sid'], 'token-sesion')
 
     def test_accion_autenticada_con_token_unicode_no_ejecuta_cambios(self):
-        acceso = cuenta('ADMINISTRADOR')
-        cliente = self.app.test_client()
-        with cliente.session_transaction() as sesion:
-            sesion.update(id_usuario=1, credenciales=acceso.version_credenciales, csrf='token')
-        with patch.object(self.app.extensions['servicios']['acceso'], 'consultar_cuenta_activa',
-                          return_value=acceso), patch.object(
-                              self.app.extensions['servicios']['cuentas'], 'asignar_rol_cuenta',
-                          ) as asignar:
-            respuesta = cliente.post('/roles/asignar', data={
-                'csrf_token': 'ñ', 'dni': '20000002', 'rol': 'USUARIO',
+        cliente = crear_cliente_con_sesion_simulada(self, self.app, crear_cuenta_de_prueba('ADMINISTRADOR'))
+        with patch.object(self.app.extensions['servicios']['cuentas'], 'actualizar_cuenta') as actualizar:
+            respuesta = cliente.post('/cuentas/20000002/editar', data={
+                'csrf_token': 'ñ', 'rol': 'USUARIO',
             })
         self.assertEqual(respuesta.status_code, 400)
-        asignar.assert_not_called()
+        actualizar.assert_not_called()

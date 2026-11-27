@@ -18,7 +18,7 @@ ALCANCE_PERSONA = '''(p.dni_persona=%s OR EXISTS (
 
 
 class RepositorioHistorialSQL(RepositorioSQL):
-    def _buscar_sujetos(self, filtro):
+    def _buscar_personas_o_bienes_del_historial(self, filtro):
         termino = f'%{filtro.q}%'
         if filtro.tipo == 'historial_bien':
             return self.consultar_sql(
@@ -58,7 +58,7 @@ class RepositorioHistorialSQL(RepositorioSQL):
         valor = filtro.codigo_inventario if por_bien else filtro.dni_persona
         if not valor:
             if filtro.q and not solo_prestamos:
-                resultado['coincidencias'] = self._buscar_sujetos(filtro)
+                resultado['coincidencias'] = self._buscar_personas_o_bienes_del_historial(filtro)
             return resultado
         if por_bien:
             sujeto = self.consultar_sql(
@@ -79,7 +79,7 @@ class RepositorioHistorialSQL(RepositorioSQL):
                 una=True,
             )
         if sujeto is None:
-            raise NoEncontrado('No se encontró el objeto o la persona seleccionada.')
+            raise NoEncontrado('No se encontró el bien o la persona seleccionada.')
         resultado['sujeto'] = sujeto
         if por_bien:
             alcance, parametros = 'd.id_bien=%s', (sujeto['id_bien'],)
@@ -160,29 +160,34 @@ class RepositorioHistorialSQL(RepositorioSQL):
                 parametros,
             )
         if not solo_prestamos:
-            campo = 're.id_bien' if por_bien else 're.dni_persona'
-            seleccion = sujeto['id_bien'] if por_bien else valor
-            tablas_reserva = '''FROM reserva re JOIN persona per ON per.dni=re.dni_persona
+            condicion = ('re.id_bien=%s' if por_bien else
+                         '(principal.dni_persona=%s OR JSON_CONTAINS(principal.participantes,JSON_QUOTE(%s)))')
+            seleccion = (sujeto['id_bien'],) if por_bien else (valor, valor)
+            tablas_reserva = '''FROM reserva re
+                JOIN reserva principal ON principal.id_reserva=COALESCE(re.id_reserva_principal,re.id_reserva)
+                JOIN persona per ON per.dni=re.dni_persona
                 JOIN recurso r ON r.id_recurso=re.id_recurso
                 LEFT JOIN bien_material b ON b.id_bien=re.id_bien'''
             resultado['reservas'] = self.consultar_sql(
-                f'''SELECT re.*,
+                f'''SELECT principal.id_reserva,re.dni_persona,re.tipo_gestion,
+                re.fecha_solicitud,re.fecha_requerida,re.estado,re.observaciones,
                 CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
                 r.nombre AS recurso,b.codigo_inventario
-                {tablas_reserva} WHERE {campo}=%s
+                {tablas_reserva} WHERE {condicion}
                 ORDER BY re.fecha_solicitud,re.id_reserva''',
-                (seleccion,),
+                seleccion,
             )
+            condicion_historial = condicion if por_bien else condicion + ' AND re.id_reserva_principal IS NULL'
             resultado['historial_reservas'] = self.consultar_sql(
                 f'''SELECT h.*,
-                re.id_reserva,re.dni_persona,
+                principal.id_reserva,re.dni_persona,
                 CONCAT(per.nombres,' ',per.apellidos) AS solicitante,
                 r.nombre AS recurso,b.codigo_inventario,
                 CONCAT(reg.nombres,' ',reg.apellidos) AS registrador
                 {tablas_reserva}
-                JOIN historial_estado h ON h.entidad='RESERVA' AND h.id_entidad=re.id_reserva
+                JOIN historial_estado h ON h.entidad='RESERVA' AND h.id_entidad=principal.id_reserva
                 LEFT JOIN persona reg ON reg.dni=h.dni_responsable
-                WHERE {campo}=%s ORDER BY h.fecha,h.id_historial_estado''',
-                (seleccion,),
+                WHERE {condicion_historial} ORDER BY h.fecha,h.id_historial_estado''',
+                seleccion,
             )
         return resultado

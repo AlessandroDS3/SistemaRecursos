@@ -11,7 +11,7 @@ from repositorio.personas_usuarios.repositorio_cuenta_sql import RepositorioCuen
 from servicios.personas_usuarios.servicio_cuenta import ServicioAplicacionCuenta
 
 
-def main(argv=None):
+def inicializar_administrador_desde_consola(argv=None):
     parser = ArgumentParser(description='Crea la primera cuenta administradora del sistema.')
     for campo in ('dni', 'nombres', 'apellidos', 'correo', 'codigo-empleado', 'area', 'usuario'):
         parser.add_argument('--' + campo, required=True)
@@ -31,10 +31,10 @@ def main(argv=None):
         return 1
 
     print(f'Cuenta administradora creada: {cuenta.nombre_usuario}')
-    print(f'Contraseña temporal: {cuenta.clave_temporal}')
-    print('El sistema pedirá cambiarla al iniciar sesión.')
+    print(f'Código de activación: {cuenta.codigo_activacion}')
+    print('Usa el usuario y el código en /cuentas/activar dentro de 24 horas para elegir la contraseña.')
     return 0
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    raise SystemExit(inicializar_administrador_desde_consola())

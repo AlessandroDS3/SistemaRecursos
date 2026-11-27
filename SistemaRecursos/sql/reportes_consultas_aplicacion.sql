@@ -82,7 +82,7 @@ ORDER BY r.nombre, b.codigo_inventario, b.id_bien;
 
 -- 05. Solicitudes y reservas: filas para pantalla, CSV y PDF.
 SELECT
-    p.id_reserva, p.tipo_gestion, p.dni_persona,
+    COALESCE(p.id_reserva_principal,p.id_reserva) AS id_reserva, p.tipo_gestion, p.dni_persona,
     CONCAT(per.nombres, ' ', per.apellidos) AS solicitante,
     r.nombre AS recurso, c.nombre AS categoria,
     p.fecha_solicitud, p.fecha_requerida,

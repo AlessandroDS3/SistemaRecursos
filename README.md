@@ -1,5 +1,8 @@
 # Sistema de préstamos de recursos
 
+> [Guía de instalación](docs/GUIA_INSTALACION.md) · [Manual por rol](docs/MANUAL_POR_ROL.md).
+> En Windows, `run.ps1` prepara el entorno e inicia el sistema.
+
 Aplicación en Python, Flask y MySQL. Esta rama contiene los archivos necesarios
 para ejecutar el sistema: código, plantillas, estilos, imágenes de la interfaz,
 dependencias, script de arranque y SQL.
@@ -18,9 +21,10 @@ cd SistemaRecursos
 .\run.ps1
 ```
 
-El script crea el entorno virtual, instala `requirements.txt` y solicita la contraseña
-de MySQL. Puedes definir `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME`
-en el entorno o en `config.local.ps1`, que está excluido de Git.
+`run.ps1` crea `.venv` si hace falta e instala las dependencias en la primera ejecución
+o cuando cambia `requirements.txt`. Solicita la contraseña de MySQL si hace falta.
+Puedes definir `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME` en el entorno
+o en `config.local.ps1`, que está excluido de Git.
 
 Abre http://127.0.0.1:5001. Los reportes permiten descargar CSV y PDF respetando los filtros.
 El repositorio de reportes ejecuta las consultas de la aplicación. El archivo
@@ -28,49 +32,27 @@ El repositorio de reportes ejecuta las consultas de la aplicación. El archivo
 
 ### Instalación sin datos de demostración
 
-Importa `SistemaRecursos/sql/schema.sql` y configura la conexión de MySQL en el
-entorno. Desde `SistemaRecursos`, con las dependencias ya instaladas, ejecuta:
+Importa `SistemaRecursos/sql/schema.sql`. Desde `SistemaRecursos`, crea la primera
+cuenta administradora e inicia el sistema con estos comandos.
 
 ```powershell
 $env:DB_NAME = 'prestamos_escuela'
-..\.venv\Scripts\python.exe -m arranque.inicializar_administrador --dni 12345678 --nombres "Ana" --apellidos "Pérez" --correo "ana@unsa.edu.pe" --codigo-empleado ADM001 --area "Administración" --usuario ana
+.\run.ps1 -CrearAdministrador
 .\run.ps1
 ```
 
-Usa los datos reales del responsable. El comando crea su ficha administrativa y
-muestra una contraseña temporal que debe cambiar al entrar. Solo funciona cuando
-la base todavía no tiene cuentas. Conserva el mismo `DB_NAME` al iniciar el sistema
-y, si usas `config.local.ps1`, comprueba que apunte a esa base.
+Introduce los datos del responsable cuando el comando te los pida. El código que muestra
+sirve para elegir la contraseña en **Activar cuenta** dentro de 24 horas. Si usas
+`config.local.ps1`, configura allí también `DB_NAME` como `prestamos_escuela`.
 
 ## Roles fijos
 
 El sistema tiene tres roles: `USUARIO`, `ENCARGADO_PRESTAMOS` y `ADMINISTRADOR`.
 Sus permisos están definidos en `SistemaRecursos/dominio/gestion_personas_usuarios/rol.py`
-y se muestran como consulta en **Roles y permisos**. El administrador puede asignar
-estos roles a las cuentas; los permisos de cada rol no se editan desde la aplicación.
-Las instalaciones nuevas ya no crean la tabla `rol_permiso`.
-Para eliminarla de una base existente, selecciona la base del sistema y ejecuta
-`SistemaRecursos/sql/migraciones/20261119_eliminar_rol_permiso.sql`.
-La migración conserva los roles asignados en `usuario_sistema.rol`; no es necesario
-volver a importar los datos de prueba.
+y se muestran en **Personas → Editar cuenta y rol**. El administrador asigna los roles
+a las cuentas y cada rol aplica los permisos definidos en el código.
 
 ## Sanciones por gravedad
-
-En otra máquina, para una base nueva, importa uno de los dos archivos SQL:
-`schema.sql` crea solo las tablas, sin registros; `datos_prueba.sql` crea una base
-separada con las mismas tablas y datos ficticios. Ambos incluyen las sanciones
-por gravedad y no necesitan ejecutar la migración.
-
-Para actualizar una instalación existente, detén la aplicación, haz una copia de
-seguridad y ejecuta `.\run.ps1 -MigrarSanciones` desde `SistemaRecursos`. El script
-actualiza la base configurada en `DB_NAME` y luego inicia la aplicación. Si usas
-MySQL Workbench, selecciona esa base y ejecuta
-`SistemaRecursos/sql/migraciones/20261123_sanciones_por_gravedad.sql`.
-La migración conserva las cuentas, préstamos, reservas, sanciones e historiales.
-Si aparece `Unknown column 'fecha_regularizacion'`, corresponde a esta actualización.
-
-Para una instalación nueva, usa `SistemaRecursos/sql/datos_prueba.sql` si quieres
-datos de demostración o `SistemaRecursos/sql/schema.sql` si prefieres partir de cero.
 
 En **Sanciones → Configurar plazos**, el administrador configura la leve
 (14 días iniciales), la grave (180 días como referencia inicial del semestre) y
@@ -84,7 +66,9 @@ sanción conserva una copia de estos valores. Cambiarlos no modifica sanciones a
 - **Muy grave:** solo el administrador puede aplicarla y rehabilitarla, después
   de regularizar el incidente. No vence automáticamente.
 
-La revisión automática, iniciada por `run.ps1`, se ejecuta cada 30 segundos.
+La revisión automática se ejecuta cada 30 segundos. `run.ps1` inicia la revisión y la web.
+Con `run.ps1 -SoloProcesador` puedes operar la revisión en otra terminal y usar
+`run.ps1 -SoloWeb` o un servidor que importe la fábrica Flask para la web.
 Cumple leves y graves únicamente si terminó su periodo y el bien fue regularizado.
 Los posibles casos de pérdida o custodia se muestran como alertas para revisión;
 el tiempo transcurrido no confirma una pérdida ni aplica una muy grave.
@@ -102,23 +86,13 @@ Se mantienen cuatro capas: reglas en `dominio`, transacciones y casos de uso en
 
 ## Cómo seguir una operación
 
-Dentro de `SistemaRecursos/`, los controladores, las vistas, los servicios y los
-repositorios se agrupan por módulo. En `dominio/`, los archivos
-`contratos_<modulo>.py` declaran las operaciones que necesitan los casos de uso.
-`crear_servicios()` y `registrar_controladores()` en [app.py](SistemaRecursos/app.py)
-muestran cómo se conectan las clases.
+La guía indica la ruta de Flask, la función del controlador y el recorrido por servicios, reglas y SQL para cada operación. [Guía completa de seguimiento del código](docs/SEGUIMIENTO_DEL_CODIGO.md)
 
-| Acción | Controlador | Caso de uso | Dominio y persistencia |
-|---|---|---|---|
-| Registrar persona | [`ControladorPersona.registrar_persona()`](SistemaRecursos/presentacion/controladores/personas_usuarios/controlador_persona.py) | [`ServicioAplicacionPersona.registrar_persona()`](SistemaRecursos/servicios/personas_usuarios/servicio_persona.py) | [`Persona.desde_datos()`](SistemaRecursos/dominio/gestion_personas_usuarios/persona.py) y [`RepositorioPersonaSQL.guardar_persona()`](SistemaRecursos/repositorio/personas_usuarios/repositorio_persona_sql.py) |
-| Registrar bien material | [`ControladorBienMaterial.registrar_bien_material()`](SistemaRecursos/presentacion/controladores/recursos/controlador_bien_material.py) | [`ServicioAplicacionBienMaterial.registrar_bien_material()`](SistemaRecursos/servicios/recursos/servicio_bien_material.py) | [`BienMaterial.desde_datos()`](SistemaRecursos/dominio/gestion_recursos/bien_material.py) y [`RepositorioBienMaterialSQL.guardar_bien_material()`](SistemaRecursos/repositorio/recursos/repositorio_bien_material_sql.py) |
-| Consultar personas | [`ControladorPersona.consultar_personas()`](SistemaRecursos/presentacion/controladores/personas_usuarios/controlador_persona.py) | [`ServicioAplicacionPersona.consultar_personas()`](SistemaRecursos/servicios/personas_usuarios/servicio_persona.py) | [`RepositorioPersonaSQL.consultar_personas()`](SistemaRecursos/repositorio/personas_usuarios/repositorio_persona_sql.py) aplica los filtros, ordena y pagina. |
-
-Desde una pantalla, busca el botón en la plantilla y sigue `url_for()` hasta
-`add_url_rule()`. Por ejemplo, **Registrar persona** sale de
-[`vista_persona.html`](SistemaRecursos/presentacion/vistas/personas_usuarios/vista_persona.html)
-y llega a `personas.registrar_persona`. Para una consulta, vuelve a la plantilla
-después de ver el SQL para ubicar dónde se presenta cada dato.
+- [Inicio y acceso](docs/SEGUIMIENTO_DEL_CODIGO.md#inicio-y-acceso) · [Personas, cuentas y roles](docs/SEGUIMIENTO_DEL_CODIGO.md#personas-cuentas-y-roles)
+- [Catálogo, categorías, inventario y mantenimiento](docs/SEGUIMIENTO_DEL_CODIGO.md#catálogo-categorías-inventario-y-mantenimiento)
+- [Préstamos y devoluciones](docs/SEGUIMIENTO_DEL_CODIGO.md#préstamos-y-devoluciones) · [Reservas y atención de solicitudes](docs/SEGUIMIENTO_DEL_CODIGO.md#reservas-y-atención-de-solicitudes) · [Ampliaciones de plazo](docs/SEGUIMIENTO_DEL_CODIGO.md#ampliaciones-de-plazo)
+- [Políticas, horario y cupos](docs/SEGUIMIENTO_DEL_CODIGO.md#políticas-horario-y-cupos) · [Sanciones e incidencias](docs/SEGUIMIENTO_DEL_CODIGO.md#sanciones-e-incidencias)
+- [Reportes, historiales y exportaciones](docs/SEGUIMIENTO_DEL_CODIGO.md#reportes-historiales-y-exportaciones) · [Operaciones automáticas y de instalación](docs/SEGUIMIENTO_DEL_CODIGO.md#operaciones-automáticas-y-de-instalación)
 
 ## Pruebas
 

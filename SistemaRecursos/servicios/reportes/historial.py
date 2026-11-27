@@ -1,19 +1,50 @@
 """Construye una cronología a partir de hechos guardados, sin inferir responsables."""
 
+import json
 import re
 from datetime import datetime, timezone
 
 from dominio.compartido.validacion import LIMA
+from dominio.gestion_prestamos.ampliacion_prestamo import EVENTO_AMPLIACION_PLAZO
 from servicios.reportes.catalogo_reportes import COLUMNAS_HISTORIAL
 
+AMPLIACION_HISTORICA = re.compile(r'^(?:Solicitud #[0-9]+ aprobada\.\s+)?Detalle #([0-9]+):')
+CIERRES_SANCION = {
+    'LEVANTADA': 'Levantamiento de sanción',
+    'CUMPLIDA': 'Cumplimiento de sanción',
+    'ANULADA': 'Anulación de sanción',
+}
 
-def organizar_historial(datos):
+
+def textos_de_incidencia(sancion: dict) -> list[str]:
+    textos = ((sancion.get(campo) or '').strip() for campo in ('motivo', 'descripcion'))
+    return list(dict.fromkeys(texto for texto in textos if texto))
+
+
+def _identificar_detalle_de_ampliacion(movimiento: dict) -> tuple[bool, int | None]:
+    datos = movimiento.get('datos')
+    if isinstance(datos, str):
+        datos = json.loads(datos)
+    if isinstance(datos, dict) and datos.get('evento') == EVENTO_AMPLIACION_PLAZO:
+        detalle_id = datos.get('id_detalle')
+        return True, detalle_id if type(detalle_id) is int else None
+    antigua = AMPLIACION_HISTORICA.match(movimiento.get('observacion') or '')
+    return (True, int(antigua[1])) if antigua else (False, None)
+
+
+def _etiquetar_cierre_de_sancion(movimiento: dict) -> str | None:
+    if movimiento['estado_anterior'] != movimiento['estado_nuevo']:
+        return CIERRES_SANCION.get(movimiento['estado_nuevo'])
+    return None
+
+
+def construir_cronologia_historial(datos):
     filas = []
     por_prestamo = {}
     for detalle in datos['prestamos']:
         por_prestamo.setdefault(detalle['id_prestamo'], []).append(detalle)
 
-    def agregar(origen, fecha, evento, referencia, **valores):
+    def agregar_evento_a_cronologia(origen, fecha, evento, referencia, **valores):
         fila = {c.nombre: None for c in COLUMNAS_HISTORIAL}
         fila.update({k: v for k, v in origen.items() if k in fila})
         fila.update(fecha=fecha, evento=evento, referencia=referencia)
@@ -43,7 +74,7 @@ def organizar_historial(datos):
                 ),
             )
         )
-        agregar(
+        agregar_evento_a_cronologia(
             d,
             d['fecha_entrega'],
             'Entrega del bien',
@@ -54,7 +85,7 @@ def organizar_historial(datos):
             observacion=observacion,
         )
         if d['fecha_devolucion']:
-            agregar(
+            agregar_evento_a_cronologia(
                 d,
                 d['fecha_devolucion'],
                 'Devolución del bien',
@@ -65,20 +96,22 @@ def organizar_historial(datos):
                 observacion=d.get('observaciones_devolucion'),
             )
         if d.get('fecha_regularizacion'):
-            agregar(d, d['fecha_regularizacion'], 'Regularización por reposición', ref,
+            agregar_evento_a_cronologia(d, d['fecha_regularizacion'], 'Regularización por reposición', ref,
                     estado_nuevo='REGULARIZADO',
                     observacion='El pendiente se cerró por reposición; el bien original no fue devuelto.')
 
     for h in datos['historial_prestamos']:
-        detalles = por_prestamo[h['id_prestamo']]
-        observacion = h.get('observacion') or ''
-        ampliacion = re.match(r'^Detalle #(\d+):', observacion)
+        prestamo_id = h['id_prestamo']
+        detalles = por_prestamo[prestamo_id]
+        ampliacion, detalle_id = _identificar_detalle_de_ampliacion(h)
+        referencia = f'Préstamo #{prestamo_id}'
         if ampliacion:
-            afectados = [d for d in detalles if d['id_detalle'] == int(ampliacion[1])]
-            # Una ampliación de otro bien del mismo préstamo no altera este objeto.
+            afectados = [d for d in detalles if d['id_detalle'] == detalle_id]
+            # Solo se registran las ampliaciones del bien consultado.
             if not afectados:
                 continue
             evento = 'Ampliación de plazo'
+            referencia += f' / detalle #{detalle_id}'
         else:
             afectados = detalles
             evento = (
@@ -86,18 +119,18 @@ def organizar_historial(datos):
                 if h['estado_anterior'] != h['estado_nuevo']
                 else 'Seguimiento del préstamo'
             )
-        agregar(
+        agregar_evento_a_cronologia(
             h,
             h['fecha'],
             evento,
-            f'Préstamo #{h["id_prestamo"]}',
+            referencia,
             codigo_inventario=', '.join(d['codigo_inventario'] for d in afectados),
             recurso=', '.join(dict.fromkeys(d['recurso'] for d in afectados)),
             dni_registrador=h.get('dni_responsable'),
         )
 
     for h in datos['historial_bienes']:
-        agregar(
+        agregar_evento_a_cronologia(
             h,
             h['fecha'],
             'Estado del bien',
@@ -105,7 +138,7 @@ def organizar_historial(datos):
             dni_registrador=h.get('dni_responsable'),
         )
     for i in datos['incidencias']:
-        agregar(
+        agregar_evento_a_cronologia(
             i,
             i['fecha'],
             'Incidencia: ' + i['tipo'],
@@ -114,51 +147,47 @@ def organizar_historial(datos):
             estado_nuevo='REGISTRADA',
             observacion=f'{i.get("descripcion") or ""} Estado actual: {i["estado"]}.',
         )
+    cierres_auditados = {
+        (h['id_sancion'], h['estado_nuevo']) for h in datos['historial_sanciones'] if _etiquetar_cierre_de_sancion(h)
+    }
     for s in datos['sanciones']:
-        agregar(
+        agregar_evento_a_cronologia(
             s,
             s['fecha'],
             'Sanción aplicada',
             f'Sanción #{s["id_sancion"]}',
             registrador=None,
             estado_nuevo='ACTIVA',
-            observacion=' '.join(
-                filter(
-                    None,
-                    (
-                        s.get('motivo'),
-                        s.get('descripcion'),
-                        f'Estado actual: {s["estado"]}.',
-                    ),
-                )
-            ),
+            observacion=' '.join([*textos_de_incidencia(s), f'Estado actual: {s["estado"]}.']),
         )
-        # Conserva levantamientos antiguos aunque no tengan una entrada de auditoría.
-        auditada = any(
-            h['id_sancion'] == s['id_sancion'] and h['estado_nuevo'] in ('LEVANTADA', 'CUMPLIDA')
-            for h in datos['historial_sanciones']
-        )
-        if s.get('fecha_levantamiento') and not auditada:
-            agregar(
+        # El último cierre de datos antiguos puede existir solo en la fila de la sanción.
+        estado = s['estado']
+        cierre = CIERRES_SANCION.get(estado)
+        if cierre and s.get('fecha_levantamiento') and (s['id_sancion'], estado) not in cierres_auditados:
+            agregar_evento_a_cronologia(
                 s,
                 s['fecha_levantamiento'],
-                'Cumplimiento de sanción' if s['estado'] == 'CUMPLIDA' else 'Levantamiento de sanción',
+                cierre,
                 f'Sanción #{s["id_sancion"]}',
                 registrador=s.get('levantada_por'),
                 dni_registrador=s.get('dni_levantamiento'),
-                estado_nuevo='CUMPLIDA' if s['estado'] == 'CUMPLIDA' else 'LEVANTADA',
+                estado_nuevo=estado,
                 observacion=s.get('justificacion_levantamiento'),
             )
     for h in datos['historial_sanciones']:
-        agregar(
+        agregar_evento_a_cronologia(
             h,
             h['fecha'],
-            'Estado de sanción',
+            _etiquetar_cierre_de_sancion(h) or 'Estado de sanción',
             f'Sanción #{h["id_sancion"]}',
             dni_registrador=h.get('dni_responsable'),
         )
-    for r in datos['reservas']:
-        agregar(
+    reservas_por_id = {}
+    for linea in datos['reservas']:
+        reserva = reservas_por_id.setdefault(linea['id_reserva'], dict(linea, bienes=[]))
+        reserva['bienes'].append(linea)
+    for r in reservas_por_id.values():
+        agregar_evento_a_cronologia(
             r,
             r['fecha_solicitud'],
             'Solicitud registrada',
@@ -168,7 +197,7 @@ def organizar_historial(datos):
             observacion=f'{r.get("observaciones") or ""} Estado actual: {r["estado"]}.',
         )
     for h in datos['historial_reservas']:
-        agregar(
+        agregar_evento_a_cronologia(
             h,
             h['fecha'],
             'Estado de solicitud',
@@ -182,6 +211,7 @@ def organizar_historial(datos):
     ]
     return dict(
         datos,
+        reservas=list(reservas_por_id.values()),
         filas=filas,
         prestamos_agrupados=prestamos,
         resumen=dict(

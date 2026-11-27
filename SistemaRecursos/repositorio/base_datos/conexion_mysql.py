@@ -18,10 +18,12 @@ class MySQLConnection:
         )
 
     @contextmanager
-    def sesion(self, escritura=False):
+    def sesion(self, escritura=False, aislamiento=None):
         conexion = mysql.connector.connect(**self.config)
         cursor = conexion.cursor(dictionary=True, buffered=True)
         try:
+            if aislamiento:
+                conexion.start_transaction(isolation_level=aislamiento)
             yield cursor
             if escritura:
                 conexion.commit()

@@ -10,15 +10,15 @@ CONFIGURACION = {
     'devoluciones': ('cumplimiento', 'Cumplimiento de devoluciones', 'devoluciones'),
     'atrasados': ('retraso_minutos', 'Tiempo de atraso', 'bienes atrasados'),
     'inventario': ('estado', 'Estado del inventario', 'bienes'),
-    'reservas': ('estado', 'Estado de las solicitudes', 'solicitudes'),
+    'reservas': ('estado', 'Bienes por estado de la reserva', 'bienes'),
     'sanciones': ('estado', 'Estado de las sanciones', 'sanciones'),
     'danos_perdidas': ('tipo_evento', 'Daños y pérdidas', 'eventos'),
     'personas': ('estado', 'Estado de las personas', 'personas'),
 }
-COLORES = ('#87002e', '#287b78', '#b77918', '#6554a4', '#3275a8', '#b64e40', '#77838b')
+COLORES = ('#111113', '#7a0d2e', '#8e8e94', '#c4c4c8', '#b3214d', '#4a4a50', '#e0b8c3')
 
 
-def _rango(minutos):
+def _clasificar_atraso_por_intervalo(minutos):
     if minutos < 60:
         return 'Menos de 1 hora'
     if minutos < 1440:
@@ -28,7 +28,7 @@ def _rango(minutos):
     return '7 días o más'
 
 
-def _serie(pares):
+def _calcular_serie_de_frecuencias(pares):
     pares = list(pares)
     total = sum(cantidad for _, cantidad in pares)
     maximo = max((cantidad for _, cantidad in pares), default=0)
@@ -53,11 +53,11 @@ def preparar_graficos(tipo, filas):
         return None
     campo, titulo, unidad = CONFIGURACION[tipo]
     distribucion = Counter(
-        _rango(fila[campo]) if tipo == 'atrasados' else etiqueta_reporte(fila[campo])
+        _clasificar_atraso_por_intervalo(fila[campo]) if tipo == 'atrasados' else etiqueta_reporte(fila[campo])
         for fila in filas
     )
     if tipo == 'atrasados':
-        orden = [_rango(m) for m in (0, 60, 1440, 10080)]
+        orden = [_clasificar_atraso_por_intervalo(m) for m in (0, 60, 1440, 10080)]
         distribucion = {nombre: distribucion[nombre] for nombre in orden if distribucion[nombre]}
     else:
         distribucion = dict(sorted(distribucion.items()))
@@ -75,11 +75,11 @@ def preparar_graficos(tipo, filas):
             etiqueta += ' · Total'
         principales.append((etiqueta, sum(n for _, n in ordenados[6:])))
     resultado = dict(
-        titulo=titulo, unidad=unidad, circular=_serie(distribucion.items()),
+        titulo=titulo, unidad=unidad, circular=_calcular_serie_de_frecuencias(distribucion.items()),
         titulo_barras='Tipos de persona' if tipo == 'personas' else 'Registros por recurso',
         descripcion_barras=('Distribución por tipo de persona.' if tipo == 'personas' else
                             'Por nombre de recurso: los 6 primeros y el resto agrupado.'),
-        barras=_serie(principales),
+        barras=_calcular_serie_de_frecuencias(principales),
     )
     if tipo in ('atrasados', 'devoluciones') and filas:
         minutos = [max(0, int(fila['retraso_minutos'])) for fila in filas]
@@ -91,6 +91,6 @@ def preparar_graficos(tipo, filas):
         resultado.update(
             titulo_barras='Distribución de retrasos',
             descripcion_barras='Frecuencia en 6 intervalos de igual amplitud, en minutos.',
-            barras=_serie(frecuencias.items()), histograma=True,
+            barras=_calcular_serie_de_frecuencias(frecuencias.items()), histograma=True,
         )
     return resultado

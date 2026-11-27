@@ -40,7 +40,7 @@ class RepositorioRecursoSQL(RepositorioSQL):
             parametros.extend(parametros_bien)
         return self.consultar_sql(sql + ' ORDER BY r.nombre,r.id_recurso', parametros)
 
-    def consultar_disponibilidad(self) -> int:
+    def contar_bienes_disponibles(self) -> int:
         return self.consultar_sql(
             "SELECT COUNT(*) AS total FROM bien_material WHERE estado='DISPONIBLE'", una=True
         )['total']
@@ -56,12 +56,18 @@ class RepositorioRecursoSQL(RepositorioSQL):
         datos = asdict(recurso)
         identificador = datos.pop('id_recurso')
         if identificador is None:
-            recurso.id_recurso = self.insertar('recurso', datos)
+            recurso.id_recurso = self.insertar_fila_sql('recurso', datos)
         else:
-            self.ejecutar(
+            actual = self.consultar_recurso(identificador, bloquear=True)
+            self.ejecutar_escritura_sql(
                 'UPDATE recurso SET ' + ','.join(c + '=%s' for c in datos) + ' WHERE id_recurso=%s',
                 (*datos.values(), identificador),
             )
+            if recurso.marca and recurso.modelo and (recurso.marca, recurso.modelo) != (actual['marca'], actual['modelo']):
+                inventario = RepositorioBienMaterialSQL(self.conexion, self._cursor)
+                for bien in self.consultar_sql('''SELECT id_bien,numero_serie FROM bien_material
+                        WHERE id_recurso=%s AND numero_serie<>'' FOR SHARE''', (identificador,)):
+                    inventario.validar_serie_por_modelo(bien['numero_serie'], recurso.marca, recurso.modelo, bien['id_bien'])
         return recurso.id_recurso
 
     def guardar_bien_material(self, bien) -> int:
@@ -82,8 +88,16 @@ class RepositorioRecursoSQL(RepositorioSQL):
             for relacion, sql in consultas.items()
         }
 
+    def existe_prestamo_pendiente_del_recurso(self, identificador: int) -> bool:
+        return self.consultar_sql(
+            '''SELECT d.id_detalle FROM bien_material b JOIN detalle_prestamo d ON d.id_bien=b.id_bien
+            WHERE b.id_recurso=%s AND d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL
+            LIMIT 1 FOR SHARE''',
+            (identificador,), una=True,
+        ) is not None
+
     def eliminar_recurso(self, identificador: int) -> None:
-        self.ejecutar('DELETE FROM recurso WHERE id_recurso=%s', (identificador,))
+        self.ejecutar_escritura_sql('DELETE FROM recurso WHERE id_recurso=%s', (identificador,))
 
     def consultar_categorias(self) -> list[dict]:
         return self.consultar_sql('SELECT * FROM categoria_recurso ORDER BY nombre')
@@ -110,14 +124,14 @@ class RepositorioRecursoSQL(RepositorioSQL):
         self, nombre: str, descripcion: str, identificador: int | None = None
     ) -> int:
         if identificador is None:
-            return self.insertar(
+            return self.insertar_fila_sql(
                 'categoria_recurso', dict(nombre=nombre, descripcion=descripcion or None)
             )
-        self.ejecutar(
+        self.ejecutar_escritura_sql(
             'UPDATE categoria_recurso SET nombre=%s,descripcion=%s WHERE id_categoria=%s',
             (nombre, descripcion or None, identificador),
         )
         return identificador
 
     def eliminar_categoria(self, identificador: int) -> None:
-        self.ejecutar('DELETE FROM categoria_recurso WHERE id_categoria=%s', (identificador,))
+        self.ejecutar_escritura_sql('DELETE FROM categoria_recurso WHERE id_categoria=%s', (identificador,))

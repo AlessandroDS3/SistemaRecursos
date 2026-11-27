@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf %}
-{% from 'parciales/componentes.html' import indicador, estado %}
-{% from 'recursos/parciales/fragmentos_recursos.html' import formulario_recurso, categorias_recursos, icono_recurso, continuar_registro %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf %}
+{% from 'parciales/componentes.html' import tarjeta_indicadora, insignia_de_estado %}
+{% from 'recursos/parciales/fragmentos_recursos.html' import formulario_recurso, panel_de_categorias, mostrar_icono_del_recurso, acciones_tras_registrar_recurso %}
 {% block titulo %}Administración de recursos · UNSA{% endblock %}
 {% block contenido %}
   {% set vista_categorias = vista_categorias_forzada|default(false) or request.args.get('vista') == 'categorias' %}
@@ -11,11 +11,11 @@
       <h1>Administración de recursos</h1>
       <button type="button" data-abrir-dialogo="registro-recurso">+ Registrar recurso</button>
     </div>
-    {% if recurso_continuacion %}{{ continuar_registro(recurso_continuacion.id_recurso, recurso_continuacion.nombre) }}{% endif %}
+    {% if recurso_continuacion %}{{ acciones_tras_registrar_recurso(recurso_continuacion.id_recurso, recurso_continuacion.nombre) }}{% endif %}
     <section class="resumen-estadisticas resumen-recursos" aria-label="Resumen según los filtros de recursos">
-      {{ indicador('Recursos', resumen.recursos) }}
-      {{ indicador('Bienes', resumen.bienes) }}
-      {{ indicador('Disponibles', resumen.disponibles, clase='disponibilidad') }}
+      {{ tarjeta_indicadora('Recursos', resumen.recursos) }}
+      {{ tarjeta_indicadora('Bienes', resumen.bienes) }}
+      {{ tarjeta_indicadora('Disponibles', resumen.disponibles, clase='disponibilidad') }}
     </section>
     <nav class="pestanas-recursos" aria-label="Administración de recursos">
       <a href="{{ url_for('recursos.consultar_administracion_recursos', **filtros) }}"
@@ -24,7 +24,7 @@
          {% if vista_categorias %}aria-current="page"{% endif %}>Categorías ({{ categorias|length }})</a>
     </nav>
     {% if vista_categorias %}
-      {{ categorias_recursos(categorias, volver='administracion') }}
+      {{ panel_de_categorias(categorias, volver='administracion') }}
     {% else %}
       <form class="filtros filtros-administracion" method="get">
         <label>
@@ -72,17 +72,17 @@
                 <td>
                   <button type="button" class="cantidad-bienes" data-desplegar-bienes="bienes-recurso-{{ r.id_recurso }}"
                           aria-controls="bienes-recurso-{{ r.id_recurso }}" aria-expanded="false"
-                          aria-label="Ver bienes de {{ r.nombre }}">{{ grupo.bienes|length }} {{ icono_recurso('desplegar') }}</button>
+                          aria-label="Ver bienes de {{ r.nombre }}">{{ grupo.bienes|length }} {{ mostrar_icono_del_recurso('desplegar') }}</button>
                 </td>
                 <td>
                   <div class="acciones-fila">
                     <a class="boton-icono" href="{{ url_for('recursos.editar_recurso', identificador=r.id_recurso, volver='administracion') }}"
-                       aria-label="Editar {{ r.nombre }}" title="Editar recurso">{{ icono_recurso('editar') }}</a>
+                       aria-label="Editar {{ r.nombre }}" title="Editar recurso">{{ mostrar_icono_del_recurso('editar') }}</a>
                     <form method="post" action="{{ url_for('recursos.eliminar_recurso', identificador=r.id_recurso) }}"
                           data-confirmar="¿Deseas eliminar el recurso {{ r.nombre }}?">
-                      {{ csrf() }}
+                      {{ campo_oculto_csrf() }}
                       <input type="hidden" name="volver" value="administracion">
-                      <button class="boton-icono" aria-label="Eliminar {{ r.nombre }}" title="Eliminar recurso">{{ icono_recurso('eliminar') }}</button>
+                      <button class="boton-icono" aria-label="Eliminar {{ r.nombre }}" title="Eliminar recurso">{{ mostrar_icono_del_recurso('eliminar') }}</button>
                     </form>
                   </div>
                 </td>
@@ -99,7 +99,7 @@
                         <thead><tr><th scope="col">Inventario</th><th scope="col">Estado</th><th scope="col">Ubicación</th><th scope="col">Acciones</th></tr></thead>
                         <tbody>
                           {% for b in grupo.bienes %}
-                            <tr><td>{{ b.codigo_inventario }}</td><td>{{ estado(b.estado) }}</td><td>{{ b.ubicacion or '—' }}</td>
+                            <tr><td>{{ b.codigo_inventario }}</td><td>{{ insignia_de_estado(b.estado) }}</td><td>{{ b.ubicacion or '—' }}</td>
                               <td><a href="{{ url_for('bienes.consultar_bien_material', identificador=b.id_bien) }}">Ver bien</a></td></tr>
                           {% endfor %}
                         </tbody>
@@ -123,7 +123,7 @@
   <dialog id="registro-recurso" class="dialogo-recursos dialogo-recurso-amplio" aria-labelledby="titulo-registro-recurso">
     <div class="cabecera-dialogo">
       <h2 id="titulo-registro-recurso">Registrar recurso</h2>
-      <button type="button" class="boton-icono" data-cerrar-dialogo aria-label="Cerrar formulario">{{ icono_recurso('cerrar') }}</button>
+      <button type="button" class="boton-icono" data-cerrar-dialogo aria-label="Cerrar formulario">{{ mostrar_icono_del_recurso('cerrar') }}</button>
     </div>
     {% if categorias %}
       {{ formulario_recurso({}, categorias, url_for('recursos.registrar_recurso'), primer_bien=true, volver='administracion', en_dialogo=true) }}

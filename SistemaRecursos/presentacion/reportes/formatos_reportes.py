@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, replace
 from servicios.reportes.catalogo_reportes import CampoReporte, REPORTES
+from servicios.reportes.historial import CIERRES_SANCION
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ FORMATOS = {
     'gravedad': 'estado',
     'tipo_regularizacion': 'etiqueta',
     'fecha_adquisicion': 'dia',
+    'fecha_registro': 'fecha',
     'estado': 'estado',
     'situacion': 'estado',
     'cumplimiento': 'estado',
@@ -44,6 +46,12 @@ FORMATOS = {
 
 def etiqueta_reporte(valor):
     return ETIQUETAS_VALORES.get(valor, str(valor).replace('_', ' ').capitalize())
+
+
+def etiqueta_cierre_sancion(sancion):
+    if sancion.get('fecha_levantamiento') and sancion['estado'] in CIERRES_SANCION:
+        return etiqueta_reporte(sancion['estado'])
+    return None
 
 
 def valor_reporte(valor, formato='texto'):

@@ -1,7 +1,7 @@
 from flask import Blueprint, flash, g, redirect, render_template, request, session, url_for
 from dominio.gestion_recursos.bien_material import ESTADOS_BIEN, ESTADOS_MANUALES
 from presentacion.seguridad import requiere_permiso
-from presentacion.formularios import recuperar_formulario
+from presentacion.formularios import recuperar_formulario_tras_error
 
 
 class ControladorBienMaterial:
@@ -40,6 +40,18 @@ class ControladorBienMaterial:
                 self.eliminar_bien_material,
                 ['POST'],
             ),
+            (
+                '/<int:identificador>/mantenimiento/abrir',
+                'abrir_mantenimiento',
+                self.abrir_mantenimiento,
+                ['POST'],
+            ),
+            (
+                '/<int:identificador>/mantenimiento/cerrar',
+                'cerrar_mantenimiento',
+                self.cerrar_mantenimiento,
+                ['POST'],
+            ),
         ):
             self.blueprint.add_url_rule(ruta, nombre, funcion, methods=metodos)
 
@@ -63,13 +75,13 @@ class ControladorBienMaterial:
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    @recuperar_formulario(lambda self: self._mostrar_formulario_bien_material())
+    @recuperar_formulario_tras_error(lambda self: self._mostrar_formulario_bien_material())
     def registrar_bien_material(self):
         if request.method == 'POST':
             id_bien_guardado = self.servicio.registrar_bien_material(
                 request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Bien guardado.')
+            flash('Bien registrado.')
             session['bien_recien_registrado'] = id_bien_guardado
             return redirect(
                 url_for('bienes.consultar_bien_material', identificador=id_bien_guardado)
@@ -77,7 +89,7 @@ class ControladorBienMaterial:
         return self._mostrar_formulario_bien_material()
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    @recuperar_formulario(
+    @recuperar_formulario_tras_error(
         lambda self, identificador: self._mostrar_formulario_bien_material(identificador)
     )
     def editar_bien_material(self, identificador):
@@ -85,7 +97,7 @@ class ControladorBienMaterial:
             id_bien_guardado = self.servicio.actualizar_bien_material(
                 identificador, request.form.to_dict(), g.usuario.id_usuario
             )
-            flash('Bien guardado.')
+            flash('Bien actualizado.')
             return redirect(
                 url_for('bienes.consultar_bien_material', identificador=id_bien_guardado)
             )
@@ -108,12 +120,30 @@ class ControladorBienMaterial:
         )
 
     @requiere_permiso('RECURSOS_GESTIONAR')
-    @recuperar_formulario(lambda self, identificador: self.consultar_bien_material(identificador))
+    @recuperar_formulario_tras_error(lambda self, identificador: self.consultar_bien_material(identificador))
     def cambiar_estado_bien_material(self, identificador):
         self.servicio.cambiar_estado_bien_material(
             identificador, request.form.to_dict(), g.usuario.id_usuario
         )
         flash('Estado actualizado.')
+        return redirect(url_for('bienes.consultar_bien_material', identificador=identificador))
+
+    @requiere_permiso('RECURSOS_GESTIONAR')
+    @recuperar_formulario_tras_error(lambda self, identificador: self.consultar_bien_material(identificador))
+    def abrir_mantenimiento(self, identificador):
+        self.servicio.abrir_mantenimiento(
+            identificador, request.form.to_dict(), g.usuario.id_usuario
+        )
+        flash('Mantenimiento abierto. El bien no se puede prestar hasta cerrarlo.')
+        return redirect(url_for('bienes.consultar_bien_material', identificador=identificador))
+
+    @requiere_permiso('RECURSOS_GESTIONAR')
+    @recuperar_formulario_tras_error(lambda self, identificador: self.consultar_bien_material(identificador))
+    def cerrar_mantenimiento(self, identificador):
+        self.servicio.cerrar_mantenimiento(
+            identificador, request.form.to_dict(), g.usuario.id_usuario
+        )
+        flash('Mantenimiento cerrado.')
         return redirect(url_for('bienes.consultar_bien_material', identificador=identificador))
 
     @requiere_permiso('RECURSOS_GESTIONAR')

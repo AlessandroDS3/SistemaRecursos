@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf %}
 {% block titulo %}Iniciar sesión · UNSA{% endblock %}
 {% block contenido %}
   <section class="presentacion-acceso" aria-label="Sistema de préstamos UNSA">
@@ -28,6 +28,7 @@
     </div>
     <div class="institucion-acceso">Universidad Nacional de San Agustín de Arequipa</div>
   </section>
+  {% block panel_acceso %}
   <section class="panel-acceso">
     <div class="contenido-panel-acceso">
       <h2>Iniciar sesión</h2>
@@ -37,7 +38,7 @@
       <form method="post"
             action="{{ url_for('auth.iniciar_sesion') }}"
             class="formulario">
-        {{ csrf() }}
+        {{ campo_oculto_csrf() }}
         <label>
           Usuario
           <input id="usuario"
@@ -62,6 +63,8 @@
         </label>
         <button type="submit">Iniciar sesión</button>
       </form>
+      <a href="{{ url_for('cuentas.activar_cuenta') }}">Activar cuenta con un código</a>
     </div>
   </section>
+  {% endblock %}
 {% endblock %}

@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
 from flask import Blueprint, flash, g, jsonify, redirect, render_template, request, url_for
 from presentacion.seguridad import requiere_permiso
-from presentacion.formularios import recuperar_formulario
-from presentacion.navegacion import detalle_prestamo, regreso_prestamos
+from presentacion.formularios import recuperar_formulario_tras_error
+from presentacion.navegacion import obtener_url_del_detalle_de_prestamo, obtener_url_de_regreso_a_prestamos
 from dominio.gestion_prestamos.prestamo import FILTROS_ESTADO_PRESTAMO
 
 
-def _bien_formulario(bien):
+def _preparar_bien_para_formulario_prestamo(bien):
     return dict(
         id_bien=bien['id_bien'],
         id_recurso=bien['id_recurso'],
@@ -19,13 +19,14 @@ def _bien_formulario(bien):
 
 
 class ControladorPrestamo:
-    def __init__(self, servicio, bienes, recursos, politicas):
+    def __init__(self, servicio, bienes, recursos, politicas, ampliaciones=None):
         self.servicio, self.bienes, self.recursos, self.politicas = (
             servicio,
             bienes,
             recursos,
             politicas,
         )
+        self.ampliaciones = ampliaciones
         self.blueprint = Blueprint('prestamos', __name__, url_prefix='/prestamos')
         self.blueprint.add_url_rule(
             '/condiciones', 'consultar_condiciones_prestamo', self.consultar_condiciones_prestamo
@@ -36,6 +37,11 @@ class ControladorPrestamo:
         for ruta, nombre, funcion, metodos in (
             ('', 'consultar_prestamos', self.consultar_prestamos, ['GET']),
             ('/nuevo', 'registrar_prestamo', self.registrar_prestamo, ['GET', 'POST']),
+            ('/autorizaciones', 'autorizar_operacion_propia', self.autorizar_operacion_propia, ['POST']),
+            ('/<int:identificador>/detalles/<int:detalle_id>/discrepancia',
+             'registrar_discrepancia_devolucion', self.registrar_discrepancia_devolucion, ['POST']),
+            ('/<int:identificador>/detalles/<int:detalle_id>/rectificar',
+             'rectificar_devolucion', self.rectificar_devolucion, ['POST']),
             ('/<int:identificador>', 'consultar_prestamo', self.consultar_prestamo, ['GET']),
             (
                 '/<int:identificador>/devolver',
@@ -60,7 +66,7 @@ class ControladorPrestamo:
 
     @requiere_permiso('PRESTAMOS_PROPIOS_CONSULTAR', 'PRESTAMOS_GESTIONAR')
     def consultar_prestamos(self):
-        gestionar = g.usuario.permite('PRESTAMOS_GESTIONAR')
+        gestionar = g.usuario.tiene_permiso('PRESTAMOS_GESTIONAR')
         filas = self.servicio.consultar_prestamos(
             request.args, None if gestionar else g.usuario.dni
         )
@@ -82,17 +88,24 @@ class ControladorPrestamo:
             self.servicio.consultar_condiciones_prestamo(request.args.get('dni_persona', ''))
         )
 
+    @requiere_permiso('USUARIOS_GESTIONAR')
+    @recuperar_formulario_tras_error(lambda self: self.consultar_prestamos())
+    def autorizar_operacion_propia(self):
+        identificador = self.servicio.autorizar_operacion_propia(request.form, g.usuario.id_usuario)
+        flash(f'Autorización #{identificador}. Es válida para un uso durante 24 horas.')
+        return redirect(url_for('prestamos.consultar_prestamos'))
+
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     def consultar_bienes_disponibles(self):
         filtros = dict(request.args, estado='DISPONIBLE')
         return jsonify(
             resultados=[
-                _bien_formulario(b) for b in self.bienes.consultar_bienes_materiales(filtros)
+                _preparar_bien_para_formulario_prestamo(b) for b in self.bienes.consultar_bienes_materiales(filtros)
             ]
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    @recuperar_formulario(lambda self: self._mostrar_formulario_prestamo())
+    @recuperar_formulario_tras_error(lambda self: self._mostrar_formulario_prestamo())
     def registrar_prestamo(self):
         if request.method == 'POST':
             datos = request.form.to_dict()
@@ -107,7 +120,7 @@ class ControladorPrestamo:
             )
             identificador = self.servicio.registrar_prestamo(datos, g.usuario.id_usuario)
             flash('Préstamo registrado.')
-            return redirect(detalle_prestamo(identificador))
+            return redirect(obtener_url_del_detalle_de_prestamo(identificador))
         return self._mostrar_formulario_prestamo()
 
     def _mostrar_formulario_prestamo(self):
@@ -128,12 +141,12 @@ class ControladorPrestamo:
         return render_template(
             'prestamos/vista_prestamo.html',
             modo='formulario',
-            bienes=[_bien_formulario(b) for b in self.bienes.consultar_bienes_materiales(filtros)],
+            bienes=[_preparar_bien_para_formulario_prestamo(b) for b in self.bienes.consultar_bienes_materiales(filtros)],
             bien_seleccionado=bien['id_bien'] if bien else None,
-            bien_inicial=_bien_formulario(bien) if bien else None,
+            bien_inicial=_preparar_bien_para_formulario_prestamo(bien) if bien else None,
             bienes_recuperados=(
                 [
-                    _bien_formulario(b)
+                    _preparar_bien_para_formulario_prestamo(b)
                     for b in self.bienes.consultar_bienes_materiales({})
                     if str(b['id_bien']) in request.form.getlist('bienes')
                 ]
@@ -141,50 +154,72 @@ class ControladorPrestamo:
                 else []
             ),
             politicas=self.politicas.consultar_politicas_prestamo(),
-            horario=self.politicas.consultar_configuracion_general(),
+            horario=self.politicas.consultar_horario_y_plazos_de_reserva(),
             recurso_contexto=recurso,
             cancelar_url=(
                 url_for('recursos.consultar_recurso', identificador=recurso['id_recurso'])
                 if recurso
-                else regreso_prestamos()
+                else obtener_url_de_regreso_a_prestamos()
             ),
-            volver=regreso_prestamos(),
+            volver=obtener_url_de_regreso_a_prestamos(),
         )
 
     @requiere_permiso('PRESTAMOS_PROPIOS_CONSULTAR', 'PRESTAMOS_GESTIONAR')
     def consultar_prestamo(self, identificador):
-        gestionar = g.usuario.permite('PRESTAMOS_GESTIONAR')
+        gestionar = g.usuario.tiene_permiso('PRESTAMOS_GESTIONAR')
         prestamo = self.servicio.consultar_prestamo(identificador, g.usuario.dni, gestionar)
         return render_template(
             'prestamos/vista_prestamo.html',
             modo='detalle',
             prestamo=prestamo,
+            solicitudes=(
+                self.ampliaciones.consultar_solicitudes_de_ampliacion_del_prestamo(identificador)
+                if self.ampliaciones
+                else []
+            ),
             gestionar=gestionar,
             ahora=datetime.now(timezone.utc).replace(tzinfo=None),
-            volver=regreso_prestamos(),
+            volver=obtener_url_de_regreso_a_prestamos(),
         )
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    @recuperar_formulario(lambda self, identificador: self.consultar_prestamo(identificador))
+    @recuperar_formulario_tras_error(lambda self, identificador: self.consultar_prestamo(identificador))
     def registrar_devolucion(self, identificador):
         datos = dict(request.form, detalles=request.form.getlist('detalles'))
         self.servicio.registrar_devolucion(identificador, datos, g.usuario.id_usuario)
         flash('Devolución registrada.')
-        return redirect(detalle_prestamo(identificador))
+        return redirect(obtener_url_del_detalle_de_prestamo(identificador))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
-    @recuperar_formulario(
+    @recuperar_formulario_tras_error(lambda self, identificador, detalle_id: self.consultar_prestamo(identificador))
+    def registrar_discrepancia_devolucion(self, identificador, detalle_id):
+        self.servicio.registrar_discrepancia_devolucion(
+            identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario,
+        )
+        flash('Discrepancia anotada. El bien sigue pendiente de devolución.')
+        return redirect(obtener_url_del_detalle_de_prestamo(identificador) + '#devolucion')
+
+    @requiere_permiso('USUARIOS_GESTIONAR')
+    @recuperar_formulario_tras_error(lambda self, identificador, detalle_id: self.consultar_prestamo(identificador))
+    def rectificar_devolucion(self, identificador, detalle_id):
+        self.servicio.rectificar_devolucion(identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario)
+        flash('Devolución rectificada. El bien vuelve a quedar pendiente y se conserva el registro anterior.')
+        return redirect(obtener_url_del_detalle_de_prestamo(identificador) + '#devolucion')
+
+    @requiere_permiso('PRESTAMOS_GESTIONAR')
+    @recuperar_formulario_tras_error(
         lambda self, identificador, detalle_id: self.consultar_prestamo(identificador)
     )
     def registrar_perdida_bien_material(self, identificador, detalle_id):
         self.servicio.registrar_perdida_bien_material(
-            identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario
+            identificador, detalle_id, request.form.get('motivo'), g.usuario.id_usuario,
+            gravedad=request.form.get('gravedad', 'GRAVE'),
         )
-        flash('Pérdida registrada; el bien continúa pendiente de recuperación.')
-        return redirect(detalle_prestamo(identificador))
+        flash('Pérdida registrada. Pendiente de regularización.')
+        return redirect(obtener_url_del_detalle_de_prestamo(identificador))
 
     @requiere_permiso('PRESTAMOS_GESTIONAR')
     def actualizar_estados_prestamos_vencidos(self):
         self.servicio.actualizar_estados_prestamos_vencidos(g.usuario.id_usuario)
         flash('Vencimientos registrados.')
-        return redirect(regreso_prestamos())
+        return redirect(obtener_url_de_regreso_a_prestamos())

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% from 'parciales/formularios.html' import csrf, campo %}
-{% from 'parciales/componentes.html' import estado %}
-{% from 'recursos/parciales/fragmentos_recursos.html' import formulario_recurso, categorias_recursos, continuar_registro as acciones_registro %}
+{% from 'parciales/formularios.html' import campo_oculto_csrf, campo_de_formulario %}
+{% from 'parciales/componentes.html' import insignia_de_estado %}
+{% from 'recursos/parciales/fragmentos_recursos.html' import formulario_recurso, panel_de_categorias, acciones_tras_registrar_recurso as acciones_registro %}
 {% block contenido %}
   {% if modo=="lista" %}
     <div class="cabecera">
       <h1>Catálogo</h1>
-      {% if g.usuario.permite("RECURSOS_GESTIONAR") %}
+      {% if g.usuario.tiene_permiso("RECURSOS_GESTIONAR") %}
         <a class="boton"
            href="{{ url_for('recursos.consultar_administracion_recursos') }}">Administrar recursos</a>
       {% endif %}
@@ -63,8 +63,8 @@
           </div>
           <footer class="pie-tarjeta">
             <div>
-              <strong>{{ 'Sin ejemplares disponibles' if not r.disponibles else r.disponibles ~ (' ejemplar disponible' if r.disponibles == 1 else ' ejemplares disponibles') }}</strong>
-              <small>{{ r.total }} {{ 'ejemplar registrado' if r.total == 1 else 'ejemplares registrados' }}</small>
+              <strong>{{ 'Sin bienes disponibles' if not r.disponibles else r.disponibles ~ (' bien disponible' if r.disponibles == 1 else ' bienes disponibles') }}</strong>
+              <small>{{ r.total }} {{ 'bien registrado' if r.total == 1 else 'bienes registrados' }}</small>
             </div>
             <a class="boton secundario"
                href="{{ url_for('recursos.consultar_recurso',identificador=r.id_recurso) }}">Ver detalle</a>
@@ -80,7 +80,7 @@
     </div>
   {% elif modo=="detalle" %}
     {% if continuar_registro %}{{ acciones_registro(recurso.id_recurso, recurso.nombre) }}{% endif %}
-    {% set gestionar_prestamos = g.usuario.permite('PRESTAMOS_GESTIONAR') %}
+    {% set gestionar_prestamos = g.usuario.tiene_permiso('PRESTAMOS_GESTIONAR') %}
     <a class="regreso-vista" href="{{ url_for('recursos.consultar_recursos') }}">Volver al catálogo</a>
     <div class="cabecera detalle-recurso-cabecera">
       <div>
@@ -88,14 +88,14 @@
         <h1>{{ recurso.nombre }}</h1>
       </div>
       <div class="acciones">
-        {% if g.usuario.permite('RECURSOS_GESTIONAR') %}
+        {% if g.usuario.tiene_permiso('RECURSOS_GESTIONAR') %}
           <a class="boton secundario" href="{{ url_for('recursos.editar_recurso',identificador=recurso.id_recurso,volver='catalogo') }}">Editar recurso</a>
-          <a class="boton secundario" href="{{ url_for('bienes.registrar_bien_material',id_recurso=recurso.id_recurso) }}">Agregar bien físico</a>
+          <a class="boton secundario" href="{{ url_for('bienes.registrar_bien_material',id_recurso=recurso.id_recurso) }}">Agregar bien material</a>
         {% endif %}
         {% if gestionar_prestamos and disponibles %}
           <a class="boton" href="{{ url_for('prestamos.registrar_prestamo',id_recurso=recurso.id_recurso) }}">Registrar préstamo</a>
         {% endif %}
-        {% if g.usuario.permite('RESERVAS_PROPIAS_GESTIONAR') %}
+        {% if g.usuario.tiene_permiso('RESERVAS_PROPIAS_GESTIONAR') %}
           <a class="{{ 'boton secundario' if gestionar_prestamos and disponibles else 'boton' }}" href="{{ url_for('reservas.registrar_reserva',id_recurso=recurso.id_recurso) }}">Reservar recurso</a>
         {% endif %}
       </div>
@@ -115,13 +115,13 @@
       <ul>
         {% for p in politicas %}
           <li>{{ p.tipo_persona|capitalize }}: {{ p.plazo_maximo }} {{ p.unidad_plazo|lower }} · {{ 'Permite salida de la institución' if p.permite_salida else 'Uso dentro de la institución' }}
-            {% if g.usuario.permite('POLITICAS_GESTIONAR') %}
+            {% if g.usuario.tiene_permiso('POLITICAS_GESTIONAR') %}
               <a href="{{ url_for('politicas.editar_politica_prestamo',identificador=p.id_politica) }}">Editar</a>
             {% endif %}
           </li>
         {% else %}<li>No hay políticas vigentes para esta categoría.</li>{% endfor %}
       </ul>
-      {% if g.usuario.permite('POLITICAS_GESTIONAR') %}
+      {% if g.usuario.tiene_permiso('POLITICAS_GESTIONAR') %}
         <a class="boton secundario" href="{{ url_for('politicas.registrar_politica_prestamo',id_categoria=recurso.id_categoria) }}">Configurar política</a>
       {% endif %}
     </section>
@@ -133,7 +133,7 @@
           <tr>
             <th>Inventario</th>
             <th>Descripción particular</th>
-            <th>Serie</th>
+            <th>Identificador / serie</th>
             <th>Ubicación</th>
             <th>Estado</th>
             {% if gestionar_prestamos %}<th>Acción</th>{% endif %}
@@ -143,7 +143,7 @@
           {% for b in bienes %}
             <tr>
               <td>
-                {% if g.usuario.permite("RECURSOS_GESTIONAR") or g.usuario.permite("PRESTAMOS_GESTIONAR") %}
+                {% if g.usuario.tiene_permiso("RECURSOS_GESTIONAR") or g.usuario.tiene_permiso("PRESTAMOS_GESTIONAR") %}
                   <a href="{{ url_for('bienes.consultar_bien_material',identificador=b.id_bien) }}">
                     {{ b.codigo_inventario }}
                   </a>
@@ -152,9 +152,9 @@
                 {% endif %}
               </td>
               <td>{{ b.descripcion_bien or 'Sin descripción particular' }}</td>
-              <td>{{ b.numero_serie or 'Sin registrar' }}</td>
+              <td>{{ b.identificador_sistema or '—' }}<small>Fabricante: {{ b.numero_serie or 'sin registrar' }}</small></td>
               <td>{{ b.ubicacion or 'Sin registrar' }}</td>
-              <td>{{ estado(b.estado) }}</td>
+              <td>{{ insignia_de_estado(b.estado) }}</td>
               {% if gestionar_prestamos %}
                 <td>
                   {% if b.estado == 'DISPONIBLE' %}
@@ -170,12 +170,12 @@
       </table>
       </div>
     </section>
-    {% if g.usuario.permite('RECURSOS_GESTIONAR') %}
+    {% if g.usuario.tiene_permiso('RECURSOS_GESTIONAR') %}
       <details class="panel">
         <summary>Eliminar recurso</summary>
         <p>Solo se pueden eliminar recursos sin bienes ni reservas asociados.</p>
         <form method="post" action="{{ url_for('recursos.eliminar_recurso',identificador=recurso.id_recurso) }}">
-          {{ csrf() }}
+          {{ campo_oculto_csrf() }}
           <button class="secundario">Eliminar recurso</button>
         </form>
       </details>
@@ -188,7 +188,7 @@
       <a class="boton secundario"
          href="{{ url_for('recursos.consultar_administracion_recursos') }}">Administrar recursos</a>
     </div>
-    {{ categorias_recursos(categorias) }}
+    {{ panel_de_categorias(categorias) }}
   {% else %}
     <div class="cabecera">
       <h1>{{ 'Editar' if recurso else 'Registrar' }} recurso</h1>

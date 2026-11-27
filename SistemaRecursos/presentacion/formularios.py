@@ -9,16 +9,16 @@ from flask import g, request
 from dominio.compartido.validacion import Conflicto
 
 
-def _normalizar(texto):
+def _normalizar_mensaje_de_error(texto):
     return ''.join(
         c for c in unicodedata.normalize('NFD', texto.lower()) if not unicodedata.combining(c)
     )
 
 
-def recuperar_formulario(mostrar):
-    def decorar(operacion):
+def recuperar_formulario_tras_error(mostrar):
+    def decorar_recuperacion_del_formulario(operacion):
         @wraps(operacion)
-        def protegida(*args, **kwargs):
+        def ejecutar_con_recuperacion_del_formulario(*args, **kwargs):
             try:
                 return operacion(*args, **kwargs)
             except ValueError as error:
@@ -28,6 +28,7 @@ def recuperar_formulario(mostrar):
                 prefijo = {
                     'ampliaciones.ampliar_prestamo': 'ampliacion',
                     'prestamos.registrar_perdida_bien_material': 'perdida',
+                    'ampliaciones.solicitar_ampliacion': 'solicitud',
                 }.get(request.endpoint)
                 g.formulario_id = (
                     f'{prefijo}-{request.view_args["detalle_id"]}'
@@ -42,18 +43,18 @@ def recuperar_formulario(mostrar):
                         for s in ('clave', 'password', 'contrasena', 'csrf', 'confirmacion')
                     )
                 }
-                g.errores_campos = _campos_del_error(str(error))
+                g.errores_campos = _asociar_mensaje_al_campo_del_formulario(str(error))
                 return mostrar(*args, **kwargs), 409 if isinstance(error, Conflicto) else 400
 
-        return protegida
+        return ejecutar_con_recuperacion_del_formulario
 
-    return decorar
+    return decorar_recuperacion_del_formulario
 
 
-def _campos_del_error(mensaje):
+def _asociar_mensaje_al_campo_del_formulario(mensaje):
     aliases = {
         'codigo_inventario': 'codigo de inventario',
-        'numero_serie': 'numero de serie',
+        'numero_serie': 'serie del fabricante',
         'fecha_adquisicion': 'fecha de adquisicion',
         'nombre_usuario': 'usuario',
         'dni': 'dni',
@@ -73,7 +74,7 @@ def _campos_del_error(mensaje):
         'hora_apertura': 'apertura',
         'hora_cierre': 'cierre',
     }
-    texto = _normalizar(mensaje)
+    texto = _normalizar_mensaje_de_error(mensaje)
     if (
         'dni' in texto
         and re.fullmatch(r'\d{8}', request.form.get('dni', ''))
@@ -107,6 +108,6 @@ def error_campo(nombre, formulario=''):
     return getattr(g, 'errores_campos', {}).get(nombre, '')
 
 
-def identificador_campo(nombre):
+def generar_id_del_campo(nombre):
     g.indice_campo = getattr(g, 'indice_campo', 0) + 1
     return f'campo-{nombre}-{g.indice_campo}'

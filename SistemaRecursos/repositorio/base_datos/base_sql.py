@@ -1,9 +1,12 @@
 """Mecánica SQL compartida. Cada transacción entrega una instancia independiente."""
 
 from contextlib import contextmanager
+import json
 import re
 from mysql.connector import IntegrityError
 
+from dominio.compartido.codigos import Codigo
+from dominio.compartido.contratos import FilaHistorialEstado
 from dominio.compartido.validacion import Conflicto
 from dominio.gestion_personas_usuarios.rol import permisos_del_rol
 
@@ -20,10 +23,14 @@ MENSAJES_DUPLICADOS = {
     'bien_material.codigo_inventario': 'Ya existe un bien con ese código de inventario.',
     'categoria_recurso.nombre': 'Ya existe una categoría con ese nombre.',
     'politica_prestamo.uq_politica_persona_categoria_vigente': 'Ya existe una política vigente para ese tipo de persona y categoría.',
+    'mantenimiento_bien.uq_mantenimiento_abierto': 'El bien ya tiene un mantenimiento abierto.',
+    'solicitud_ampliacion.uq_solicitud_pendiente': 'Ya existe una solicitud de ampliación pendiente para ese bien.',
 }
 
 
 class RepositorioSQL:
+    aislamiento = None
+
     def __init__(self, conexion=None, cursor=None):
         self.conexion = conexion or MySQLConnection()
         self._cursor = cursor
@@ -33,24 +40,24 @@ class RepositorioSQL:
         if self._cursor is not None:
             yield self
         else:
-            with self.conexion.sesion(escritura=True) as cursor:
+            with self.conexion.sesion(escritura=True, aislamiento=self.aislamiento) as cursor:
                 yield type(self)(self.conexion, cursor)
 
     def consultar_sql(self, sql, parametros=(), una=False):
-        def leer(cursor):
-            cursor.execute(sql, parametros)
+        def leer_resultados_con_cursor(cursor):
+            cursor.execute(sql, tuple(p.value if isinstance(p, Codigo) else p for p in parametros))
             return cursor.fetchone() if una else cursor.fetchall()
 
         if self._cursor is not None:
-            return leer(self._cursor)
+            return leer_resultados_con_cursor(self._cursor)
         with self.conexion.sesion() as cursor:
-            return leer(cursor)
+            return leer_resultados_con_cursor(cursor)
 
-    def ejecutar(self, sql, parametros=()):
+    def ejecutar_escritura_sql(self, sql, parametros=()):
         if self._cursor is None:
             raise RuntimeError('Una escritura requiere una transacción del servicio.')
         try:
-            self._cursor.execute(sql, parametros)
+            self._cursor.execute(sql, tuple(p.value if isinstance(p, Codigo) else p for p in parametros))
         except IntegrityError as error:
             # MySQL identifica el índice al final del error; no mostramos valores ni SQL.
             indice = (error.msg or '').rsplit('for key ', 1)[-1].strip("'`")
@@ -59,14 +66,14 @@ class RepositorioSQL:
             raise
         return self._cursor.lastrowid
 
-    def insertar(self, tabla, datos):
+    def insertar_fila_sql(self, tabla, datos):
         # Tabla y columnas solo se suministran desde métodos del repositorio.
         nombres = [tabla, *datos]
         if not all(re.fullmatch(r'[a-z_]+', n) for n in nombres):
             raise ValueError('Identificador SQL inválido.')
         columnas = ','.join(datos)
         marcas = ','.join(['%s'] * len(datos))
-        return self.ejecutar(
+        return self.ejecutar_escritura_sql(
             f'INSERT INTO {tabla} ({columnas}) VALUES ({marcas})', tuple(datos.values())
         )
 
@@ -87,15 +94,20 @@ class RepositorioSQL:
         return cuenta_actor
 
     def registrar_historial_estado(
-        self, entidad, identificador, anterior, nuevo, actor, observacion
+        self, entidad, identificador, anterior, nuevo, actor, observacion, *, dni_objetivo=None, datos=None
     ):
-        self.ejecutar(
-            '''INSERT INTO historial_estado(entidad,id_entidad,estado_anterior,estado_nuevo,
-            fecha,dni_responsable,observacion) VALUES(%s,%s,%s,%s,UTC_TIMESTAMP(),%s,%s)''',
-            (entidad, identificador, anterior, nuevo, actor, observacion),
-        )
+        columnas = dict(entidad=entidad, id_entidad=identificador, estado_anterior=anterior,
+                        estado_nuevo=nuevo, dni_responsable=actor, observacion=observacion)
+        if dni_objetivo is not None:
+            columnas['dni_objetivo'] = dni_objetivo
+        if datos is not None:
+            columnas['datos'] = json.dumps(datos, ensure_ascii=False)
+        campos = ','.join(columnas)
+        marcas = ','.join(['%s'] * len(columnas))
+        return self.ejecutar_escritura_sql(f'INSERT INTO historial_estado(fecha,{campos}) VALUES(UTC_TIMESTAMP(),{marcas})',
+                             tuple(columnas.values()))
 
-    def consultar_historial_estado(self, entidad, identificador):
+    def consultar_historial_estado(self, entidad: str, identificador: int) -> list[FilaHistorialEstado]:
         return self.consultar_sql(
             '''SELECT h.*,CONCAT(p.nombres,' ',p.apellidos) AS responsable
             FROM historial_estado h LEFT JOIN persona p ON p.dni=h.dni_responsable

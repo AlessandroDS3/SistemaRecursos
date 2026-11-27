@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from hashlib import sha256
 
+from dominio.gestion_personas_usuarios.rol import Rol
+
 
 @dataclass(frozen=True, kw_only=True)
 class CuentaAcceso:
@@ -11,7 +13,7 @@ class CuentaAcceso:
     nombre_usuario: str
     nombres: str
     apellidos: str
-    rol: str
+    rol: Rol
     estado_cuenta: str
     estado_persona: str
     contrasena_hash: str = field(repr=False)
@@ -24,13 +26,13 @@ class CuentaAcceso:
 
     @property
     def version_credenciales(self):
-        datos = f'{self.contrasena_hash}:{int(self.debe_cambiar_clave)}'
+        datos = f'{self.contrasena_hash}:{int(self.debe_cambiar_clave)}:{self.rol}:{self.dni}'
         return sha256(datos.encode()).hexdigest()
 
     def puede_acceder(self):
         return self.estado_cuenta == self.estado_persona == 'ACTIVA'
 
-    def permite(self, codigo):
+    def tiene_permiso(self, codigo):
         return not self.debe_cambiar_clave and codigo in self.permisos
 
 

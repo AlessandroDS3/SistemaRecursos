@@ -11,11 +11,11 @@
       <div class="estadistica-vector" role="img" aria-label="{{ titulo }}. Cantidades y porcentajes en la leyenda siguiente.">{{ graficos.svg[loop.index0]|safe }}</div>
       <ul class="estadistica-leyenda">
         {% for item in serie.elementos %}
-        <li><span><i style="background: {{ item.color if circular else '#287b78' }}" aria-hidden="true"></i>{{ loop.index }}. {{ item.etiqueta }}</span><span><strong>{{ item.cantidad }}</strong> · {{ item.porcentaje }} %</span></li>
+        <li><span><i style="background: {{ item.color if circular else '#111113' }}" aria-hidden="true"></i>{{ loop.index }}. {{ item.etiqueta }}</span><span><strong>{{ item.cantidad }}</strong> · {{ item.porcentaje }} %</span></li>
         {% endfor %}
       </ul>
     {% else %}
-      <p class="estadistica-vacia suave">No hay datos para graficar con estos filtros.</p>
+      <p class="estadistica-vacia suave">No hay datos para mostrar.</p>
     {% endif %}
   </figure>
   {% endfor %}

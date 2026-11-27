@@ -4,15 +4,17 @@ from contextlib import nullcontext
 import unittest
 from unittest.mock import Mock, patch
 
+from dominio.compartido.validacion import Conflicto
+from dominio.gestion_personas_usuarios.cuenta import version_cuenta
 from dominio.gestion_personas_usuarios.rol import permisos_del_rol
 from repositorio.base_datos.base_sql import RepositorioSQL
 from repositorio.personas_usuarios.repositorio_acceso_sql import RepositorioAccesoSQL
 from servicios.personas_usuarios.servicio_cuenta import ServicioAplicacionCuenta
-from tests.soporte_roles import cuenta
+from tests.soporte_roles import crear_cuenta_de_prueba
 
 
 class PermisosFijosTest(unittest.TestCase):
-    def test_perfiles_acordados(self):
+    def test_roles_fijos_tienen_los_permisos_definidos(self):
         usuario = {
             'CATALOGO_CONSULTAR', 'RESERVAS_PROPIAS_GESTIONAR',
             'PRESTAMOS_PROPIOS_CONSULTAR',
@@ -36,7 +38,7 @@ class PermisosFijosTest(unittest.TestCase):
     def test_autenticacion_no_consulta_permisos_editables_en_sql(self):
         for rol in ('USUARIO', 'ENCARGADO_PRESTAMOS', 'ADMINISTRADOR'):
             with self.subTest(rol=rol):
-                acceso = cuenta(rol)
+                acceso = crear_cuenta_de_prueba(rol)
                 fila = dict(
                     id_usuario=acceso.id_usuario, dni=acceso.dni,
                     nombre_usuario=acceso.nombre_usuario, nombres=acceso.nombres,
@@ -55,7 +57,7 @@ class PermisosFijosTest(unittest.TestCase):
                 repo = RepositorioSQL(conexion=Mock())
                 with patch.object(repo, 'consultar_sql', side_effect=[dict(rol=rol)]):
                     actor = repo.consultar_cuenta_actor(1)
-                self.assertEqual(actor['permisos'], cuenta(rol).permisos)
+                self.assertEqual(actor['permisos'], crear_cuenta_de_prueba(rol).permisos)
 
     def test_asignacion_conserva_validacion_y_ultimo_administrador(self):
         repo = Mock()
@@ -63,22 +65,26 @@ class PermisosFijosTest(unittest.TestCase):
         admin = dict(
             id_usuario=1, dni_persona='20000001', rol='ADMINISTRADOR', estado_cuenta='ACTIVA',
             estado_persona='ACTIVA', debe_cambiar_clave=False,
+            nombre_usuario='admin', contrasena_hash='hash-de-prueba',
             permisos=permisos_del_rol('ADMINISTRADOR'),
         )
-        usuario = dict(admin, id_usuario=2, dni_persona='20000002', rol='USUARIO')
+        usuario = dict(admin, id_usuario=2, dni_persona='20000002', rol='USUARIO', nombre_usuario='usuario')
         repo.consultar_cuenta_actor.return_value = admin
         repo.consultar_cuentas_para_actualizar.return_value = [admin, usuario]
         servicio = ServicioAplicacionCuenta(repo)
-        servicio.asignar_rol_cuenta('20000002', 'ENCARGADO_PRESTAMOS', 1)
+        datos = dict(rol='ENCARGADO_PRESTAMOS', version=version_cuenta(usuario))
+        servicio.actualizar_cuenta('20000002', datos, 1)
         repo.actualizar_cuenta.assert_called_once_with(2, {'rol': 'ENCARGADO_PRESTAMOS'})
         repo.actualizar_cuenta.reset_mock()
         with self.assertRaisesRegex(ValueError, 'Rol inexistente'):
-            servicio.asignar_rol_cuenta('20000002', 'OTRO', 1)
+            servicio.actualizar_cuenta('20000002', dict(datos, rol='OTRO'), 1)
+        with self.assertRaises(Conflicto):
+            servicio.actualizar_cuenta('20000002', dict(datos, version='anterior'), 1)
         with self.assertRaisesRegex(ValueError, 'al menos una cuenta administradora'):
-            servicio.asignar_rol_cuenta('20000001', 'USUARIO', 1)
+            servicio.actualizar_cuenta('20000001', dict(rol='USUARIO', version=version_cuenta(admin)), 1)
         repo.actualizar_cuenta.assert_not_called()
         repo.consultar_cuenta_actor.return_value = dict(
             admin, rol='ENCARGADO_PRESTAMOS', permisos=permisos_del_rol('ENCARGADO_PRESTAMOS')
         )
         with self.assertRaises(PermissionError):
-            servicio.asignar_rol_cuenta('20000002', 'ADMINISTRADOR', 1)
+            servicio.actualizar_cuenta('20000002', dict(datos, rol='ADMINISTRADOR'), 1)

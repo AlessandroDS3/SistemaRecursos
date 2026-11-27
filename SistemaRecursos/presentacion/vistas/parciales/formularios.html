@@ -1,9 +1,9 @@
 {% from 'parciales/componentes.html' import texto_estado %}
-{% macro csrf() %}
+{% macro campo_oculto_csrf() %}
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 {% endmacro %}
-{% macro campo(nombre, etiqueta, valor='', tipo='text', requerido=false, maximo=255, formulario='') %}
-  {% set identificador = identificador_campo(nombre) %}
+{% macro campo_de_formulario(nombre, etiqueta, valor='', tipo='text', requerido=false, maximo=255, formulario='') %}
+  {% set identificador = generar_id_del_campo(nombre) %}
   {% set error = error_campo(nombre, formulario) %}
   {% set valor = valor_formulario(nombre, valor, formulario) if tipo != 'password' else '' %}
   <label>
@@ -20,8 +20,8 @@
     {% if error %}<small class="error-campo" id="{{ identificador }}-error">{{ error }}</small>{% endif %}
   </label>
 {% endmacro %}
-{% macro opciones(nombre, etiqueta, valores, actual='', formulario='') %}
-  {% set identificador = identificador_campo(nombre) %}
+{% macro selector_de_opciones(nombre, etiqueta, valores, actual='', formulario='') %}
+  {% set identificador = generar_id_del_campo(nombre) %}
   {% set actual = valor_formulario(nombre, actual, formulario) %}
   {% set error = error_campo(nombre, formulario) %}
   <label>
@@ -40,7 +40,7 @@
     {% if error %}<small class="error-campo" id="{{ identificador }}-error">{{ error }}</small>{% endif %}
   </label>
 {% endmacro %}
-{% macro historial(filas) %}
+{% macro tabla_de_historial(filas) %}
   <h2>Historial</h2>
   <div class="tabla">
     <table>

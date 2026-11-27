@@ -4,7 +4,7 @@ from dominio.compartido.validacion import Conflicto
 from repositorio.base_datos.base_sql import RepositorioSQL
 
 
-def cargar_cuentas_para_actualizar(repo) -> list[dict]:
+def consultar_y_bloquear_cuentas_para_edicion(repo) -> list[dict]:
     """Bloquea cuentas y personas en orden de cuenta hasta terminar la transacción."""
     return repo.consultar_sql('''SELECT u.id_usuario,u.dni_persona,u.nombre_usuario,
         u.contrasena_hash,u.debe_cambiar_clave,u.rol,u.estado_cuenta,
@@ -40,7 +40,7 @@ class RepositorioCuentaSQL(RepositorioSQL):
 
     def consultar_cuenta_para_cambiar_clave(self, identificador: int) -> dict | None:
         return self.consultar_sql(
-            '''SELECT u.id_usuario,u.contrasena_hash,u.debe_cambiar_clave,u.estado_cuenta,p.estado AS estado_persona
+            '''SELECT u.id_usuario,u.dni_persona,u.contrasena_hash,u.debe_cambiar_clave,u.estado_cuenta,p.estado AS estado_persona
             FROM usuario_sistema u JOIN persona p ON p.dni=u.dni_persona
             WHERE u.id_usuario=%s FOR UPDATE''',
             (identificador,),
@@ -57,7 +57,10 @@ class RepositorioCuentaSQL(RepositorioSQL):
         )
 
     def consultar_cuentas_para_actualizar(self) -> list[dict]:
-        return cargar_cuentas_para_actualizar(self)
+        return consultar_y_bloquear_cuentas_para_edicion(self)
+
+    def cerrar_sesiones_de_cuenta(self, identificador):
+        cerrar_sesiones_de_cuenta(self, identificador)
 
     def registrar_cuenta(self, documento: str, nombre: str, hash_clave: str) -> int:
         return self._insertar_cuenta(documento, nombre, hash_clave, 'USUARIO')
@@ -78,7 +81,7 @@ class RepositorioCuentaSQL(RepositorioSQL):
         return self._insertar_cuenta(persona.dni, nombre, hash_clave, 'ADMINISTRADOR')
 
     def _insertar_cuenta(self, documento: str, nombre: str, hash_clave: str, rol: str) -> int:
-        return self.insertar(
+        return self.insertar_fila_sql(
             'usuario_sistema',
             dict(
                 dni_persona=documento,
@@ -102,18 +105,12 @@ class RepositorioCuentaSQL(RepositorioSQL):
             raise ValueError('Campo de cuenta desconocido.')
         if datos:
             columnas = ','.join(campo + '=%s' for campo in datos)
-            self.ejecutar(
+            self.ejecutar_escritura_sql(
                 'UPDATE usuario_sistema SET ' + columnas + ' WHERE id_usuario=%s',
                 (*datos.values(), identificador),
             )
 
-    def buscar_cuentas(self, termino: str) -> list[dict]:
-        return self.consultar_sql(
-            '''SELECT u.id_usuario,u.dni_persona,u.nombre_usuario,u.rol,u.estado_cuenta,
-            CONCAT(p.nombres,' ',p.apellidos) AS persona FROM usuario_sistema u
-            JOIN persona p ON p.dni=u.dni_persona
-            WHERE p.dni LIKE %s OR p.apellidos LIKE %s OR u.nombre_usuario LIKE %s
-                OR EXISTS(SELECT 1 FROM estudiante e WHERE e.dni=p.dni AND e.cui LIKE %s)
-            ORDER BY p.apellidos,p.nombres LIMIT 50''',
-            (f'%{termino}%',) * 4,
-        )
+
+def cerrar_sesiones_de_cuenta(repo, identificador):
+    repo.ejecutar_escritura_sql('''UPDATE sesion_usuario SET fecha_cierre=UTC_TIMESTAMP()
+        WHERE id_usuario=%s AND fecha_cierre IS NULL''', (identificador,))

@@ -86,7 +86,7 @@ Persona que pertenece al personal administrativo. Puede reservar y recibir biene
 | **RF13** | Registrar el préstamo al confirmar la entrega física dentro del horario de atención. Asociar el solicitante, el encargado y los bienes entregados. La entrega puede ser directa o proceder de una reserva preparada. |
 | **RF14** | Validar que cada bien esté disponible para la entrega directa o preparado para la reserva que se atiende. Exigir que la política permita la salida de cada bien si el préstamo es para uso externo. |
 | **RF15** | Calcular el plazo y la fecha límite de devolución por bien según su política. En los préstamos cuyo plazo se expresa en horas, limitar la devolución a la hora de cierre. |
-| **RF16** | Registrar préstamos individuales y grupales. Identificar en los grupales al responsable y a los demás participantes, y validar la elegibilidad de todos. |
+| **RF16** | Registrar préstamos individuales y grupales. Identificar en los grupales al responsable y a los demás participantes, y validar la elegibilidad y el cupo de todos. Cada bien pendiente del grupo cuenta una vez para cada integrante, incluido el responsable. |
 | **RF17** | Registrar devoluciones por bien con fecha, encargado que lo recibe, condición y observaciones. En devoluciones parciales, mantener pendientes los bienes restantes. |
 | **RF18** | Actualizar los estados del préstamo y de los bienes según la entrega, el vencimiento, la devolución o la regularización que corresponda. |
 | **RF19** | Permitir reservar un recurso para una fecha futura, consultar y cancelar reservas propias, y permitir al encargado preparar un bien, confirmar su entrega, rechazar o expirar una reserva. Liberar el bien preparado al cancelar, rechazar o vencer la reserva. |

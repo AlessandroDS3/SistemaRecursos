@@ -15,15 +15,15 @@ CAMPOS = '''s.*,i.tipo,i.id_detalle,d.id_prestamo,d.id_bien,d.id_politica,
 
 
 class RepositorioSancionSQL(RepositorioSQL):
-    def consultar_configuracion(self, bloquear=False):
+    def consultar_configuracion_sanciones(self, bloquear=False):
         return self.consultar_sql(
             '''SELECT dias_leve,dias_grave,dias_espera_perdida
             FROM configuracion_general WHERE id_configuracion=1'''
             + (' FOR UPDATE' if bloquear else ''), una=True,
         )
 
-    def guardar_configuracion(self, datos):
-        self.ejecutar(
+    def guardar_configuracion_sanciones(self, datos):
+        self.ejecutar_escritura_sql(
             '''UPDATE configuracion_general SET dias_leve=%s,dias_grave=%s,
             dias_espera_perdida=%s WHERE id_configuracion=1''',
             tuple(datos[k] for k in ('dias_leve', 'dias_grave', 'dias_espera_perdida')),
@@ -79,7 +79,7 @@ class RepositorioSancionSQL(RepositorioSQL):
         )
         return bool(filas)
 
-    def consultar_sancion_detalle(self, detalle):
+    def consultar_sancion_por_detalle_prestamo(self, detalle):
         return self.consultar_sql(
             'SELECT ' + CAMPOS + ' ' + TABLAS + ''' WHERE i.id_detalle=%s
             ORDER BY (s.estado='ACTIVA') DESC,s.id_sancion DESC LIMIT 1 FOR UPDATE''',
@@ -88,7 +88,7 @@ class RepositorioSancionSQL(RepositorioSQL):
         )
 
     def registrar_incidencia(self, detalle, tipo, descripcion, fecha):
-        return self.insertar(
+        return self.insertar_fila_sql(
             'incidencia',
             dict(
                 id_detalle=detalle,
@@ -99,28 +99,35 @@ class RepositorioSancionSQL(RepositorioSQL):
             ),
         )
 
+    def consultar_incidencia_sin_sancion(self, detalle, tipo):
+        return self.consultar_sql(
+            '''SELECT i.id_incidencia FROM incidencia i LEFT JOIN sancion s ON s.id_incidencia_ref=i.id_incidencia
+            WHERE i.id_detalle=%s AND i.tipo=%s AND s.id_sancion IS NULL
+            ORDER BY i.id_incidencia LIMIT 1 FOR UPDATE OF i''', (detalle, tipo), una=True,
+        )
+
     def registrar_sancion(self, datos):
-        return self.insertar('sancion', datos)
+        return self.insertar_fila_sql('sancion', datos)
 
     def actualizar_sancion(self, identificador, datos):
         permitidos = {
             'gravedad', 'fecha_inicio_nivel', 'fecha_fin', 'motivo', 'descripcion', 'estado',
             'fecha_regularizacion', 'tipo_regularizacion', 'dni_regularizacion',
             'observacion_regularizacion', 'id_bien_reposicion', 'fecha_levantamiento',
-            'dni_levantamiento', 'justificacion_levantamiento',
+            'dni_levantamiento', 'justificacion_levantamiento', 'fecha_recuperacion_original',
         }
         if not datos or set(datos) - permitidos:
             raise ValueError('Campos de sanción inválidos.')
-        self.ejecutar('UPDATE sancion SET ' + ','.join(k + '=%s' for k in datos)
+        self.ejecutar_escritura_sql('UPDATE sancion SET ' + ','.join(k + '=%s' for k in datos)
                       + ' WHERE id_sancion=%s', (*datos.values(), identificador))
 
     def actualizar_incidencia(self, identificador, datos):
         if not datos or set(datos) - {'tipo', 'estado', 'descripcion', 'dni_registrador'}:
             raise ValueError('Campos de incidencia inválidos.')
-        self.ejecutar('UPDATE incidencia SET ' + ','.join(k + '=%s' for k in datos)
+        self.ejecutar_escritura_sql('UPDATE incidencia SET ' + ','.join(k + '=%s' for k in datos)
                       + ' WHERE id_incidencia=%s', (*datos.values(), identificador))
 
-    def consultar_detalles_vencidos(self):
+    def consultar_detalles_de_prestamo_vencidos(self):
         return self.consultar_sql('''SELECT d.id_detalle,d.id_prestamo FROM detalle_prestamo d
             WHERE d.fecha_devolucion IS NULL AND d.fecha_regularizacion IS NULL
             AND d.fecha_limite_devolucion<UTC_TIMESTAMP()
@@ -128,7 +135,7 @@ class RepositorioSancionSQL(RepositorioSQL):
                 WHERE i.id_detalle=d.id_detalle)
             ORDER BY d.id_prestamo,d.id_detalle LIMIT 100''')
 
-    def consultar_sanciones_a_revisar(self):
+    def consultar_sanciones_activas_para_revision(self):
         return self.consultar_sql('''SELECT i.id_detalle,s.id_sancion FROM sancion s
             JOIN incidencia i ON i.id_incidencia=s.id_incidencia_ref
             WHERE s.estado='ACTIVA' AND s.gravedad<>'MUY_GRAVE'

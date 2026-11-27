@@ -9,6 +9,7 @@ if (formularioPrestamo) {
   const campoSolicitante = document.getElementById("buscar-solicitante");
   const resultadosSolicitante = document.getElementById("resultados-solicitante");
   const estadoSolicitante = document.getElementById("resultado-busqueda-persona");
+  const indicacionBusqueda = estadoSolicitante.textContent.trim();
   const uso = document.getElementById("uso-bienes");
   const modalidad = document.getElementById("modalidad");
   const grupo = document.getElementById("grupo");
@@ -33,7 +34,7 @@ if (formularioPrestamo) {
   });
 
   // Datos que se muestran de las personas.
-  function etiquetaTipo(tipo) {
+  function obtenerEtiquetaDelTipoDePersona(tipo) {
     const etiquetas = {
       ESTUDIANTE: "Estudiante",
       DOCENTE: "Docente",
@@ -42,7 +43,7 @@ if (formularioPrestamo) {
     return etiquetas[tipo] || tipo;
   }
 
-  function textoIdentificacion(persona) {
+  function formatearDocumentosDePersona(persona) {
     const documentos = [];
     if (persona.cui) {
       documentos.push("CUI: " + persona.cui);
@@ -74,7 +75,7 @@ if (formularioPrestamo) {
     const nombre = document.createElement("strong");
     nombre.textContent = persona.nombre_completo;
     const detalle = document.createElement("small");
-    detalle.textContent = textoIdentificacion(persona) + " · " + etiquetaTipo(persona.tipo);
+    detalle.textContent = formatearDocumentosDePersona(persona) + " · " + obtenerEtiquetaDelTipoDePersona(persona.tipo);
     const estado = document.createElement("span");
     if (persona.elegible) {
       estado.className = "estado-persona-prestamo activa";
@@ -103,7 +104,7 @@ if (formularioPrestamo) {
     resumenSolicitante.hidden = true;
     document.getElementById("busqueda-solicitante").hidden = false;
     formularioPrestamo.querySelector("[name=acepta_condiciones]").checked = false;
-    actualizarPoliticas();
+    actualizarCondicionesDeEntrega();
     campoSolicitante.focus();
   }
 
@@ -114,7 +115,7 @@ if (formularioPrestamo) {
     const nombre = document.createElement("strong");
     nombre.textContent = persona.nombre_completo;
     const detalle = document.createElement("small");
-    detalle.textContent = textoIdentificacion(persona) + " · " + etiquetaTipo(persona.tipo);
+    detalle.textContent = formatearDocumentosDePersona(persona) + " · " + obtenerEtiquetaDelTipoDePersona(persona.tipo);
     const datosPersona = document.createElement("div");
     datosPersona.append(nombre, detalle);
     const avatar = document.createElement("span");
@@ -131,17 +132,17 @@ if (formularioPrestamo) {
     formularioPrestamo.querySelector("[name=acepta_condiciones]").checked = false;
     if (participantes.has(String(persona.dni))) {
       participantes.delete(String(persona.dni));
-      pintarParticipantes();
+      mostrarParticipantesDelPrestamo();
     }
-    actualizarPoliticas();
+    actualizarCondicionesDeEntrega();
   }
 
   function agregarParticipante(persona) {
     participantes.set(String(persona.dni), persona);
-    pintarParticipantes();
+    mostrarParticipantesDelPrestamo();
   }
 
-  function pintarParticipantes() {
+  function mostrarParticipantesDelPrestamo() {
     const contenedor = document.getElementById("participantes-seleccionados");
     contenedor.replaceChildren();
     for (const persona of participantes.values()) {
@@ -152,8 +153,8 @@ if (formularioPrestamo) {
       oculto.name = "participantes";
       oculto.value = persona.dni;
       const etiqueta = document.createElement("span");
-      etiqueta.textContent = persona.nombre_completo + " · " + textoIdentificacion(persona);
-      if (!persona.elegible) etiqueta.textContent += ' · Persona no elegible';
+      etiqueta.textContent = persona.nombre_completo + " · " + formatearDocumentosDePersona(persona);
+      if (!persona.elegible) etiqueta.textContent += ' · No habilitada para préstamos';
       const quitar = document.createElement("button");
       quitar.type = "button";
       quitar.className = "secundario";
@@ -161,16 +162,16 @@ if (formularioPrestamo) {
       quitar.setAttribute("aria-label", "Quitar a " + persona.nombre_completo);
       quitar.addEventListener("click", () => {
         participantes.delete(String(persona.dni));
-        pintarParticipantes();
+        mostrarParticipantesDelPrestamo();
       });
       fila.append(oculto, etiqueta, quitar);
       contenedor.append(fila);
     }
-    actualizarPoliticas();
+    actualizarCondicionesDeEntrega();
   }
 
   // Politicas y fechas estimadas. El servidor confirma los plazos al registrar.
-  function politicaDelBien(bien) {
+  function obtenerPoliticaAplicableAlBien(bien) {
     for (const regla of reglas) {
       if (regla.dataset.persona === tipoSolicitante.value
           && regla.dataset.categoria === String(bien.id_categoria)) {
@@ -180,7 +181,7 @@ if (formularioPrestamo) {
     return null;
   }
 
-  function horarioActual() {
+  function consultarHorarioDeAtencionActual() {
     const ahora = new Date();
     const partes = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit",
@@ -190,25 +191,31 @@ if (formularioPrestamo) {
     const cierre = formularioPrestamo.dataset.cierre;
     const hora = partes.hour + ":" + partes.minute;
     const fecha = partes.year + "-" + partes.month + "-" + partes.day;
-    return { cerrado: !apertura || !cierre || hora < apertura || hora >= cierre,
+    const diaLima = (new Date(fecha + "T00:00:00Z").getUTCDay() + 6) % 7;
+    const atiendeHoy = formularioPrestamo.dataset.dias.split(",").includes(String(diaLima));
+    return { cerrado: !atiendeHoy || !apertura || !cierre || hora < apertura || hora >= cierre,
       cierre: new Date(fecha + "T" + cierre + ":00-05:00") };
   }
 
   function calcularFechaDevolucion(bien) {
-    const politica = politicaDelBien(bien);
+    const politica = obtenerPoliticaAplicableAlBien(bien);
     if (!politica) return null;
     const limite = Date.now() + Number(politica.horas) * 3600000;
-    return new Date(politica.unidad === "HORAS" ? Math.min(limite, horarioActual().cierre.getTime()) : limite);
+    if (politica.unidad === "HORAS") return new Date(Math.min(limite, consultarHorarioDeAtencionActual().cierre.getTime()));
+    const dias = formularioPrestamo.dataset.dias.split(",");
+    const diaLima = (new Date(limite - 5 * 3600000).getUTCDay() + 6) % 7;
+    const espera = Math.min(...dias.map(dia => (Number(dia) - diaLima + 7) % 7));
+    return new Date(limite + espera * 86400000);
   }
 
-  function actualizarPoliticas() {
-    const cerrado = horarioActual().cerrado;
+  function actualizarCondicionesDeEntrega() {
+    const cerrado = consultarHorarioDeAtencionActual().cerrado;
     document.getElementById("atencion-cerrada").hidden = !cerrado;
     let faltaPolitica = false;
     let salidaNoPermitida = false;
     const solicitaSalida = uso.querySelector("input:checked").value === "1";
     for (const bien of bienesElegidos.values()) {
-      const politica = politicaDelBien(bien);
+      const politica = obtenerPoliticaAplicableAlBien(bien);
       if (tipoSolicitante.value && !politica) {
         faltaPolitica = true;
       }
@@ -225,12 +232,12 @@ if (formularioPrestamo) {
       || (modalidad.querySelector("input:checked").value === "GRUPAL" && [...participantes.values()].some(p => !p.elegible))
       || !formularioPrestamo.elements.acepta_condiciones.checked
       || (modalidad.querySelector("input:checked").value === "GRUPAL" && participantes.size === 0);
-    pintarBienes();
-    actualizarResumen();
+    mostrarBienesSeleccionados();
+    actualizarResumenDelPrestamo();
     return faltaPolitica || salidaNoPermitida || cerrado;
   }
 
-  function actualizarResumen() {
+  function actualizarResumenDelPrestamo() {
     const nombre = resumenSolicitante.querySelector("strong");
     let solicitante = "Sin seleccionar";
     if (nombre) solicitante = nombre.textContent;
@@ -258,7 +265,7 @@ if (formularioPrestamo) {
     document.getElementById("resumen-devolucion").textContent = textoFecha;
   }
 
-  function crearFilaBien(bien) {
+  function crearFilaDeBienSeleccionado(bien) {
     const fila = document.createElement("article");
     fila.className = "prestamo-bien";
     const oculto = document.createElement("input");
@@ -277,7 +284,7 @@ if (formularioPrestamo) {
 
     const resumenPolitica = document.createElement("div");
     resumenPolitica.className = "prestamo-bien-reglas";
-    const politica = politicaDelBien(bien);
+    const politica = obtenerPoliticaAplicableAlBien(bien);
     if (politica) {
       const plazo = document.createElement("strong");
       plazo.className = "prestamo-plazo";
@@ -286,12 +293,12 @@ if (formularioPrestamo) {
       if (politica.salida === "1") permisoSalida = "Salida permitida";
       resumenPolitica.append(plazo, document.createTextNode(" · " + permisoSalida));
     } else if (tipoSolicitante.value) {
-      resumenPolitica.textContent = "Sin política configurada";
+      resumenPolitica.textContent = "Sin política de préstamo";
     } else {
-      resumenPolitica.textContent = "Selecciona al solicitante para ver el plazo.";
+      resumenPolitica.textContent = "Selecciona un solicitante.";
     }
     identidad.append(resumenPolitica);
-    if (bien.estado && bien.estado !== 'DISPONIBLE') resumenPolitica.textContent = 'Este bien ya no está disponible. Quítalo y selecciona otro ejemplar.';
+    if (bien.estado && bien.estado !== 'DISPONIBLE') resumenPolitica.textContent = 'Bien no disponible. Selecciona otro.';
 
     const devolucion = document.createElement("div");
     devolucion.className = "prestamo-bien-fecha";
@@ -309,25 +316,24 @@ if (formularioPrestamo) {
     quitar.setAttribute("aria-label", "Quitar " + bien.codigo_inventario);
     quitar.addEventListener("click", () => {
       bienesElegidos.delete(String(bien.id_bien));
-      actualizarPoliticas();
+      actualizarCondicionesDeEntrega();
       document.getElementById("buscar-bien").dispatchEvent(new Event("search"));
     });
     fila.append(oculto, identidad, devolucion, quitar);
     return fila;
   }
 
-  function pintarBienes() {
+  function mostrarBienesSeleccionados() {
     const contenedor = document.getElementById("bienes-seleccionados");
     contenedor.replaceChildren();
     document.getElementById("cantidad-bienes").textContent = "BIENES SELECCIONADOS · " + bienesElegidos.size;
-    document.getElementById("bienes-vacios").hidden = bienesElegidos.size > 0;
     for (const bien of bienesElegidos.values()) {
-      contenedor.append(crearFilaBien(bien));
+      contenedor.append(crearFilaDeBienSeleccionado(bien));
     }
   }
 
   // Cada buscador conserva su temporizador y su solicitud pendiente.
-  function consultarPersonas(campo, resultados, estado, paraParticipantes = false) {
+  function configurarBusquedaDePersonas(campo, resultados, estado, paraParticipantes = false) {
     let temporizador;
     let solicitudActiva = null;
 
@@ -344,14 +350,14 @@ if (formularioPrestamo) {
       resultados.hidden = true;
     }
 
-    async function consultar() {
+    async function buscarPersonasPorTermino() {
       clearTimeout(temporizador);
       if (solicitudActiva) solicitudActiva.abort();
       const termino = campo.value.trim();
       resultados.replaceChildren();
       resultados.hidden = true;
       if (termino.length < 2) {
-        estado.textContent = "Escribe al menos 2 caracteres.";
+        estado.textContent = indicacionBusqueda;
         return;
       }
       const solicitud = new AbortController();
@@ -374,10 +380,10 @@ if (formularioPrestamo) {
         }
         resultados.hidden = cantidad === 0;
         if (cantidad > 0) {
-          estado.textContent = cantidad + " coincidencia(s). Selecciona la persona correcta.";
+          estado.textContent = cantidad + (cantidad === 1 ? " coincidencia." : " coincidencias.");
           if (datos.resultados.length === datos.limite) estado.textContent += " Afina la búsqueda si no aparece.";
         } else {
-          estado.textContent = "No encontramos personas elegibles con esos datos.";
+          estado.textContent = "No se encontraron personas para seleccionar.";
         }
       } catch (error) {
         if (!solicitud.signal.aborted && solicitudActiva === solicitud && termino === campo.value.trim()) {
@@ -391,15 +397,15 @@ if (formularioPrestamo) {
       if (solicitudActiva) solicitudActiva.abort();
       resultados.replaceChildren();
       resultados.hidden = true;
-      temporizador = setTimeout(consultar, 250);
+      temporizador = setTimeout(buscarPersonasPorTermino, 250);
     });
     campo.addEventListener("keydown", evento => {
       if (evento.key === "Enter") {
         evento.preventDefault();
-        consultar();
+        buscarPersonasPorTermino();
       }
     });
-    campo.addEventListener("search", () => consultar());
+    campo.addEventListener("search", () => buscarPersonasPorTermino());
   }
 
   function crearOpcionBien(bien, agregar) {
@@ -421,7 +427,7 @@ if (formularioPrestamo) {
     return boton;
   }
 
-  function consultarBienes() {
+  function configurarBusquedaDeBienes() {
     const campo = document.getElementById("buscar-bien");
     const resultados = document.getElementById("resultados-bienes");
     const estado = document.getElementById("estado-bienes");
@@ -430,11 +436,11 @@ if (formularioPrestamo) {
 
     function agregarBien(bien) {
       bienesElegidos.set(String(bien.id_bien), bien);
-      actualizarPoliticas();
-      consultar();
+      actualizarCondicionesDeEntrega();
+      buscarBienesDisponibles();
     }
 
-    async function consultar() {
+    async function buscarBienesDisponibles() {
       clearTimeout(temporizador);
       if (solicitudActiva) solicitudActiva.abort();
       const termino = campo.value.trim();
@@ -446,11 +452,11 @@ if (formularioPrestamo) {
         const iniciales = JSON.parse(formularioPrestamo.dataset.bienesIniciales || "[]");
         for (const bien of iniciales) resultados.append(crearOpcionBien(bien, agregarBien));
         resultados.hidden = iniciales.length === 0;
-        estado.textContent = iniciales.length + " bien(es) cargado(s). Selecciona los que se llevará.";
+        estado.textContent = "Bienes encontrados: " + iniciales.length;
         return;
       }
       if (termino.length < 2 && !recurso) {
-        estado.textContent = "Escribe al menos 2 caracteres.";
+        estado.textContent = indicacionBusqueda;
         return;
       }
       const solicitud = new AbortController();
@@ -468,7 +474,7 @@ if (formularioPrestamo) {
         for (const bien of datos.resultados) resultados.append(crearOpcionBien(bien, agregarBien));
         resultados.hidden = resultados.childElementCount === 0;
         if (datos.resultados.length > 0) {
-          estado.textContent = datos.resultados.length + " bien(es) cargado(s). Selecciona los que se llevará.";
+          estado.textContent = "Bienes encontrados: " + datos.resultados.length;
         } else {
           estado.textContent = "No hay bienes disponibles con esos datos.";
         }
@@ -485,34 +491,34 @@ if (formularioPrestamo) {
       if (solicitudActiva) solicitudActiva.abort();
       resultados.replaceChildren();
       resultados.hidden = true;
-      temporizador = setTimeout(consultar, 250);
+      temporizador = setTimeout(buscarBienesDisponibles, 250);
     });
     campo.addEventListener("keydown", evento => {
       if (evento.key === "Enter") {
         evento.preventDefault();
-        consultar();
+        buscarBienesDisponibles();
       }
     });
-    campo.addEventListener("search", () => consultar());
-    consultar();
+    campo.addEventListener("search", () => buscarBienesDisponibles());
+    buscarBienesDisponibles();
   }
 
-  consultarPersonas(campoSolicitante, resultadosSolicitante, estadoSolicitante);
-  consultarPersonas(
+  configurarBusquedaDePersonas(campoSolicitante, resultadosSolicitante, estadoSolicitante);
+  configurarBusquedaDePersonas(
     document.getElementById("buscar-participante"),
     document.getElementById("resultados-participantes"),
     document.getElementById("estado-participantes"),
     true
   );
-  consultarBienes();
+  configurarBusquedaDeBienes();
   modalidad.addEventListener("change", () => {
     grupo.hidden = modalidad.querySelector("input:checked").value !== "GRUPAL";
     grupo.disabled = grupo.hidden;
-    actualizarPoliticas();
+    actualizarCondicionesDeEntrega();
   });
-  formularioPrestamo.elements.acepta_condiciones.addEventListener("change", actualizarPoliticas);
-  uso.addEventListener("change", actualizarPoliticas);
-  actualizarPoliticas();
+  formularioPrestamo.elements.acepta_condiciones.addEventListener("change", actualizarCondicionesDeEntrega);
+  uso.addEventListener("change", actualizarCondicionesDeEntrega);
+  actualizarCondicionesDeEntrega();
 
   formularioPrestamo.addEventListener("submit", evento => {
     if (!seleccionSolicitante.value) {
@@ -521,13 +527,13 @@ if (formularioPrestamo) {
       campoSolicitante.focus();
     } else if (bienesElegidos.size === 0) {
       evento.preventDefault();
-      document.getElementById("estado-bienes").textContent = "Agrega al menos un bien disponible.";
+      document.getElementById("estado-bienes").textContent = "Selecciona los bienes.";
       document.getElementById("buscar-bien").focus();
     } else if (modalidad.querySelector("input:checked").value === "GRUPAL" && participantes.size === 0) {
       evento.preventDefault();
       document.getElementById("estado-participantes").textContent = "Agrega al menos otro participante.";
       document.getElementById("buscar-participante").focus();
-    } else if (actualizarPoliticas()) {
+    } else if (actualizarCondicionesDeEntrega()) {
       evento.preventDefault();
       const faltaPolitica = document.getElementById("politica-faltante");
       if (!faltaPolitica.hidden) faltaPolitica.focus();
@@ -535,11 +541,11 @@ if (formularioPrestamo) {
       else document.getElementById("atencion-cerrada").focus();
     }
   });
-  setInterval(actualizarPoliticas, 15000);
+  setInterval(actualizarCondicionesDeEntrega, 15000);
 
   if (previos) {
     (async () => {
-      async function recuperarPersona(dni) {
+      async function buscarPersonaPorDni(dni) {
         const url = new URL(formularioPrestamo.dataset.personasUrl, window.location.origin);
         url.searchParams.set('q', dni);
         const respuesta = await fetch(url, {headers:{Accept:'application/json'}});
@@ -548,21 +554,21 @@ if (formularioPrestamo) {
       }
       const responsable = previos.dni_persona?.[0];
       if (responsable) {
-        const persona = await recuperarPersona(responsable);
+        const persona = await buscarPersonaPorDni(responsable);
         if (persona) seleccionarSolicitante(persona);
       }
       const documentos = (previos.participantes || []).flatMap(valor => valor.split(',').map(d => d.trim())).filter(Boolean);
       for (const dni of documentos) {
-        const persona = await recuperarPersona(dni);
+        const persona = await buscarPersonaPorDni(dni);
         if (persona && dni !== responsable) participantes.set(dni, persona);
       }
-      pintarParticipantes();
+      mostrarParticipantesDelPrestamo();
       grupo.hidden = modalidad.querySelector('input:checked').value !== 'GRUPAL';
       grupo.disabled = grupo.hidden;
       formularioPrestamo.elements.acepta_condiciones.checked = previos.acepta_condiciones?.includes('1') || false;
-      actualizarPoliticas();
+      actualizarCondicionesDeEntrega();
     })().catch(() => {
-      estadoSolicitante.textContent = 'Los bienes se conservaron. Busca de nuevo al solicitante para continuar.';
+      estadoSolicitante.textContent = 'Selecciona nuevamente al solicitante.';
     });
   }
 
