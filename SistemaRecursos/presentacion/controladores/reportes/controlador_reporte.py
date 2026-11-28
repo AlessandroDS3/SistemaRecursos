@@ -1,3 +1,5 @@
+from base64 import b64encode
+
 from flask import Blueprint, Response, g, render_template, request
 from reportlab.graphics import renderSVG
 
@@ -14,6 +16,11 @@ from presentacion.reportes.graficos_reportes import preparar_graficos
 from presentacion.seguridad import requiere_permiso
 from servicios.reportes.catalogo_reportes import OPCIONES_FILTROS, REPORTES
 from servicios.reportes.historial import textos_de_incidencia
+
+
+def svg_como_data_uri(svg):
+    """La plantilla muestra el SVG dentro de <img>: así nunca se interpreta como HTML ni ejecuta scripts."""
+    return 'data:image/svg+xml;base64,' + b64encode(svg.encode('utf-8')).decode('ascii')
 
 
 class ControladorReporte:
@@ -54,7 +61,10 @@ class ControladorReporte:
         if not resultado['filtro'].tipo.startswith('historial_'):
             resultado['graficos'] = preparar_graficos(resultado['filtro'].tipo, resultado['filas'])
             if resultado['graficos']:
-                resultado['graficos']['svg'] = [renderSVG.drawToString(d) for d in dibujar_graficos_de_reporte(resultado['graficos'])]
+                resultado['graficos']['svg'] = [
+                    svg_como_data_uri(renderSVG.drawToString(d))
+                    for d in dibujar_graficos_de_reporte(resultado['graficos'])
+                ]
         return render_template(
             (
                 'reportes/vista_historial.html'

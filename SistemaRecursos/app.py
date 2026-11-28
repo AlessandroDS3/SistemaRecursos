@@ -5,6 +5,7 @@ from pathlib import Path
 from secrets import token_hex
 
 from flask import Flask
+from werkzeug.serving import WSGIRequestHandler
 
 from repositorio.base_datos.conexion_mysql import MySQLConnection
 from repositorio.personas_usuarios.repositorio_acceso_sql import RepositorioAccesoSQL
@@ -143,6 +144,13 @@ def create_app(config=None):
     return app
 
 
+class ManejadorSinVersion(WSGIRequestHandler):
+    """La cabecera Server no revela las versiones de Werkzeug ni de Python."""
+
+    def version_string(self):
+        return 'SistemaRecursos'
+
+
 def iniciar_servidor_web(argv=None):
     parser = ArgumentParser(description='Inicia el servidor web del Sistema de Recursos.')
     parser.add_argument('--sin-procesador', action='store_true',
@@ -157,7 +165,8 @@ def iniciar_servidor_web(argv=None):
             servicios['sanciones'], servicios['reservas'], servicios['procesador']
         )
     try:
-        app.run(host='127.0.0.1', port=int(os.getenv('PORT', '5001')), use_reloader=False)
+        app.run(host='127.0.0.1', port=int(os.getenv('PORT', '5001')), use_reloader=False,
+                request_handler=ManejadorSinVersion)
     finally:
         if detener is not None:
             detener.set()

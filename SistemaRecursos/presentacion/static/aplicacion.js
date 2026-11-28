@@ -133,7 +133,7 @@ document.querySelectorAll('[data-ampliacion-previa]').forEach(formulario => {
   function programarConsultaDeAmpliacion() { clearTimeout(temporizador); solicitud?.abort(); boton.disabled = true; temporizador = setTimeout(consultarFechaPreviaDeAmpliacion, 250); }
   formulario.elements.cantidad.addEventListener('input', programarConsultaDeAmpliacion);
   formulario.elements.unidad.addEventListener('change', programarConsultaDeAmpliacion);
-  if (formulario.elements.cantidad.value) consultarFechaPreviaDeAmpliacion();
+  if (formulario.elements.cantidad.value) void consultarFechaPreviaDeAmpliacion();
 });
 
 const mostrarClave = document.querySelector('[data-mostrar-clave]');

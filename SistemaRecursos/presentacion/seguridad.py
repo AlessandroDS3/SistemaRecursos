@@ -5,6 +5,26 @@ from hmac import compare_digest
 from secrets import token_urlsafe
 from flask import abort, flash, g, redirect, request, session, url_for
 
+POLITICA_CONTENIDO = (
+    "default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self'; "
+    "img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; "
+    "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+)
+CABECERAS_SEGURIDAD = {
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'same-origin',
+    # Los navegadores solo la aplican cuando el sitio se sirve por HTTPS.
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+}
+
+
+def csp_nonce():
+    """Nonce de la petición para los <script> en línea permitidos por la CSP."""
+    if 'csp_nonce' not in g:
+        g.csp_nonce = token_urlsafe(16)
+    return g.csp_nonce
+
 
 def csrf_token():
     if 'csrf' not in session:
@@ -40,6 +60,14 @@ def requiere_permiso(*permisos):
 def configurar_seguridad(app, acceso):
     """Instala sesión, permisos y validación CSRF global para POST, PUT, PATCH y DELETE."""
     app.jinja_env.globals['csrf_token'] = csrf_token
+    app.jinja_env.globals['csp_nonce'] = csp_nonce
+
+    @app.after_request
+    def agregar_cabeceras_de_seguridad(respuesta):
+        respuesta.headers['Content-Security-Policy'] = POLITICA_CONTENIDO.format(nonce=csp_nonce())
+        for nombre, valor in CABECERAS_SEGURIDAD.items():
+            respuesta.headers.setdefault(nombre, valor)
+        return respuesta
 
     @app.before_request
     def recuperar_sesion():

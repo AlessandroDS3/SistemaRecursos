@@ -124,7 +124,7 @@
 
   <section id="cronologia"><h2 id="titulo-cronologia">Cronología</h2>
     <p class="suave">{{ 'Hora de Lima.' if propio else 'Eventos del más reciente al más antiguo, en hora de Lima.' }}</p>
-    <div class="tabla panel tabla-cronologia tabla-teclado" tabindex="0" role="region" aria-labelledby="titulo-cronologia"><table>
+    <div class="tabla panel tabla-cronologia tabla-teclado" role="region" aria-labelledby="titulo-cronologia"><table>
       <thead><tr><th scope="col">Evento y fecha</th><th scope="col">Referencia</th><th scope="col">Cambio de estado</th><th scope="col">Registrado por</th><th scope="col">Observación</th></tr></thead><tbody>
       {% for e in filas %}<tr>
         <td><strong>{{ e.evento }}</strong><small>{{ e.fecha|fecha }}</small></td>

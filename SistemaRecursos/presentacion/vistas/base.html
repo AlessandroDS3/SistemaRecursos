@@ -8,7 +8,7 @@
         Sistema de préstamos · UNSA
       {% endblock %}
     </title>
-    <script>
+    <script nonce="{{ csp_nonce() }}">
       try { const tema = localStorage.getItem('tema'); if (tema) document.documentElement.dataset.theme = tema; } catch (e) {}
     </script>
     <link rel="preload" href="{{ url_for('static', filename='fuentes/inter-latin.woff2') }}" as="font" type="font/woff2" crossorigin>

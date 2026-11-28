@@ -41,7 +41,7 @@ def _calcular_serie_de_frecuencias(pares):
         fin = 360 * acumulado / total if total else 0
         sectores.append(f'{color} {inicio:.6f}deg {fin:.6f}deg')
         elementos.append(dict(
-            etiqueta=etiqueta, cantidad=cantidad, color=color,
+            etiqueta=etiqueta, cantidad=cantidad, color=color, indice_color=indice % len(COLORES),
             porcentaje=round(100 * cantidad / total, 1) if total else 0,
             ancho=round(100 * cantidad / maximo, 2) if maximo else 0,
         ))

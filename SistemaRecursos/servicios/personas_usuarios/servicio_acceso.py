@@ -20,7 +20,8 @@ registro = logging.getLogger(__name__)
 class ServicioAplicacionAcceso:
     def __init__(self, repositorio: IRepositorioAcceso, limitador_usuario=None, limitador_origen=None):
         self.repositorio = repositorio
-        self._hash_ausente = generate_password_hash('cuenta-ausente', method='scrypt')
+        # Hash de una clave aleatoria: iguala el tiempo de respuesta cuando la cuenta no existe.
+        self._hash_ausente = generate_password_hash(token_urlsafe(32), method='scrypt')
         # Un laboratorio comparte IP: el límite por origen es más alto que por cuenta.
         self.limitador_usuario = limitador_usuario or LimitadorIntentos(maximo=5)
         self.limitador_origen = limitador_origen or LimitadorIntentos(maximo=20)

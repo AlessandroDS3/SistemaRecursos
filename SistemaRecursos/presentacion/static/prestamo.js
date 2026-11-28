@@ -402,7 +402,7 @@ if (formularioPrestamo) {
     campo.addEventListener("keydown", evento => {
       if (evento.key === "Enter") {
         evento.preventDefault();
-        buscarPersonasPorTermino();
+        void buscarPersonasPorTermino();
       }
     });
     campo.addEventListener("search", () => buscarPersonasPorTermino());
@@ -437,7 +437,7 @@ if (formularioPrestamo) {
     function agregarBien(bien) {
       bienesElegidos.set(String(bien.id_bien), bien);
       actualizarCondicionesDeEntrega();
-      buscarBienesDisponibles();
+      void buscarBienesDisponibles();
     }
 
     async function buscarBienesDisponibles() {
@@ -496,11 +496,11 @@ if (formularioPrestamo) {
     campo.addEventListener("keydown", evento => {
       if (evento.key === "Enter") {
         evento.preventDefault();
-        buscarBienesDisponibles();
+        void buscarBienesDisponibles();
       }
     });
     campo.addEventListener("search", () => buscarBienesDisponibles());
-    buscarBienesDisponibles();
+    void buscarBienesDisponibles();
   }
 
   configurarBusquedaDePersonas(campoSolicitante, resultadosSolicitante, estadoSolicitante);

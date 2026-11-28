@@ -8,10 +8,10 @@
     </figcaption>
     {% if serie.total %}
       <p class="estadistica-total"><strong>{{ serie.total }}</strong> {{ graficos.unidad }}</p>
-      <div class="estadistica-vector" role="img" aria-label="{{ titulo }}. Cantidades y porcentajes en la leyenda siguiente.">{{ graficos.svg[loop.index0]|safe }}</div>
+      <div class="estadistica-vector"><img src="{{ graficos.svg[loop.index0] }}" alt="{{ titulo }}. Cantidades y porcentajes en la leyenda siguiente."></div>
       <ul class="estadistica-leyenda">
         {% for item in serie.elementos %}
-        <li><span><i style="background: {{ item.color if circular else '#111113' }}" aria-hidden="true"></i>{{ loop.index }}. {{ item.etiqueta }}</span><span><strong>{{ item.cantidad }}</strong> · {{ item.porcentaje }} %</span></li>
+        <li><span><i class="color-serie-{{ item.indice_color if circular else 0 }}" aria-hidden="true"></i>{{ loop.index }}. {{ item.etiqueta }}</span><span><strong>{{ item.cantidad }}</strong> · {{ item.porcentaje }} %</span></li>
         {% endfor %}
       </ul>
     {% else %}

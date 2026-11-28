@@ -17,11 +17,19 @@
 .estadistica-leyenda li > span:last-child, .estadistica-fila > span:last-child { flex-shrink: 0; color: var(--suave); font-variant-numeric: tabular-nums; }
 .estadistica-leyenda li > span:last-child strong { color: var(--texto); }
 .estadistica-leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; }
+/* Mismos tonos que COLORES en graficos_reportes.py; clases en vez de style="" para cumplir la CSP. */
+.color-serie-0 { background: #111113; }
+.color-serie-1 { background: #7a0d2e; }
+.color-serie-2 { background: #8e8e94; }
+.color-serie-3 { background: #c4c4c8; }
+.color-serie-4 { background: #b3214d; }
+.color-serie-5 { background: #4a4a50; }
+.color-serie-6 { background: #e0b8c3; }
 .estadistica-pista { height: 8px; background: var(--fondo-activo); border-radius: 4px; overflow: hidden; margin-top: 6px; }
 .estadistica-pista span { display: block; height: 100%; background: var(--acento); border-radius: inherit; }
 .estadistica-nota { font-size: var(--letra-micro); margin-bottom: 0; }
 .estadistica-vacia { padding: 48px 0; text-align: center; }
 .estadistica-insignia { display: block; margin-bottom: 4px; font-size: var(--letra-micro); font-weight: 500; color: var(--suave); }
 .estadistica-vector { margin: 6px 0; padding: 10px; background: #fff; border-radius: var(--radio-control); }
-.estadistica-vector svg { width: 100%; max-width: 380px; height: auto; display: block; margin: 0 auto; }
+.estadistica-vector img { width: 100%; max-width: 380px; height: auto; display: block; margin: 0 auto; }
 @media (max-width: 900px) { .estadisticas-reportes { grid-template-columns: minmax(0, 1fr); } }
