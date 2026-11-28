@@ -427,7 +427,6 @@
             <td>
               {% if gestionar and not d.fecha_devolucion and not d.fecha_regularizacion %}
                 {{ selector_de_opciones('condicion_'~d.id_detalle,'Condición',('BUENO','DANADO')) }}
-                {{ campo_de_formulario('codigo_recibido_'~d.id_detalle,'Código del bien recibido',maximo=40) }}
                 <small id="aviso-danio-{{ d.id_detalle }}" class="aviso-condicion" data-aviso-danio role="status" hidden></small>
               {% elif d.condicion_devolucion %}{{ insignia_de_estado(d.condicion_devolucion) }}
               {% else %}{{ 'Repuesto' if d.fecha_regularizacion else 'Pendiente' }}{% endif %}

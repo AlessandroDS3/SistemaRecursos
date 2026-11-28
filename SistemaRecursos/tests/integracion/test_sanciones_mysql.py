@@ -96,7 +96,7 @@ class SancionesMySQLTest(BaseMySQLTest):
         return self.repo.consultar_sanciones()[0]
 
     def registrar_devolucion_del_bien_de_prueba(self, condicion='BUENO'):
-        self.prestamos.registrar_devolucion(1, dict(detalles=['1'], condicion_1=condicion, codigo_recibido_1='ORIGINAL',
+        self.prestamos.registrar_devolucion(1, dict(detalles=['1'], condicion_1=condicion,
                                                   observacion_1='Verificación física del bien'), 2)
 
     def reportar_perdida_del_bien_de_prueba(self):
@@ -290,7 +290,7 @@ class SancionesMySQLTest(BaseMySQLTest):
         self.registrar_reposicion_del_bien_de_prueba()
         self.assertEqual(self.prestamos_repo.consultar_prestamo(1)['estado_actual'], 'PARCIALMENTE_DEVUELTO')
         self.assertEqual(self.prestamos_repo.consultar_resumen_prestamos()['prestamos_pendientes'], 1)
-        self.prestamos.registrar_devolucion(1, dict(detalles=['2'], condicion_2='BUENO', codigo_recibido_2='OTRO'), 2)
+        self.prestamos.registrar_devolucion(1, dict(detalles=['2'], condicion_2='BUENO'), 2)
         self.assertEqual(self.prestamos_repo.consultar_prestamo(1)['estado_actual'], 'REGULARIZADO')
 
     def test_recuperacion_original_conserva_el_periodo_grave(self):

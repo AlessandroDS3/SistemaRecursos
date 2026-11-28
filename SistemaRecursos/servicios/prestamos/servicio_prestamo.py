@@ -187,7 +187,6 @@ class ServicioAplicacionPrestamo:
                     raise NoEncontrado('El bien seleccionado no pertenece al préstamo.')
                 detalle = por_id[devolucion.id_detalle]
                 devolucion.validar_bien_pendiente_de_devolucion(detalle)
-                devolucion.validar_codigo_recibido(detalle, datos.get(f'codigo_recibido_{devolucion.id_detalle}'))
             ahora = operacion.consultar_fecha_actual()
             for devolucion in devoluciones:
                 detalle = por_id[devolucion.id_detalle]

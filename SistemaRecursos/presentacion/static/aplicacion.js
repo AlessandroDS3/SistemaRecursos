@@ -68,7 +68,6 @@ if (recuperacionFormulario) {
 document.querySelectorAll('[data-fila-devolucion]').forEach(fila => {
   const seleccionar = fila.querySelector('[name="detalles"]');
   const condicion = fila.querySelector('select[name^="condicion_"]');
-  const codigo = fila.querySelector('input[name^="codigo_recibido_"]');
   const observacion = fila.querySelector('input[name^="observacion_"]');
   const avisoDanio = fila.querySelector('[data-aviso-danio]');
   if (!seleccionar || !condicion || !observacion) return;
@@ -80,7 +79,6 @@ document.querySelectorAll('[data-fila-devolucion]').forEach(fila => {
     condicion.setAttribute('aria-describedby', [condicion.getAttribute('aria-describedby'), avisoDanio.id].filter(Boolean).join(' '));
   }
   function actualizarCamposDeDevolucion() {
-    if (codigo) codigo.required = seleccionar.checked;
     observacion.required = seleccionar.checked && condicion.value === 'DANADO';
     observacion.setAttribute('aria-required', String(observacion.required));
     observacion.placeholder = condicion.value === 'DANADO' ? 'Describe el daño del bien' : 'Opcional';

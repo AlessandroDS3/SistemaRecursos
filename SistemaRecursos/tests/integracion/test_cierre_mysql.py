@@ -261,7 +261,7 @@ class CierreMySQLTest(BaseMySQLTest):
         self.assertIsNone(detalle['fecha_devolucion'])
         identificador = detalle['id_detalle']
         self.servicios['prestamos'].registrar_devolucion(prestamo, dict(detalles=[str(identificador)], **{
-            f'codigo_recibido_{identificador}': 'LAP-1', f'condicion_{identificador}': 'BUENO',
+            f'condicion_{identificador}': 'BUENO',
         }), 2)
         self.assertIsNotNone(self.consultar_detalle_por_prestamo_y_bien(prestamo, 1)['fecha_devolucion'])
 
@@ -396,8 +396,7 @@ class CierreMySQLTest(BaseMySQLTest):
         solicitud = ampliaciones.solicitar_ampliacion(prestamo, detalle['id_detalle'],
                                                       dict(cantidad='1', unidad='DIAS', motivo='Tesis'), 3)
         self.servicios['prestamos'].registrar_devolucion(prestamo, dict(
-            detalles=[str(detalle['id_detalle'])], **{f"condicion_{detalle['id_detalle']}": 'BUENO',
-                                                      f"codigo_recibido_{detalle['id_detalle']}": 'LAP-2'}), 2)
+            detalles=[str(detalle['id_detalle'])], **{f"condicion_{detalle['id_detalle']}": 'BUENO'}), 2)
         with self.assertRaisesRegex(Conflicto, 'Rechaza'):
             ampliaciones.aprobar_solicitud_ampliacion(solicitud, {}, 2)
         self.assertEqual(self.ejecutar_sql_de_prueba('SELECT estado FROM solicitud_ampliacion')[0]['estado'], 'PENDIENTE')
@@ -456,7 +455,7 @@ class CierreMySQLTest(BaseMySQLTest):
         prestamos = self.servicios['prestamos']
         prestamo = self.registrar_prestamo_de_prueba([1, 2])
         detalle = self.consultar_detalle_por_prestamo_y_bien(prestamo, 1)['id_detalle']
-        datos = dict(detalles=[str(detalle)], **{f'condicion_{detalle}': 'BUENO', f'codigo_recibido_{detalle}': 'LAP-1'})
+        datos = dict(detalles=[str(detalle)], **{f'condicion_{detalle}': 'BUENO'})
         prestamos.registrar_devolucion(prestamo, datos, 2)
         estado = self.ejecutar_sql_de_prueba('SELECT estado FROM prestamo WHERE id_prestamo=%s', (prestamo,))[0]['estado']
         self.assertEqual(estado, 'PARCIALMENTE_DEVUELTO')
@@ -495,7 +494,7 @@ class CierreMySQLTest(BaseMySQLTest):
 
         detalle = self.consultar_detalle_por_prestamo_y_bien(primero, 1)['id_detalle']
         prestamos.registrar_devolucion(primero, dict(detalles=[str(detalle)], **{
-            f'condicion_{detalle}': 'BUENO', f'codigo_recibido_{detalle}': 'LAP-1'}), 2)
+            f'condicion_{detalle}': 'BUENO'}), 2)
         self.assertEqual(prestamos.consultar_condiciones_prestamo('20000001')['pendientes'], 1)
         self.assertEqual(prestamos.consultar_condiciones_prestamo(integrante)['pendientes'], 2)
         self.assertTrue(self.registrar_prestamo_de_prueba([4], integrante))
@@ -723,7 +722,7 @@ class CierreMySQLTest(BaseMySQLTest):
         with self.assertRaisesRegex(Conflicto, 'ya se usó'):
             self.registrar_prestamo_de_prueba([2], '10000002', autorizacion=permiso)
         detalle = self.consultar_detalle_por_prestamo_y_bien(prestamo, 1)['id_detalle']
-        datos = dict(detalles=[str(detalle)], **{f'condicion_{detalle}': 'BUENO', f'codigo_recibido_{detalle}': 'LAP-1'})
+        datos = dict(detalles=[str(detalle)], **{f'condicion_{detalle}': 'BUENO'})
         with self.assertRaisesRegex(Conflicto, 'no corresponde'):
             servicio.registrar_devolucion(prestamo, dict(datos, autorizacion=permiso), 2)
         recepcion = servicio.autorizar_operacion_propia(dict(dni_operador='10000002', accion='DEVOLUCION', id_prestamo=prestamo, motivo='Recepción autorizada del ejemplar LAP-1.'), 1)
@@ -752,16 +751,16 @@ class CierreMySQLTest(BaseMySQLTest):
         self.assertEqual(self.ejecutar_sql_de_prueba('SELECT dni_persona FROM usuario_sistema WHERE id_usuario=3')[0]['dni_persona'], persona.dni)
         self.assertEqual(self.consultar_detalle_por_prestamo_y_bien(prestamo, 1)['id_politica'], 1)
 
-    def test_codigo_devolucion_y_rectificacion_administrativa(self):
+    def test_discrepancia_y_rectificacion_administrativa_de_devolucion(self):
         servicio = self.servicios['prestamos']
         prestamo = self.registrar_prestamo_de_prueba()
         detalle = self.consultar_detalle_por_prestamo_y_bien(prestamo, 1)['id_detalle']
         datos = dict(detalles=[str(detalle)], **{f'condicion_{detalle}': 'BUENO'})
-        with self.assertRaisesRegex(Conflicto, 'no coincide'):
-            servicio.registrar_devolucion(prestamo, dict(datos, **{f'codigo_recibido_{detalle}': 'LAP-2'}), 2)
         servicio.registrar_discrepancia_devolucion(prestamo, detalle, 'Se presentó LAP-2.', 2)
         self.assertIsNone(self.consultar_detalle_por_prestamo_y_bien(prestamo, 1)['fecha_devolucion'])
-        servicio.registrar_devolucion(prestamo, dict(datos, **{f'codigo_recibido_{detalle}': 'LAP-1'}), 2)
+        # La devolución ya no pide repetir el código de inventario mostrado en la fila.
+        servicio.registrar_devolucion(prestamo, datos, 2)
+        self.assertIsNotNone(self.consultar_detalle_por_prestamo_y_bien(prestamo, 1)['fecha_devolucion'])
         with self.assertRaises(PermissionError):
             servicio.rectificar_devolucion(prestamo, detalle, 'Registro accidental', 2)
         servicio.rectificar_devolucion(prestamo, detalle, 'Registro accidental', 1)

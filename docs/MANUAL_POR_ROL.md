@@ -91,9 +91,9 @@ queda pendiente hasta que se cierre o venza.
 
 ### Devoluciones
 
-Abre el préstamo (**Préstamos → Devolver**), marca los bienes que recibes e ingresa el código
-de inventario leído en cada bien y su condición. Puedes recibir una parte y dejar el resto
-pendiente. Si el código no coincide, registra la discrepancia en la ficha del préstamo.
+Abre el préstamo (**Préstamos → Devolver**), marca los bienes que recibes e indica su condición.
+Puedes recibir una parte y dejar el resto pendiente. Si el bien presentado no es el del
+préstamo, no lo marques y registra la discrepancia en la ficha del préstamo.
 Si el bien llega tarde, la sanción leve se genera sola.
 
 ### Ampliaciones
